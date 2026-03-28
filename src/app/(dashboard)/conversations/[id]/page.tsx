@@ -1,0 +1,280 @@
+import Link from 'next/link'
+import { notFound } from 'next/navigation'
+import { ArrowLeft } from 'lucide-react'
+import { ChannelIcon } from '@/components/ui/channel-icon'
+import { ConversationThread } from '@/components/dashboard/conversation-thread'
+import { AISidebar } from '@/components/dashboard/ai-sidebar'
+import { ConversationActions } from '@/components/dashboard/conversation-actions'
+import { StatusDropdown } from '@/components/dashboard/status-dropdown'
+import { AgentAssignment } from '@/components/dashboard/agent-assignment'
+import { InternalNotes } from '@/components/dashboard/internal-notes'
+import {
+  cn,
+  getChannelLabel,
+  getPriorityColor,
+} from '@/lib/utils'
+import { createServerSupabaseClient } from '@/lib/supabase-server'
+import type {
+  ChannelType,
+  Priority,
+  ConversationStatus,
+} from '@/types/database'
+
+/** Derive priority from the conversation's priority field or fallback to 'medium' */
+function derivePriority(p: string | null | undefined): Priority {
+  if (p === 'urgent' || p === 'high' || p === 'medium' || p === 'low') return p
+  return 'medium'
+}
+
+export default async function ConversationPage({
+  params,
+}: {
+  params: Promise<{ id: string }>
+}) {
+  const { id } = await params
+  const supabase = await createServerSupabaseClient()
+
+  // Check user's role and account_id for scoping
+  const {
+    data: { user: authUser },
+  } = await supabase.auth.getUser()
+
+  let userAccountId: string | null = null
+  let userIsAdmin = false
+  if (authUser) {
+    const { data: profile } = await supabase
+      .from('users')
+      .select('role, account_id')
+      .eq('id', authUser.id)
+      .maybeSingle()
+    userIsAdmin = profile?.role === 'admin'
+    userAccountId = profile?.account_id ?? null
+  }
+
+  // Fetch conversation details
+  const { data: conversation, error: convError } = await supabase
+    .from('conversations')
+    .select(`
+      id,
+      account_id,
+      channel,
+      status,
+      priority,
+      assigned_to,
+      participant_name,
+      participant_email,
+      participant_phone,
+      tags,
+      first_message_at,
+      last_message_at,
+      accounts!conversations_account_id_fkey ( id, name, phase1_enabled, phase2_enabled ),
+      users!conversations_assigned_to_fkey ( id, full_name, email )
+    `)
+    .eq('id', id)
+    .single()
+
+  if (convError || !conversation) {
+    notFound()
+  }
+
+  // Non-admin users can only access conversations for their own company
+  if (!userIsAdmin && userAccountId && conversation.account_id !== userAccountId) {
+    notFound()
+  }
+
+  // Fetch all messages in this conversation
+  const { data: messages } = await supabase
+    .from('messages')
+    .select('*')
+    .eq('conversation_id', id)
+    .order('timestamp', { ascending: true })
+
+  // Fetch classifications for messages in this conversation
+  const messageIds = (messages || []).map((m) => m.id)
+  let classification = null
+  if (messageIds.length > 0) {
+    const { data: classifications } = await supabase
+      .from('message_classifications')
+      .select('*')
+      .in('message_id', messageIds)
+      .order('classified_at', { ascending: false })
+      .limit(1)
+    classification = classifications?.[0] ?? null
+  }
+
+  // Fetch AI replies for this conversation
+  let aiReply = null
+  const { data: aiReplies } = await supabase
+    .from('ai_replies')
+    .select('*')
+    .eq('conversation_id', id)
+    .order('created_at', { ascending: false })
+    .limit(1)
+  aiReply = aiReplies?.[0] ?? null
+
+  // Fetch KB articles used for this AI reply
+  let kbArticleTitles: string[] = []
+  if (aiReply) {
+    const { data: kbHits } = await supabase
+      .from('kb_hits')
+      .select('kb_articles!kb_hits_kb_article_id_fkey(title)')
+      .eq('ai_reply_id', aiReply.id)
+    kbArticleTitles = (kbHits || [])
+      .map((h: any) => h.kb_articles?.title)
+      .filter(Boolean)
+  }
+
+  // Map AI reply to expected format for sidebar
+  const mappedAiReply = aiReply
+    ? {
+        ...aiReply,
+        draft_text: aiReply.draft_text || aiReply.edited_text || aiReply.final_text || '',
+        confidence_score: aiReply.confidence_score ?? null,
+        kb_articles_used: kbArticleTitles,
+        approved_by: aiReply.reviewed_by,
+        approved_at: aiReply.reviewed_at,
+        edited_text: aiReply.edited_text,
+        rejection_reason: aiReply.edit_notes,
+      }
+    : null
+
+  // Fetch other conversations from same participant for history
+  const participantEmail = conversation.participant_email
+  let customerHistory: { id: string; channel: string; preview: string; date: string }[] = []
+  if (participantEmail) {
+    const { data: pastConversations } = await supabase
+      .from('conversations')
+      .select('id, channel, first_message_at, last_message_at')
+      .eq('participant_email', participantEmail)
+      .neq('id', id)
+      .order('last_message_at', { ascending: false })
+      .limit(5)
+
+    if (pastConversations && pastConversations.length > 0) {
+      // Get first message of each for preview
+      for (const pc of pastConversations) {
+        const { data: firstMsg } = await supabase
+          .from('messages')
+          .select('email_subject, message_text')
+          .eq('conversation_id', pc.id)
+          .order('timestamp', { ascending: true })
+          .limit(1)
+          .single()
+
+        customerHistory.push({
+          id: pc.id,
+          channel: getChannelLabel(pc.channel as ChannelType),
+          preview: firstMsg?.email_subject || (firstMsg?.message_text ? firstMsg.message_text.substring(0, 80) + '...' : 'No preview'),
+          date: pc.last_message_at
+            ? new Date(pc.last_message_at).toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+              })
+            : 'Unknown',
+        })
+      }
+    }
+  }
+
+  const account = conversation.accounts as any
+  const assignedUserRaw = conversation.users as any
+  const assignedUser = Array.isArray(assignedUserRaw) ? (assignedUserRaw[0] ?? null) : (assignedUserRaw ?? null) as { id: string; full_name: string | null; email: string } | null
+  const channel = conversation.channel as ChannelType
+  const priority = derivePriority(conversation.priority)
+  const status = (conversation.status || 'active') as ConversationStatus
+  const participantName = conversation.participant_name || conversation.participant_email || 'Unknown'
+  const accountName = account?.name || 'Unknown Account'
+  // Get the email subject from the first inbound message
+  const firstInboundMsg = (messages || []).find((m: any) => m.direction === 'inbound')
+  const emailSubject = firstInboundMsg?.email_subject || null
+
+  return (
+    <div className="flex h-[calc(100vh-4rem)] flex-col">
+      {/* Conversation header */}
+      <div className="shrink-0 border-b border-gray-200 bg-white px-4 sm:px-6 py-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+            <Link
+              href="/inbox"
+              className="text-gray-400 hover:text-teal-700 transition-colors"
+            >
+              <ArrowLeft size={20} />
+            </Link>
+            <div className="flex items-center gap-3">
+              <ChannelIcon channel={channel} size={22} />
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="font-semibold text-gray-900 truncate max-w-[150px] sm:max-w-none">{participantName}</h1>
+                  <StatusDropdown
+                    conversationId={id}
+                    currentStatus={status}
+                  />
+                  <span className={cn(
+                    'rounded-full px-2 py-0.5 text-xs font-medium',
+                    getPriorityColor(priority)
+                  )}>
+                    {priority}
+                  </span>
+                  <AgentAssignment
+                    conversationId={id}
+                    currentAssignedTo={conversation.assigned_to || null}
+                    currentAssignedName={assignedUser?.full_name || assignedUser?.email || null}
+                  />
+                </div>
+                <p className="text-xs text-gray-500 truncate max-w-[200px] sm:max-w-none">
+                  {accountName} &middot; {getChannelLabel(channel)}
+                  {conversation.participant_email && (
+                    <span className="hidden sm:inline"> &middot; {conversation.participant_email}</span>
+                  )}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Main content area */}
+      <div className="flex flex-1 flex-col lg:flex-row overflow-hidden">
+        {/* Message thread */}
+        <div className="flex flex-1 flex-col min-h-0">
+          <div className="flex-1 overflow-y-auto px-4 sm:px-6">
+            {messages && messages.length > 0 ? (
+              <ConversationThread messages={messages} channel={channel} />
+            ) : (
+              <div className="flex items-center justify-center h-full text-gray-400 text-sm">
+                No messages in this conversation yet.
+              </div>
+            )}
+          </div>
+
+          {/* Bottom action bar */}
+          <div className="shrink-0 border-t border-gray-200 bg-white px-4 sm:px-6 py-3">
+            <ConversationActions
+              conversationId={id}
+              accountId={conversation.account_id}
+              accountName={accountName}
+              channel={channel}
+              aiReplyId={aiReply?.id || null}
+              aiReplyStatus={aiReply?.status || null}
+              aiDraftText={aiReply?.draft_text || aiReply?.edited_text || null}
+              participantEmail={conversation.participant_email}
+              emailSubject={emailSubject}
+            />
+          </div>
+        </div>
+
+        {/* Right sidebar - below thread on mobile, side panel on desktop */}
+        <div className="w-full lg:w-80 shrink-0 overflow-y-auto border-t lg:border-t-0 lg:border-l border-gray-200 bg-gray-50 p-4 space-y-4">
+          <AISidebar
+            classification={classification}
+            aiReply={mappedAiReply}
+            kbArticles={kbArticleTitles}
+            customerHistory={customerHistory}
+          />
+          <InternalNotes conversationId={id} />
+        </div>
+      </div>
+    </div>
+  )
+}

@@ -1,0 +1,158 @@
+{
+  "_NOTE": "Teams integration is NOT YET PROVISIONED. Microsoft 365 Business license and admin consent are required before this workflow can be activated. Team ID and Channel ID must be configured after M365 provisioning is complete.",
+  "name": "Unified Portal - Teams Monitor",
+  "nodes": [
+    {
+      "parameters": {
+        "event": "newMessage",
+        "teamId": "REQUIRES_M365_PROVISIONING",
+        "channelId": "REQUIRES_M365_PROVISIONING"
+      },
+      "id": "teams-trigger-001",
+      "name": "Teams Trigger",
+      "type": "n8n-nodes-base.microsoftTeamsTrigger",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "credentials": {
+        "microsoftTeamsOAuth2Api": {
+          "id": "czc5W08z3sCXs8Fu",
+          "name": "Microsoft Teams OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": ""
+          },
+          "conditions": [
+            {
+              "id": "filter-bot",
+              "leftValue": "={{ $json.from?.user?.displayName || '' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "filter-001",
+      "name": "Filter Bot Messages",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "sender",
+              "value": "={{ $json.from?.user?.displayName || 'Unknown' }}"
+            },
+            {
+              "name": "text",
+              "value": "={{ $json.body?.content || $json.body?.plainTextContent || '' }}"
+            },
+            {
+              "name": "chat_id",
+              "value": "={{ $json.chatId || $json.channelIdentity?.channelId || '' }}"
+            },
+            {
+              "name": "timestamp",
+              "value": "={{ $json.createdDateTime || $now.toISO() }}"
+            },
+            {
+              "name": "account_id",
+              "value": "REQUIRES_M365_PROVISIONING"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-fields-001",
+      "name": "Map Teams Fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [700, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://unified-comm-portal.vercel.app/api/webhooks/teams",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-Webhook-Secret",
+              "value": "my-webhook-secret-123"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ sender: $json.sender, text: $json.text, chat_id: $json.chat_id, timestamp: $json.timestamp, account_id: $json.account_id }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "http-request-001",
+      "name": "Send to Portal Webhook",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [940, 300]
+    }
+  ],
+  "connections": {
+    "Teams Trigger": {
+      "main": [
+        [
+          {
+            "node": "Filter Bot Messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Bot Messages": {
+      "main": [
+        [
+          {
+            "node": "Map Teams Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Map Teams Fields": {
+      "main": [
+        [
+          {
+            "node": "Send to Portal Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "unified-portal"
+    }
+  ]
+}

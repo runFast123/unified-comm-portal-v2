@@ -1,0 +1,95 @@
+{
+  "name": "Unified Portal - Teams Reply Sender",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "teams-reply",
+        "options": {
+          "responseMode": "onReceived",
+          "responseData": "allEntries"
+        }
+      },
+      "id": "webhook-001",
+      "name": "Webhook - Receive Reply",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "webhookId": "teams-reply"
+    },
+    {
+      "parameters": {
+        "resource": "chatMessage",
+        "chatId": "={{ $json.body.chat_id }}",
+        "messageType": "text",
+        "message": "={{ $json.body.reply_text || $json.body.final_text }}",
+        "options": {}
+      },
+      "id": "teams-send-001",
+      "name": "Teams - Send Reply",
+      "type": "n8n-nodes-base.microsoftTeams",
+      "typeVersion": 2,
+      "position": [520, 300],
+      "credentials": {
+        "microsoftTeamsOAuth2Api": {
+          "id": "czc5W08z3sCXs8Fu",
+          "name": "Microsoft Teams OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "status",
+              "value": "sent"
+            },
+            {
+              "name": "message",
+              "value": "Reply sent successfully via Teams"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-response-001",
+      "name": "Set Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [760, 300]
+    }
+  ],
+  "connections": {
+    "Webhook - Receive Reply": {
+      "main": [
+        [
+          {
+            "node": "Teams - Send Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Teams - Send Reply": {
+      "main": [
+        [
+          {
+            "node": "Set Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "unified-portal"
+    }
+  ]
+}

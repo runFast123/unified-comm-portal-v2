@@ -1,0 +1,130 @@
+{
+  "name": "Unified Portal - Gmail Monitor",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "filters": {
+          "readStatus": "unread",
+          "receivedAfter": "={{ $now.minus(1, 'hour').toISO() }}"
+        },
+        "options": {
+          "includeSpamTrash": false
+        }
+      },
+      "id": "gmail-trigger-001",
+      "name": "Gmail Trigger",
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.1,
+      "position": [250, 300],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "ARRNrllXKhhiNILy",
+          "name": "SmartelCredentialMail"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "sender",
+              "value": "={{ $json.from.text || $json.from }}"
+            },
+            {
+              "name": "subject",
+              "value": "={{ $json.subject }}"
+            },
+            {
+              "name": "body",
+              "value": "={{ $json.textPlain || $json.snippet || '' }}"
+            },
+            {
+              "name": "thread_id",
+              "value": "={{ $json.threadId || $json.id }}"
+            },
+            {
+              "name": "account_id",
+              "value": "={{ (() => { const sender = ($json.From || $json.from?.text || $json.from || '').toLowerCase(); const mapping = {'ajoxi': 'ee83d772-0350-4ca5-9cd8-91285bf3ff7e', 'letsdial': '081fb6ce-96b7-4407-8ceb-7cf80202fccf', 'meratalk': 'e3c161e1-8ccd-4789-a03a-a9698ae8d3b2', 'rozper': '7cfeb742-86c6-4a43-bcd9-41f5d00b9a53', 'softtop': '49d00b10-aae9-4422-85ee-d571d4f8e760', 'teloz': '277ad954-8a07-46d8-80f2-d024b95fae04', 'techopensystems': 'a45ab224-1dff-4c74-a3d4-07684186c51b', 'twiching': 'c0e1b30a-b581-4c5f-a6a4-26bd14f963a7', 'mycountrymobile': '552ded86-9ed2-4ae3-979f-ce4910774d86', 'acepeak': '539ebfdd-8d9c-41bc-81fa-0cf78a5220b3'}; for (const [key, id] of Object.entries(mapping)) { if (sender.includes(key)) return id; } return '539ebfdd-8d9c-41bc-81fa-0cf78a5220b3'; })() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-fields-001",
+      "name": "Map Email Fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://unified-comm-portal.vercel.app/api/webhooks/email",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-Webhook-Secret",
+              "value": "my-webhook-secret-123"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ sender: $json.sender, subject: $json.subject, body: $json.body, thread_id: $json.thread_id, account_id: $json.account_id }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "http-request-001",
+      "name": "Send to Portal Webhook",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [720, 300]
+    }
+  ],
+  "connections": {
+    "Gmail Trigger": {
+      "main": [
+        [
+          {
+            "node": "Map Email Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Map Email Fields": {
+      "main": [
+        [
+          {
+            "node": "Send to Portal Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "unified-portal"
+    }
+  ]
+}

@@ -1,0 +1,98 @@
+{
+  "name": "Unified Portal - Gmail Reply Sender",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "email-reply",
+        "options": {
+          "responseMode": "onReceived",
+          "responseData": "allEntries"
+        }
+      },
+      "id": "webhook-001",
+      "name": "Webhook - Receive Reply",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "webhookId": "email-reply"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.body.to || $json.body.recipient_email }}",
+        "subject": "={{ $json.body.subject || 'Re: ' + ($json.body.original_subject || 'Your inquiry') }}",
+        "emailType": "text",
+        "message": "={{ $json.body.reply_text || $json.body.final_text }}",
+        "options": {
+          "replyToMessageId": "={{ $json.body.thread_id || '' }}",
+          "appendAttribution": false
+        }
+      },
+      "id": "gmail-send-001",
+      "name": "Gmail - Send Reply",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [520, 300],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "ARRNrllXKhhiNILy",
+          "name": "SmartelCredentialMail"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "status",
+              "value": "sent"
+            },
+            {
+              "name": "message",
+              "value": "Reply sent successfully via Gmail"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-response-001",
+      "name": "Set Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [760, 300]
+    }
+  ],
+  "connections": {
+    "Webhook - Receive Reply": {
+      "main": [
+        [
+          {
+            "node": "Gmail - Send Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail - Send Reply": {
+      "main": [
+        [
+          {
+            "node": "Set Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "unified-portal"
+    }
+  ]
+}
