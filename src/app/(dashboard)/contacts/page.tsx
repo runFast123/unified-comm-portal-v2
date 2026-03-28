@@ -586,7 +586,11 @@ export default function ContactsPage() {
               {filteredContacts.map((contact, idx) => {
                 const key = `${contact.name}-${contact.email || ''}-${contact.accountId}-${idx}`
                 return (
-                  <TableRow key={key}>
+                  <TableRow
+                    key={key}
+                    className="cursor-pointer hover:bg-gray-50 transition-colors"
+                    onClick={() => handleViewHistory(contact)}
+                  >
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-teal-100 text-xs font-semibold text-teal-700">
@@ -627,7 +631,7 @@ export default function ContactsPage() {
                     </TableCell>
                     <TableCell>
                       <button
-                        onClick={() => handleViewHistory(contact)}
+                        onClick={(e) => { e.stopPropagation(); handleViewHistory(contact) }}
                         className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-teal-700 bg-teal-50 hover:bg-teal-100 transition-colors"
                       >
                         <Eye className="h-3.5 w-3.5" />

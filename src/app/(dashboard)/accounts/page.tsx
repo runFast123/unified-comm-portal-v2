@@ -42,60 +42,53 @@ export default function AccountsPage() {
         return
       }
 
-      // For each account, fetch message count, pending reply count, and last message time
+      // For each account, fetch exact message counts and last activity
+      // Using count: 'exact' + head: true to avoid Supabase's default 1000 row limit
       const accountIds = accountRows.map((a: Account) => a.id)
 
-      // Fetch total message counts per account
-      const { data: messageCounts, error: messageCountsError } = await supabase
-        .from('messages')
-        .select('account_id')
-        .in('account_id', accountIds)
+      const statsPerAccount = await Promise.all(
+        accountRows.map(async (a: Account) => {
+          const [totalResult, pendingResult, latestConvo] = await Promise.all([
+            // Exact total message count (no row limit)
+            supabase
+              .from('messages')
+              .select('*', { count: 'exact', head: true })
+              .eq('account_id', a.id),
+            // Exact pending reply count
+            supabase
+              .from('messages')
+              .select('*', { count: 'exact', head: true })
+              .eq('account_id', a.id)
+              .eq('reply_required', true)
+              .eq('replied', false),
+            // Latest conversation time
+            supabase
+              .from('conversations')
+              .select('last_message_at')
+              .eq('account_id', a.id)
+              .order('last_message_at', { ascending: false })
+              .limit(1)
+              .maybeSingle(),
+          ])
+          return {
+            id: a.id,
+            total: totalResult.count || 0,
+            pending: pendingResult.count || 0,
+            lastMessageAt: (latestConvo.data?.last_message_at as string | null) || null,
+          }
+        })
+      )
 
-      if (messageCountsError) {
-        console.error('Error fetching message counts:', messageCountsError)
-      }
-
-      // Fetch pending replies (reply_required = true AND replied = false)
-      const { data: pendingRows, error: pendingError } = await supabase
-        .from('messages')
-        .select('account_id')
-        .in('account_id', accountIds)
-        .eq('reply_required', true)
-        .eq('replied', false)
-
-      if (pendingError) {
-        console.error('Error fetching pending replies:', pendingError)
-      }
-
-      // Fetch latest message time per account from conversations
-      const { data: latestConvos, error: latestConvosError } = await supabase
-        .from('conversations')
-        .select('account_id, last_message_at')
-        .in('account_id', accountIds)
-        .order('last_message_at', { ascending: false })
-
-      if (latestConvosError) {
-        console.error('Error fetching latest conversations:', latestConvosError)
-      }
-
-      // Build count maps
+      // Build lookup maps from parallel results
       const totalMap = new Map<string, number>()
       const pendingMap = new Map<string, number>()
       const lastMsgMap = new Map<string, string>()
 
-      ;(messageCounts || []).forEach((m: { account_id: string }) => {
-        totalMap.set(m.account_id, (totalMap.get(m.account_id) || 0) + 1)
-      })
-
-      ;(pendingRows || []).forEach((m: { account_id: string }) => {
-        pendingMap.set(m.account_id, (pendingMap.get(m.account_id) || 0) + 1)
-      })
-
-      ;(latestConvos || []).forEach((c: { account_id: string; last_message_at: string | null }) => {
-        if (!lastMsgMap.has(c.account_id) && c.last_message_at) {
-          lastMsgMap.set(c.account_id, c.last_message_at)
-        }
-      })
+      for (const s of statsPerAccount) {
+        totalMap.set(s.id, s.total)
+        pendingMap.set(s.id, s.pending)
+        if (s.lastMessageAt) lastMsgMap.set(s.id, s.lastMessageAt)
+      }
 
       const enriched: AccountWithStats[] = accountRows.map((a: Account) => ({
         ...a,
