@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import {
   MessageCircle,
   AlertCircle,
@@ -77,6 +78,7 @@ interface Stats {
 }
 
 export function AccountDetailClient({ account }: { account: Account }) {
+  const router = useRouter()
   const [dateRange, setDateRange] = useState<DateRange>('30d')
   const [customFrom, setCustomFrom] = useState('')
   const [customTo, setCustomTo] = useState('')
@@ -376,28 +378,40 @@ export function AccountDetailClient({ account }: { account: Account }) {
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <div className="rounded-xl border border-gray-200 bg-white px-5 py-4 shadow-sm">
+          <div
+            className="rounded-xl border border-gray-200 bg-white px-5 py-4 shadow-sm cursor-pointer hover:shadow-md hover:border-teal-300 transition-all"
+            onClick={() => router.push(`/inbox?channel=email`)}
+          >
             <div className="flex items-center gap-2 text-gray-500">
               <MessageCircle size={16} />
               <span className="text-sm">Total Messages</span>
             </div>
             <p className="mt-2 text-2xl font-bold text-gray-900">{stats.total}</p>
           </div>
-          <div className="rounded-xl border border-gray-200 bg-white px-5 py-4 shadow-sm">
+          <div
+            className="rounded-xl border border-gray-200 bg-white px-5 py-4 shadow-sm cursor-pointer hover:shadow-md hover:border-orange-300 transition-all"
+            onClick={() => router.push(`/inbox?filter=pending`)}
+          >
             <div className="flex items-center gap-2 text-gray-500">
               <AlertCircle size={16} />
               <span className="text-sm">Pending Replies</span>
             </div>
             <p className="mt-2 text-2xl font-bold text-orange-600">{stats.pending}</p>
           </div>
-          <div className="rounded-xl border border-gray-200 bg-white px-5 py-4 shadow-sm">
+          <div
+            className="rounded-xl border border-gray-200 bg-white px-5 py-4 shadow-sm cursor-pointer hover:shadow-md hover:border-teal-300 transition-all"
+            onClick={() => router.push(`/inbox?filter=ai_processed`)}
+          >
             <div className="flex items-center gap-2 text-gray-500">
               <Brain size={16} />
               <span className="text-sm">AI Send Rate</span>
             </div>
             <p className="mt-2 text-2xl font-bold text-teal-700">{stats.aiSendRate}%</p>
           </div>
-          <div className="rounded-xl border border-gray-200 bg-white px-5 py-4 shadow-sm">
+          <div
+            className="rounded-xl border border-gray-200 bg-white px-5 py-4 shadow-sm cursor-pointer hover:shadow-md hover:border-gray-300 transition-all"
+            onClick={() => router.push('/reports')}
+          >
             <div className="flex items-center gap-2 text-gray-500">
               <Clock size={16} />
               <span className="text-sm">Avg Processing</span>
