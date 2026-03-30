@@ -81,7 +81,7 @@ export async function GET(request: Request) {
         m.message_classifications?.[0]?.category || '',
         m.message_classifications?.[0]?.sentiment || '',
         m.message_classifications?.[0]?.urgency || '',
-        m.message_classifications?.[0]?.confidence ? Math.round(Number(m.message_classifications[0].confidence) * 100) + '%' : '',
+        m.message_classifications?.[0]?.confidence != null ? Math.round(Number(m.message_classifications[0].confidence) * 100) + '%' : '--',
         m.replied ? 'Yes' : 'No',
         safeCSV((m.message_text || '').substring(0, 200).replace(/\n/g, ' ')),
       ])

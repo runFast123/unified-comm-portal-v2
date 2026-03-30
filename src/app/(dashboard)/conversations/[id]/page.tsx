@@ -159,7 +159,7 @@ export default async function ConversationPage({
           .eq('conversation_id', pc.id)
           .order('timestamp', { ascending: true })
           .limit(1)
-          .single()
+          .maybeSingle()
 
         customerHistory.push({
           id: pc.id,

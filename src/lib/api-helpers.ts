@@ -242,7 +242,7 @@ export async function callAI(
     } catch (err: any) {
       lastError = err
       const isTimeout = err.name === 'AbortError'
-      const isRetryable = isTimeout || (err.message && err.message.includes('5'))
+      const isRetryable = isTimeout || (err.message && /\b5\d{2}\b/.test(err.message))
 
       if (attempt < AI_MAX_RETRIES && isRetryable) {
         console.warn(`AI call attempt ${attempt + 1} failed (${isTimeout ? 'timeout' : err.message}), retrying in ${AI_RETRY_DELAYS[attempt]}ms...`)
