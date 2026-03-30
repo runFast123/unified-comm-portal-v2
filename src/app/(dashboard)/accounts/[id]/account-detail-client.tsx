@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import {
   MessageCircle,
   AlertCircle,
@@ -13,6 +12,9 @@ import {
   Eye,
   Bot,
   Shield,
+  ShieldAlert,
+  X,
+  Mail,
 } from 'lucide-react'
 import { ChannelIcon } from '@/components/ui/channel-icon'
 import { PhaseIndicator } from '@/components/ui/phase-indicator'
@@ -75,17 +77,33 @@ interface Stats {
   pending: number
   aiSendRate: number
   avgProcessingTime: number
+  spam: number
+}
+
+type DrillDownType = 'total' | 'pending' | 'ai_sent' | 'spam' | null
+
+interface DrillDownMessage {
+  id: string
+  sender_name: string | null
+  email_subject: string | null
+  message_text: string | null
+  received_at: string
+  replied: boolean
+  is_spam: boolean
+  conversation_id: string
 }
 
 export function AccountDetailClient({ account }: { account: Account }) {
-  const router = useRouter()
   const [dateRange, setDateRange] = useState<DateRange>('30d')
   const [customFrom, setCustomFrom] = useState('')
   const [customTo, setCustomTo] = useState('')
   const [loading, setLoading] = useState(true)
-  const [stats, setStats] = useState<Stats>({ total: 0, pending: 0, aiSendRate: 0, avgProcessingTime: 0 })
+  const [stats, setStats] = useState<Stats>({ total: 0, pending: 0, aiSendRate: 0, avgProcessingTime: 0, spam: 0 })
   const [categories, setCategories] = useState<CategoryBreakdown[]>([])
   const [conversations, setConversations] = useState<ConversationItem[]>([])
+  const [drillDown, setDrillDown] = useState<DrillDownType>(null)
+  const [drillDownMessages, setDrillDownMessages] = useState<DrillDownMessage[]>([])
+  const [drillDownLoading, setDrillDownLoading] = useState(false)
 
   const getStartDate = useCallback((): string | null => {
     const now = new Date()
@@ -144,6 +162,15 @@ export function AccountDetailClient({ account }: { account: Account }) {
         .eq('replied', false)
       if (startDate) pendingQuery = pendingQuery.gte('received_at', startDate)
       const { count: pendingReplies } = await pendingQuery
+
+      // Spam count
+      let spamQuery = supabase
+        .from('messages')
+        .select('*', { count: 'exact', head: true })
+        .eq('account_id', id)
+        .eq('is_spam', true)
+      if (startDate) spamQuery = spamQuery.gte('received_at', startDate)
+      const { count: spamCount } = await spamQuery
 
       // AI replies
       let aiQuery = supabase
@@ -264,7 +291,10 @@ export function AccountDetailClient({ account }: { account: Account }) {
           pending: pendingReplies || 0,
           aiSendRate: totalAiReplies > 0 ? aiSendRate : 0,
           avgProcessingTime,
+          spam: spamCount || 0,
         })
+        setDrillDown(null)
+        setDrillDownMessages([])
         setCategories(catBreakdown)
         setConversations(convItems)
         setLoading(false)
@@ -278,6 +308,81 @@ export function AccountDetailClient({ account }: { account: Account }) {
   const handleCustomChange = (from: string, to: string) => {
     setCustomFrom(from)
     setCustomTo(to)
+  }
+
+  const handleKpiClick = async (type: DrillDownType) => {
+    if (drillDown === type) {
+      setDrillDown(null)
+      setDrillDownMessages([])
+      return
+    }
+    setDrillDown(type)
+    setDrillDownLoading(true)
+    const supabase = createClient()
+    const startDate = getStartDate()
+
+    let query = supabase
+      .from('messages')
+      .select('id, sender_name, email_subject, message_text, received_at, replied, is_spam, conversation_id')
+      .eq('account_id', account.id)
+      .eq('direction', 'inbound')
+      .order('received_at', { ascending: false })
+      .limit(50)
+
+    if (startDate) query = query.gte('received_at', startDate)
+
+    switch (type) {
+      case 'pending':
+        query = query.eq('reply_required', true).eq('replied', false).eq('is_spam', false)
+        break
+      case 'spam':
+        query = query.eq('is_spam', true)
+        break
+      case 'ai_sent':
+        // For AI sent, we fetch AI replies instead
+        break
+      case 'total':
+      default:
+        query = query.eq('is_spam', false)
+        break
+    }
+
+    if (type === 'ai_sent') {
+      let aiQuery = supabase
+        .from('ai_replies')
+        .select('id, draft_text, status, created_at, channel, messages!ai_replies_message_id_fkey(sender_name, email_subject, conversation_id)')
+        .eq('account_id', account.id)
+        .eq('status', 'sent')
+        .order('created_at', { ascending: false })
+        .limit(50)
+      if (startDate) aiQuery = aiQuery.gte('created_at', startDate)
+      const { data } = await aiQuery
+      const mapped: DrillDownMessage[] = (data || []).map((r: Record<string, unknown>) => {
+        const msg = r.messages as Record<string, unknown> | null
+        return {
+          id: r.id as string,
+          sender_name: (msg?.sender_name as string) || null,
+          email_subject: (msg?.email_subject as string) || null,
+          message_text: (r.draft_text as string) || null,
+          received_at: r.created_at as string,
+          replied: true,
+          is_spam: false,
+          conversation_id: (msg?.conversation_id as string) || '',
+        }
+      })
+      setDrillDownMessages(mapped)
+    } else {
+      const { data } = await query
+      setDrillDownMessages((data || []) as DrillDownMessage[])
+    }
+    setDrillDownLoading(false)
+  }
+
+  const drillDownTitle: Record<string, string> = {
+    total: 'All Messages',
+    pending: 'Pending Replies',
+    ai_sent: 'AI Sent Replies',
+    spam: 'Spam Messages',
   }
 
   return (
@@ -368,8 +473,8 @@ export function AccountDetailClient({ account }: { account: Account }) {
 
       {/* Stats row */}
       {loading ? (
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          {[...Array(4)].map((_, i) => (
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+          {[...Array(5)].map((_, i) => (
             <div key={i} className="rounded-xl border border-gray-200 bg-white px-5 py-4 shadow-sm animate-pulse">
               <div className="h-4 w-24 bg-gray-200 rounded" />
               <div className="mt-3 h-8 w-16 bg-gray-200 rounded" />
@@ -377,10 +482,13 @@ export function AccountDetailClient({ account }: { account: Account }) {
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
           <div
-            className="rounded-xl border border-gray-200 bg-white px-5 py-4 shadow-sm cursor-pointer hover:shadow-md hover:border-teal-300 transition-all"
-            onClick={() => router.push(`/inbox?channel=email`)}
+            className={cn(
+              'rounded-xl border bg-white px-5 py-4 shadow-sm cursor-pointer hover:shadow-md transition-all',
+              drillDown === 'total' ? 'border-teal-500 ring-2 ring-teal-100' : 'border-gray-200 hover:border-teal-300'
+            )}
+            onClick={() => handleKpiClick('total')}
           >
             <div className="flex items-center gap-2 text-gray-500">
               <MessageCircle size={16} />
@@ -389,8 +497,11 @@ export function AccountDetailClient({ account }: { account: Account }) {
             <p className="mt-2 text-2xl font-bold text-gray-900">{stats.total}</p>
           </div>
           <div
-            className="rounded-xl border border-gray-200 bg-white px-5 py-4 shadow-sm cursor-pointer hover:shadow-md hover:border-orange-300 transition-all"
-            onClick={() => router.push(`/inbox?filter=pending`)}
+            className={cn(
+              'rounded-xl border bg-white px-5 py-4 shadow-sm cursor-pointer hover:shadow-md transition-all',
+              drillDown === 'pending' ? 'border-orange-500 ring-2 ring-orange-100' : 'border-gray-200 hover:border-orange-300'
+            )}
+            onClick={() => handleKpiClick('pending')}
           >
             <div className="flex items-center gap-2 text-gray-500">
               <AlertCircle size={16} />
@@ -399,8 +510,11 @@ export function AccountDetailClient({ account }: { account: Account }) {
             <p className="mt-2 text-2xl font-bold text-orange-600">{stats.pending}</p>
           </div>
           <div
-            className="rounded-xl border border-gray-200 bg-white px-5 py-4 shadow-sm cursor-pointer hover:shadow-md hover:border-teal-300 transition-all"
-            onClick={() => router.push(`/inbox?filter=ai_processed`)}
+            className={cn(
+              'rounded-xl border bg-white px-5 py-4 shadow-sm cursor-pointer hover:shadow-md transition-all',
+              drillDown === 'ai_sent' ? 'border-teal-500 ring-2 ring-teal-100' : 'border-gray-200 hover:border-teal-300'
+            )}
+            onClick={() => handleKpiClick('ai_sent')}
           >
             <div className="flex items-center gap-2 text-gray-500">
               <Brain size={16} />
@@ -408,17 +522,94 @@ export function AccountDetailClient({ account }: { account: Account }) {
             </div>
             <p className="mt-2 text-2xl font-bold text-teal-700">{stats.aiSendRate}%</p>
           </div>
-          <div
-            className="rounded-xl border border-gray-200 bg-white px-5 py-4 shadow-sm cursor-pointer hover:shadow-md hover:border-gray-300 transition-all"
-            onClick={() => router.push('/reports')}
-          >
+          <div className="rounded-xl border border-gray-200 bg-white px-5 py-4 shadow-sm">
             <div className="flex items-center gap-2 text-gray-500">
               <Clock size={16} />
               <span className="text-sm">Avg Processing</span>
             </div>
             <p className="mt-2 text-2xl font-bold text-gray-900">{stats.avgProcessingTime}m</p>
           </div>
+          <div
+            className={cn(
+              'rounded-xl border bg-white px-5 py-4 shadow-sm cursor-pointer hover:shadow-md transition-all',
+              drillDown === 'spam' ? 'border-red-500 ring-2 ring-red-100' : 'border-gray-200 hover:border-red-300'
+            )}
+            onClick={() => handleKpiClick('spam')}
+          >
+            <div className="flex items-center gap-2 text-gray-500">
+              <ShieldAlert size={16} />
+              <span className="text-sm">Spam</span>
+            </div>
+            <p className={cn('mt-2 text-2xl font-bold', stats.spam > 0 ? 'text-red-600' : 'text-gray-400')}>{stats.spam}</p>
+          </div>
         </div>
+      )}
+
+      {/* Drill-down message list */}
+      {drillDown && (
+        <Card>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-gray-900">
+              {drillDownTitle[drillDown]} ({drillDownMessages.length}{drillDownMessages.length >= 50 ? '+' : ''})
+            </h3>
+            <button
+              onClick={() => { setDrillDown(null); setDrillDownMessages([]) }}
+              className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+            >
+              <X size={16} />
+            </button>
+          </div>
+          {drillDownLoading ? (
+            <div className="space-y-3">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="flex gap-3 animate-pulse">
+                  <div className="h-8 w-8 rounded-full bg-gray-200 shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 w-40 bg-gray-200 rounded" />
+                    <div className="h-3 w-64 bg-gray-200 rounded" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : drillDownMessages.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-6">No messages found for this filter.</p>
+          ) : (
+            <div className="divide-y divide-gray-100 max-h-[400px] overflow-y-auto">
+              {drillDownMessages.map((msg) => (
+                <Link
+                  key={msg.id}
+                  href={msg.conversation_id ? `/conversations/${msg.conversation_id}` : '#'}
+                  className="flex items-start gap-3 py-3 hover:bg-gray-50 -mx-6 px-6 transition-colors"
+                >
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 shrink-0 mt-0.5">
+                    <Mail size={14} className="text-gray-500" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-medium text-gray-900 truncate">
+                        {msg.sender_name || 'Unknown sender'}
+                      </span>
+                      <span className="text-xs text-gray-400 shrink-0 whitespace-nowrap">
+                        {timeAgo(msg.received_at)}
+                      </span>
+                    </div>
+                    {msg.email_subject && (
+                      <p className="text-xs font-medium text-gray-600 truncate">{msg.email_subject}</p>
+                    )}
+                    <p className="text-xs text-gray-400 truncate mt-0.5">
+                      {msg.message_text?.slice(0, 100) || 'No content'}
+                    </p>
+                    <div className="mt-1 flex items-center gap-2">
+                      {msg.replied && <Badge variant="success" size="sm">Replied</Badge>}
+                      {msg.is_spam && <Badge variant="danger" size="sm">Spam</Badge>}
+                      {!msg.replied && !msg.is_spam && <Badge variant="warning" size="sm">Pending</Badge>}
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </Card>
       )}
 
       {/* Two columns: classification + conversations */}
