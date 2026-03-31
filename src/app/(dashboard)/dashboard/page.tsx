@@ -72,7 +72,7 @@ interface CategoryBreakdown {
   count: number
 }
 
-type DateRange = 'today' | '7days' | '30days'
+type DateRange = 'today' | 'yesterday' | '7days' | '30days' | 'custom'
 
 const defaultKPIs: DashboardKPIs = {
   totalMessagesToday: 0,
@@ -89,11 +89,17 @@ const defaultChannelStats: ChannelStats[] = [
   { channel: 'whatsapp', messageCount: 0, pendingCount: 0, aiSentCount: 0 },
 ]
 
-function getDateRangeStart(range: DateRange): string {
+function getDateRangeStart(range: DateRange, customFrom?: string): string {
   const now = new Date()
   switch (range) {
     case 'today': {
       const start = new Date(now)
+      start.setHours(0, 0, 0, 0)
+      return start.toISOString()
+    }
+    case 'yesterday': {
+      const start = new Date(now)
+      start.setDate(start.getDate() - 1)
       start.setHours(0, 0, 0, 0)
       return start.toISOString()
     }
@@ -109,14 +115,24 @@ function getDateRangeStart(range: DateRange): string {
       start.setHours(0, 0, 0, 0)
       return start.toISOString()
     }
+    case 'custom': {
+      if (customFrom) return new Date(customFrom).toISOString()
+      // Fallback to 30 days
+      const start = new Date(now)
+      start.setDate(start.getDate() - 30)
+      start.setHours(0, 0, 0, 0)
+      return start.toISOString()
+    }
   }
 }
 
 function getDateRangeLabel(range: DateRange): string {
   switch (range) {
     case 'today': return 'today'
+    case 'yesterday': return 'yesterday'
     case '7days': return 'last 7 days'
     case '30days': return 'last 30 days'
+    case 'custom': return 'custom period'
   }
 }
 
@@ -150,6 +166,8 @@ export default function DashboardPage() {
   })
   const [spamFilteredToday, setSpamFilteredToday] = useState(0)
   const [companyStats, setCompanyStats] = useState<CompanyPerformance[]>([])
+  const [customFrom, setCustomFrom] = useState('')
+  const [customTo, setCustomTo] = useState('')
 
   // Drill-down state for clickable KPI cards
   type DashDrillDown = 'total' | 'pending' | 'ai_processed' | 'sla_breached' | 'spam' | null
@@ -173,7 +191,7 @@ export default function DashboardPage() {
     setDashDrill(type)
     setDashDrillLoading(true)
     const supabase = createClient()
-    const startDate = getDateRangeStart(dateRange)
+    const startDate = getDateRangeStart(dateRange, customFrom)
 
     let query = supabase
       .from('messages')
@@ -283,7 +301,7 @@ export default function DashboardPage() {
     async function fetchDashboardData() {
       setLoading(true)
       const supabase = createClient()
-      const rangeISO = getDateRangeStart(dateRange)
+      const rangeISO = getDateRangeStart(dateRange, customFrom)
 
       try {
         // Build scoped queries - non-admins only see their company's data
@@ -385,23 +403,14 @@ export default function DashboardPage() {
         ])
 
         // --- Process KPIs ---
+        // Always use the same query source for Total Messages as the channel breakdown
+        // to ensure consistent counts (previously RPC and query could diverge)
         let processedKpis = { ...defaultKPIs }
+        processedKpis.totalMessagesToday = (channelMessagesResult.data ?? []).length
+        processedKpis.pendingReplies = (channelPendingResult.data ?? []).length
+        processedKpis.aiRepliesSent = (channelAiSentResult.data ?? []).length
         if (kpiResult.data && !kpiResult.error) {
-          const d = kpiResult.data
-          processedKpis.totalMessagesToday = d.total_messages_today ?? 0
-          processedKpis.pendingReplies = d.pending_replies ?? 0
-          processedKpis.aiRepliesSent = d.ai_replies_sent_today ?? 0
-          processedKpis.avgResponseTime = d.avg_response_time_mins ?? 0
-        }
-
-        // Override with date-range-filtered counts when not "today"
-        if (dateRange !== 'today') {
-          const totalInRange = (channelMessagesResult.data ?? []).length
-          const pendingInRange = (channelPendingResult.data ?? []).length
-          const aiSentInRange = (channelAiSentResult.data ?? []).length
-          processedKpis.totalMessagesToday = totalInRange
-          processedKpis.pendingReplies = pendingInRange
-          processedKpis.aiRepliesSent = aiSentInRange
+          processedKpis.avgResponseTime = kpiResult.data.avg_response_time_mins ?? 0
         }
 
         // --- Process sentiment + category from combined query ---
@@ -636,7 +645,7 @@ export default function DashboardPage() {
     }
 
     fetchDashboardData()
-  }, [dateRange, isAdmin, userAccountId])
+  }, [dateRange, customFrom, customTo, isAdmin, userAccountId])
 
   const maxCategoryCount = categories[0]?.count ?? 1
 
@@ -732,8 +741,10 @@ export default function DashboardPage() {
           <span className="text-sm font-medium text-gray-500 mr-1">Period:</span>
           {([
             { key: 'today' as DateRange, label: 'Today' },
+            { key: 'yesterday' as DateRange, label: 'Yesterday' },
             { key: '7days' as DateRange, label: '7 Days' },
             { key: '30days' as DateRange, label: '30 Days' },
+            { key: 'custom' as DateRange, label: 'Custom' },
           ]).map(({ key, label }) => (
             <button
               key={key}
@@ -747,6 +758,23 @@ export default function DashboardPage() {
               {label}
             </button>
           ))}
+          {dateRange === 'custom' && (
+            <div className="flex items-center gap-2 ml-2">
+              <input
+                type="date"
+                value={customFrom}
+                onChange={(e) => setCustomFrom(e.target.value)}
+                className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-700 focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+              />
+              <span className="text-sm text-gray-400">to</span>
+              <input
+                type="date"
+                value={customTo}
+                onChange={(e) => setCustomTo(e.target.value)}
+                className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-700 focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+              />
+            </div>
+          )}
         </div>
 
         {/* Account Filter Dropdown - only for admins */}
