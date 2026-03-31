@@ -1,13 +1,14 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { ChannelIcon } from '@/components/ui/channel-icon'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
 import { getChannelLabel, timeAgo } from '@/lib/utils'
+import { createClient } from '@/lib/supabase-client'
 import type { ChannelType } from '@/types/database'
-import { ArrowUpDown, ChevronUp, ChevronDown } from 'lucide-react'
+import { ArrowUpDown, ChevronUp, ChevronDown, Calendar, X, Loader2 } from 'lucide-react'
 
 export interface CompanyPerformance {
   id: string
@@ -31,6 +32,79 @@ interface Props {
 export function CompanyStatsTable({ stats }: Props) {
   const [sortKey, setSortKey] = useState<SortKey>('totalMessages')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+  const [specificDate, setSpecificDate] = useState('')
+  const [dateFilteredStats, setDateFilteredStats] = useState<CompanyPerformance[] | null>(null)
+  const [dateLoading, setDateLoading] = useState(false)
+
+  // Fetch per-account stats for a specific date
+  const fetchForDate = useCallback(async (date: string) => {
+    if (!date) { setDateFilteredStats(null); return }
+    setDateLoading(true)
+    const supabase = createClient()
+    const startOfDay = new Date(date + 'T00:00:00').toISOString()
+    const endOfDay = new Date(date + 'T23:59:59.999').toISOString()
+
+    // Get all accounts
+    const { data: accounts } = await supabase
+      .from('accounts')
+      .select('id, name, channel_type, gmail_address')
+      .eq('is_active', true)
+      .order('name')
+
+    if (!accounts) { setDateLoading(false); return }
+
+    const results: CompanyPerformance[] = await Promise.all(
+      accounts.map(async (acc) => {
+        const [totalRes, pendingRes, aiSentRes, classRes] = await Promise.all([
+          supabase.from('messages').select('*', { count: 'exact', head: true })
+            .eq('account_id', acc.id).eq('direction', 'inbound')
+            .gte('received_at', startOfDay).lte('received_at', endOfDay),
+          supabase.from('messages').select('*', { count: 'exact', head: true })
+            .eq('account_id', acc.id).eq('direction', 'inbound')
+            .eq('reply_required', true).eq('replied', false)
+            .gte('received_at', startOfDay).lte('received_at', endOfDay),
+          supabase.from('ai_replies').select('*', { count: 'exact', head: true })
+            .eq('account_id', acc.id).eq('status', 'sent')
+            .gte('created_at', startOfDay).lte('created_at', endOfDay),
+          supabase.from('message_classifications')
+            .select('category, messages!inner(account_id)')
+            .eq('messages.account_id', acc.id)
+            .gte('classified_at', startOfDay).lte('classified_at', endOfDay)
+            .limit(200),
+        ])
+        const total = totalRes.count || 0
+        const pending = pendingRes.count || 0
+        const aiSent = aiSentRes.count || 0
+        const catCounts: Record<string, number> = {}
+        ;(classRes.data || []).forEach((c: { category: string }) => {
+          catCounts[c.category] = (catCounts[c.category] || 0) + 1
+        })
+        const topCat = Object.entries(catCounts).sort((a, b) => b[1] - a[1])[0]
+
+        return {
+          id: acc.id,
+          name: acc.name,
+          channel_type: acc.channel_type as ChannelType,
+          gmail_address: acc.gmail_address as string | null,
+          totalMessages: total,
+          pendingReplies: pending,
+          aiRepliesSent: aiSent,
+          responseRate: total > 0 ? Math.round((aiSent / total) * 100) : 0,
+          topCategory: topCat ? topCat[0] : null,
+          lastActivity: null, // Not relevant for specific date view
+        }
+      })
+    )
+    setDateFilteredStats(results)
+    setDateLoading(false)
+  }, [])
+
+  useEffect(() => {
+    if (specificDate) fetchForDate(specificDate)
+    else setDateFilteredStats(null)
+  }, [specificDate, fetchForDate])
+
+  const displayStats = dateFilteredStats || stats
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -41,7 +115,7 @@ export function CompanyStatsTable({ stats }: Props) {
     }
   }
 
-  const sorted = [...stats].sort((a, b) => {
+  const sorted = [...displayStats].sort((a, b) => {
     let cmp = 0
     switch (sortKey) {
       case 'name': cmp = a.name.localeCompare(b.name); break
@@ -81,15 +155,56 @@ export function CompanyStatsTable({ stats }: Props) {
     return 'text-red-600'
   }
 
-  if (stats.length === 0) {
+  if (displayStats.length === 0 && !dateLoading) {
     return (
-      <div className="py-8 text-center text-sm text-gray-400">
-        No company data available for this period.
+      <div>
+        <div className="flex items-center gap-3 mb-4">
+          <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5">
+            <Calendar className="h-3.5 w-3.5 text-gray-400" />
+            <input
+              type="date"
+              value={specificDate}
+              onChange={(e) => setSpecificDate(e.target.value)}
+              className="bg-transparent text-sm text-gray-700 focus:outline-none"
+            />
+            {specificDate && (
+              <button onClick={() => setSpecificDate('')} className="text-gray-400 hover:text-gray-600">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+          {specificDate && <span className="text-xs text-teal-600 font-medium">Showing data for {specificDate}</span>}
+        </div>
+        <div className="py-8 text-center text-sm text-gray-400">
+          No company data available for this period.
+        </div>
       </div>
     )
   }
 
   return (
+    <div>
+      {/* Day-wise filter */}
+      <div className="flex items-center gap-3 mb-4">
+        <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5">
+          <Calendar className="h-3.5 w-3.5 text-gray-400" />
+          <input
+            type="date"
+            value={specificDate}
+            onChange={(e) => setSpecificDate(e.target.value)}
+            className="bg-transparent text-sm text-gray-700 focus:outline-none"
+          />
+          {specificDate && (
+            <button onClick={() => setSpecificDate('')} className="text-gray-400 hover:text-gray-600">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+        {specificDate && <span className="text-xs text-teal-600 font-medium">Showing data for {specificDate}</span>}
+        {!specificDate && <span className="text-xs text-gray-400">Pick a date to filter by specific day</span>}
+        {dateLoading && <Loader2 className="h-4 w-4 animate-spin text-teal-600" />}
+      </div>
+
     <Table>
       <TableHeader>
         <TableRow>
@@ -149,5 +264,6 @@ export function CompanyStatsTable({ stats }: Props) {
         ))}
       </TableBody>
     </Table>
+    </div>
   )
 }
