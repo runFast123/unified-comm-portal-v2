@@ -362,6 +362,9 @@ CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log (created_at DES
 -- notification_rules
 CREATE INDEX IF NOT EXISTS idx_notification_rules_account ON notification_rules (account_id);
 
+-- Add notify_email_address column (added for email notification feature)
+ALTER TABLE notification_rules ADD COLUMN IF NOT EXISTS notify_email_address TEXT;
+
 
 -- ============================================================================
 -- 5. ROW LEVEL SECURITY (RLS)

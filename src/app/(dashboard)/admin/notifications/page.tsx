@@ -29,6 +29,7 @@ interface NotificationRule {
   notify_email: boolean
   notify_in_portal: boolean
   notify_slack: boolean
+  notify_email_address: string | null
   slack_webhook_url: string | null
   escalation_minutes: number
   is_active: boolean
@@ -42,6 +43,7 @@ const emptyFormData = {
   notify_email: false,
   notify_in_portal: true,
   notify_slack: false,
+  notify_email_address: '',
   escalation_minutes: 30,
 }
 
@@ -95,6 +97,7 @@ export default function NotificationsPage() {
         notify_email: row.notify_email as boolean,
         notify_in_portal: row.notify_in_portal as boolean,
         notify_slack: row.notify_slack as boolean,
+        notify_email_address: (row.notify_email_address as string) || null,
         slack_webhook_url: row.slack_webhook_url as string | null,
         escalation_minutes: (row.escalation_minutes as number) || 30,
         is_active: row.is_active as boolean,
@@ -135,6 +138,7 @@ export default function NotificationsPage() {
       notify_email: rule.notify_email,
       notify_in_portal: rule.notify_in_portal,
       notify_slack: rule.notify_slack,
+      notify_email_address: rule.notify_email_address || '',
       escalation_minutes: rule.escalation_minutes,
     })
     setValidationError(null)
@@ -165,6 +169,7 @@ export default function NotificationsPage() {
       channel: formData.channel || null,
       min_priority: formData.min_priority,
       notify_email: formData.notify_email,
+      notify_email_address: formData.notify_email ? formData.notify_email_address || null : null,
       notify_in_portal: formData.notify_in_portal,
       notify_slack: formData.notify_slack,
       slack_webhook_url: formData.notify_slack ? slackWebhook || null : null,
@@ -514,6 +519,16 @@ export default function NotificationsPage() {
               </label>
             </div>
           </div>
+
+          {formData.notify_email && (
+            <Input
+              label="Notification Email Address"
+              type="email"
+              value={formData.notify_email_address}
+              onChange={(e) => setFormData({ ...formData, notify_email_address: e.target.value })}
+              placeholder="admin@example.com"
+            />
+          )}
 
           <Input
             label="Escalation Time (minutes)"

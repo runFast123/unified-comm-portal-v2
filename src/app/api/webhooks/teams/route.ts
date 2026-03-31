@@ -73,7 +73,7 @@ export async function POST(request: Request) {
     // Verify account exists and is active
     const { data: accountRow, error: accountError } = await supabase
       .from('accounts')
-      .select('id, is_active')
+      .select('id, name, is_active')
       .eq('id', account_id)
       .single()
 
@@ -156,6 +156,24 @@ export async function POST(request: Request) {
         { error: 'Failed to store message' },
         { status: 500 }
       )
+    }
+
+    // Trigger notifications (async, non-blocking)
+    try {
+      const { triggerNotifications } = await import('@/lib/notification-service')
+      triggerNotifications(supabase, {
+        id: message.id,
+        conversation_id: conversationId,
+        account_id: account_id,
+        account_name: accountRow.name || 'Unknown',
+        channel: 'teams',
+        sender_name: sender_name || sender_email || null,
+        email_subject: null,
+        message_text: messageText?.substring(0, 200) || null,
+        is_spam: false,
+      }).catch(err => console.error('Notification trigger failed:', err))
+    } catch (notifErr) {
+      console.error('Failed to load notification service:', notifErr)
     }
 
     // Get account settings for phase flags

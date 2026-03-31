@@ -116,7 +116,7 @@ export async function POST(request: Request) {
     // Verify account exists and is active
     const { data: accountRow, error: accountError } = await supabase
       .from('accounts')
-      .select('id, is_active')
+      .select('id, name, is_active')
       .eq('id', account_id)
       .single()
 
@@ -194,6 +194,26 @@ export async function POST(request: Request) {
         { error: 'Failed to store message' },
         { status: 500 }
       )
+    }
+
+    // Trigger email notifications (async, non-blocking)
+    if (!spamResult.isSpam) {
+      try {
+        const { triggerNotifications } = await import('@/lib/notification-service')
+        triggerNotifications(supabase, {
+          id: message.id,
+          conversation_id: conversationId,
+          account_id: account_id,
+          account_name: accountRow.name || 'Unknown',
+          channel: 'email',
+          sender_name: senderName || senderEmail,
+          email_subject: subject || null,
+          message_text: plainTextBody?.substring(0, 200) || null,
+          is_spam: spamResult.isSpam,
+        }).catch(err => console.error('Notification trigger failed:', err))
+      } catch (notifErr) {
+        console.error('Failed to load notification service:', notifErr)
+      }
     }
 
     // Skip AI processing for spam messages (save costs)

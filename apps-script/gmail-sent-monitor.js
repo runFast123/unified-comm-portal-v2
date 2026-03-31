@@ -33,12 +33,12 @@ const CONFIG = {
   // Webhook secret (must match N8N_WEBHOOK_SECRET in your portal's .env)
   WEBHOOK_SECRET: 'my-webhook-secret-123',
 
-  // How often to check (in minutes) - the trigger runs this often
-  CHECK_INTERVAL_MINUTES: 2,
+  // How often to check (in minutes) - Google allows: 1, 5, 10, 15, or 30
+  CHECK_INTERVAL_MINUTES: 5,
 
   // How far back to look for sent emails (in minutes) - should be slightly
   // more than CHECK_INTERVAL to avoid missing emails
-  LOOKBACK_MINUTES: 3,
+  LOOKBACK_MINUTES: 6,
 };
 
 // ============================================================================
