@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { CheckSquare, CheckCheck, Archive, UserPlus, Loader2, Inbox, List, Columns, X, Sparkles, User, ShieldAlert, ShieldCheck } from 'lucide-react'
+import { CheckSquare, CheckCheck, Archive, UserPlus, Loader2, Inbox, List, Columns, X, Sparkles, User, ShieldAlert, ShieldCheck, Mail } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { InboxList } from '@/components/inbox/inbox-list'
 import { InboxFiltersBar, type InboxFilters } from '@/components/inbox/inbox-filters'
@@ -114,11 +114,17 @@ export default function InboxPage() {
   const [newMessageCount, setNewMessageCount] = useState(0)
   const [myConversationsOnly, setMyConversationsOnly] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
-  const [spamView, setSpamView] = useState(() => {
-    if (typeof window !== 'undefined') return new URLSearchParams(window.location.search).get('spam') === 'true'
-    return false
+  type InboxView = 'inbox' | 'newsletter' | 'spam'
+  const [inboxView, setInboxView] = useState<InboxView>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      if (params.get('spam') === 'true') return 'spam'
+      if (params.get('newsletter') === 'true') return 'newsletter'
+    }
+    return 'inbox'
   })
   const [spamCount, setSpamCount] = useState(0)
+  const [newsletterCount, setNewsletterCount] = useState(0)
   // Dashboard filter from URL params (e.g., ?filter=pending, ?filter=sla_breached)
   const [dashboardFilter] = useState<string | null>(() => {
     if (typeof window !== 'undefined') return new URLSearchParams(window.location.search).get('filter')
@@ -189,7 +195,22 @@ export default function InboxPage() {
           conversations!messages_conversation_id_fkey ( status, assigned_to )
         `)
         .eq('direction', 'inbound')
-        .eq('is_spam', spamView)
+
+      // Apply view-specific spam/newsletter filters
+      if (inboxView === 'inbox') {
+        messagesQuery = messagesQuery.eq('is_spam', false)
+      } else if (inboxView === 'newsletter') {
+        messagesQuery = messagesQuery
+          .eq('is_spam', true)
+          .in('spam_reason', ['newsletter', 'marketing', 'automated_notification', 'ai_classified_newsletter'])
+      } else {
+        // spam view
+        messagesQuery = messagesQuery
+          .eq('is_spam', true)
+          .not('spam_reason', 'in', '(newsletter,marketing,automated_notification,ai_classified_newsletter)')
+      }
+
+      messagesQuery = messagesQuery
         .order('received_at', { ascending: false })
         .limit(100)
 
@@ -203,18 +224,30 @@ export default function InboxPage() {
         messagesQuery = messagesQuery.eq('account_id', userAccountId)
       }
 
-      // Also fetch spam count for the badge
+      // Also fetch newsletter + spam counts for the badges
+      let newsletterCountQuery = supabase
+        .from('messages')
+        .select('id', { count: 'exact', head: true })
+        .eq('direction', 'inbound')
+        .eq('is_spam', true)
+        .in('spam_reason', ['newsletter', 'marketing', 'automated_notification', 'ai_classified_newsletter'])
+      if (!isAdmin && userAccountId) {
+        newsletterCountQuery = newsletterCountQuery.eq('account_id', userAccountId)
+      }
+
       let spamCountQuery = supabase
         .from('messages')
         .select('id', { count: 'exact', head: true })
         .eq('direction', 'inbound')
         .eq('is_spam', true)
+        .not('spam_reason', 'in', '(newsletter,marketing,automated_notification,ai_classified_newsletter)')
       if (!isAdmin && userAccountId) {
         spamCountQuery = spamCountQuery.eq('account_id', userAccountId)
       }
 
-      const [messagesResult, spamCountResult] = await Promise.all([
+      const [messagesResult, newsletterCountResult, spamCountResult] = await Promise.all([
         messagesQuery,
+        newsletterCountQuery,
         spamCountQuery,
       ])
 
@@ -222,6 +255,7 @@ export default function InboxPage() {
         throw messagesResult.error
       }
 
+      setNewsletterCount(newsletterCountResult.count ?? 0)
       setSpamCount(spamCountResult.count ?? 0)
 
       const data = messagesResult.data
@@ -282,7 +316,7 @@ export default function InboxPage() {
     } finally {
       setLoading(false)
     }
-  }, [isAdmin, userAccountId, spamView, dashboardFilter])
+  }, [isAdmin, userAccountId, inboxView, dashboardFilter])
 
   useEffect(() => {
     fetchInboxItems()
@@ -331,10 +365,14 @@ export default function InboxPage() {
       toast.error('Failed to mark as not spam: ' + err.message)
     } else {
       setItems((prev) => prev.filter((item) => item.message_id !== messageId))
-      setSpamCount((prev) => Math.max(0, prev - 1))
+      if (inboxView === 'newsletter') {
+        setNewsletterCount((prev) => Math.max(0, prev - 1))
+      } else {
+        setSpamCount((prev) => Math.max(0, prev - 1))
+      }
       toast.success('Message moved back to inbox.')
     }
-  }, [toast])
+  }, [toast, inboxView])
 
   const handleMarkNotSpamBulk = useCallback(async () => {
     const ids = selectedIds.size > 0
@@ -350,11 +388,15 @@ export default function InboxPage() {
       toast.error('Failed to mark as not spam: ' + err.message)
     } else {
       setItems((prev) => prev.filter((item) => !ids.includes(item.message_id)))
-      setSpamCount((prev) => Math.max(0, prev - ids.length))
+      if (inboxView === 'newsletter') {
+        setNewsletterCount((prev) => Math.max(0, prev - ids.length))
+      } else {
+        setSpamCount((prev) => Math.max(0, prev - ids.length))
+      }
       clearSelection()
       toast.success(`Moved ${ids.length} message(s) back to inbox.`)
     }
-  }, [filteredItems, selectedIds, toast, clearSelection])
+  }, [filteredItems, selectedIds, toast, clearSelection, inboxView])
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -382,11 +424,13 @@ export default function InboxPage() {
       {/* Page header */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900">
-          {spamView ? 'Spam / Junk' : 'Unified Inbox'}
+          {inboxView === 'spam' ? 'Spam / Junk' : inboxView === 'newsletter' ? 'Newsletters' : 'Unified Inbox'}
         </h1>
         <p className="mt-1 text-sm text-gray-500">
-          {spamView
+          {inboxView === 'spam'
             ? 'Messages automatically filtered as spam or junk'
+            : inboxView === 'newsletter'
+            ? 'Newsletters, marketing emails, and automated notifications'
             : 'All pending messages across channels in one place'}
         </p>
       </div>
@@ -417,39 +461,45 @@ export default function InboxPage() {
         </div>
       )}
 
-      {/* Spam / Inbox toggle */}
+      {/* Inbox / Newsletter / Spam toggle */}
       <div className="flex items-center gap-2">
         <button
-          onClick={() => { setSpamView(false); setSelectedItem(null) }}
-          className={`inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-            !spamView
-              ? 'bg-teal-600 text-white shadow-sm'
-              : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+          onClick={() => { setInboxView('inbox'); setSelectedItem(null) }}
+          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+            inboxView === 'inbox' ? 'bg-teal-600 text-white shadow-sm' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
           }`}
         >
-          <Inbox size={16} />
+          <Inbox className="h-4 w-4" />
           Inbox
         </button>
         <button
-          onClick={() => { setSpamView(true); setSelectedItem(null) }}
-          className={`inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-            spamView
-              ? 'bg-orange-600 text-white shadow-sm'
-              : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+          onClick={() => { setInboxView('newsletter'); setSelectedItem(null) }}
+          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+            inboxView === 'newsletter' ? 'bg-amber-500 text-white shadow-sm' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
           }`}
         >
-          <ShieldAlert size={16} />
+          <Mail className="h-4 w-4" />
+          Newsletter
+          {newsletterCount > 0 && (
+            <span className="rounded-full bg-amber-200 text-amber-800 px-2 py-0.5 text-xs font-semibold">{newsletterCount}</span>
+          )}
+        </button>
+        <button
+          onClick={() => { setInboxView('spam'); setSelectedItem(null) }}
+          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+            inboxView === 'spam' ? 'bg-red-500 text-white shadow-sm' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+          }`}
+        >
+          <ShieldAlert className="h-4 w-4" />
           Spam
           {spamCount > 0 && (
-            <span className="ml-1 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-orange-100 px-1.5 text-xs font-semibold text-orange-700">
-              {spamCount > 99 ? '99+' : spamCount}
-            </span>
+            <span className="rounded-full bg-red-200 text-red-800 px-2 py-0.5 text-xs font-semibold">{spamCount}</span>
           )}
         </button>
       </div>
 
       {/* Filters */}
-      {!spamView && (
+      {inboxView === 'inbox' && (
       <div className="flex items-center gap-3">
         <div className="flex-1">
           <InboxFiltersBar filters={filters} onChange={setFilters} />
@@ -666,8 +716,8 @@ export default function InboxPage() {
                       const messageIds = selectedIds.size > 0
                         ? filteredItems.filter((item) => selectedIds.has(item.id)).map((item) => item.message_id)
                         : filteredItems.map((item) => item.message_id)
-                      // When archiving spam messages, also clear is_spam so they don't reappear in spam view on refresh
-                      const updateFields = spamView
+                      // When archiving spam/newsletter messages, also clear is_spam so they don't reappear
+                      const updateFields = inboxView !== 'inbox'
                         ? { replied: true, reply_required: false, is_spam: false }
                         : { replied: true, reply_required: false }
                       const { error: err } = await supabase
@@ -680,8 +730,10 @@ export default function InboxPage() {
                         setItems((prev) =>
                           prev.filter((item) => !messageIds.includes(item.message_id))
                         )
-                        // Also update spam count badge when archiving spam
-                        if (spamView) {
+                        // Also update count badges when archiving spam/newsletter
+                        if (inboxView === 'newsletter') {
+                          setNewsletterCount((prev) => Math.max(0, prev - messageIds.length))
+                        } else if (inboxView === 'spam') {
                           setSpamCount((prev) => Math.max(0, prev - messageIds.length))
                         }
                         toast.success(`Archived ${messageIds.length} message(s).`)
@@ -787,12 +839,20 @@ export default function InboxPage() {
       {/* Empty state */}
       {!loading && !error && items.length === 0 && (
         <div className="flex flex-col items-center justify-center rounded-lg border border-gray-200 bg-white py-16">
-          {spamView ? (
+          {inboxView === 'spam' ? (
             <>
               <ShieldCheck className="h-10 w-10 text-green-300" />
               <p className="mt-3 text-sm font-medium text-gray-700">No spam messages</p>
               <p className="mt-1 text-xs text-gray-500">
                 Your inbox is clean -- no messages have been flagged as spam.
+              </p>
+            </>
+          ) : inboxView === 'newsletter' ? (
+            <>
+              <Mail className="h-10 w-10 text-amber-300" />
+              <p className="mt-3 text-sm font-medium text-gray-700">No newsletters</p>
+              <p className="mt-1 text-xs text-gray-500">
+                No newsletters or marketing emails have been received.
               </p>
             </>
           ) : (
@@ -808,7 +868,7 @@ export default function InboxPage() {
       )}
 
       {/* Filtered empty state */}
-      {!loading && !error && items.length > 0 && filteredItems.length === 0 && !spamView && (
+      {!loading && !error && items.length > 0 && filteredItems.length === 0 && inboxView === 'inbox' && (
         <div className="flex flex-col items-center justify-center rounded-lg border border-gray-200 bg-white py-16">
           <Inbox className="h-10 w-10 text-gray-300" />
           <p className="mt-3 text-sm font-medium text-gray-700">
@@ -820,13 +880,13 @@ export default function InboxPage() {
         </div>
       )}
 
-      {/* Spam list */}
-      {!loading && !error && spamView && items.length > 0 && (
+      {/* Spam / Newsletter list */}
+      {!loading && !error && inboxView !== 'inbox' && items.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <p className="text-sm text-gray-600">
               <span className="font-semibold text-gray-900">{items.length}</span>{' '}
-              spam message{items.length !== 1 ? 's' : ''}
+              {inboxView === 'newsletter' ? 'newsletter' : 'spam'} message{items.length !== 1 ? 's' : ''}
             </p>
             <Button
               variant="secondary"
@@ -878,7 +938,7 @@ export default function InboxPage() {
       )}
 
       {/* Inbox list */}
-      {!loading && !error && !spamView && filteredItems.length > 0 && viewMode === 'list' && (
+      {!loading && !error && inboxView === 'inbox' && filteredItems.length > 0 && viewMode === 'list' && (
         <InboxList
           items={filteredItems}
           selectedIds={selectedIds}
@@ -887,7 +947,7 @@ export default function InboxPage() {
       )}
 
       {/* Split view */}
-      {!loading && !error && !spamView && filteredItems.length > 0 && viewMode === 'split' && (
+      {!loading && !error && inboxView === 'inbox' && filteredItems.length > 0 && viewMode === 'split' && (
         <div className="flex rounded-lg border border-gray-200 bg-white overflow-hidden" style={{ height: 'calc(100vh - 320px)' }}>
           {/* Left: message list (narrower) */}
           <div className="w-[45%] shrink-0 overflow-y-auto border-r border-gray-200">

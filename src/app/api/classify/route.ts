@@ -5,7 +5,7 @@ import type { Category, Sentiment, Urgency } from '@/types/database'
 
 const DEFAULT_CLASSIFICATION_PROMPT = `You are a customer message classifier for a telecommunications company. Analyze the customer message and return a JSON object with the following fields:
 
-- category: one of "Sales Inquiry", "Trouble Ticket", "Payment Issue", "Service Problem", "Technical Issue", "Billing Question", "Connection Issue", "Rate Issue", "General Inquiry"
+- category: one of "Sales Inquiry", "Trouble Ticket", "Payment Issue", "Service Problem", "Technical Issue", "Billing Question", "Connection Issue", "Rate Issue", "General Inquiry", "Newsletter/Marketing"
 - subcategory: a more specific label within the category
 - sentiment: one of "positive", "neutral", "negative"
 - urgency: one of "low", "medium", "high", "urgent"
@@ -131,6 +131,22 @@ export async function POST(request: Request) {
         { error: 'Failed to store classification' },
         { status: 500 }
       )
+    }
+
+    // If AI classified as Newsletter/Marketing with high confidence, mark as spam
+    if (classification.category === 'Newsletter/Marketing' && classification.confidence > 0.7) {
+      const { error: spamUpdateError } = await supabase
+        .from('messages')
+        .update({
+          is_spam: true,
+          spam_reason: 'ai_classified_newsletter',
+          reply_required: false,
+        })
+        .eq('id', message_id)
+
+      if (spamUpdateError) {
+        console.error('Failed to update message spam status after AI classification:', spamUpdateError)
+      }
     }
 
     return NextResponse.json(stored, { status: 200 })

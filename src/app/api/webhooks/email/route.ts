@@ -13,6 +13,9 @@ import {
 const SPAM_SENDER_PATTERNS = [
   'noreply@', 'no-reply@', 'notifications@', 'marketing@',
   'newsletter@', 'mailer-daemon@', 'postmaster@',
+  'digest@', 'updates@', 'news@', 'alerts@', 'promo@',
+  'campaigns@', 'bounce@', 'auto@', 'system@', 'donotreply@',
+  'unsubscribe@', 'feedback@', 'survey@', 'invite@',
 ]
 
 const SPAM_SUBJECT_KEYWORDS = [
@@ -21,9 +24,42 @@ const SPAM_SUBJECT_KEYWORDS = [
   'delivery status notification', 'mailer-daemon',
 ]
 
+const NEWSLETTER_SUBJECT_KEYWORDS = [
+  'webinar', 'invitation to', 'register now', 'sign up today',
+  'event reminder', 'join us', 'you\'re invited',
+  'digest', 'roundup', 'weekly update', 'monthly update', 'daily update',
+  'what\'s new', 'product update', 'release notes', 'changelog',
+  'award', 'nomination', 'submit your entry',
+  'survey', 'take our survey', 'your feedback',
+  'received $', 'payment of $', 'transaction alert',
+  'account statement', 'billing summary',
+  'trending', 'top stories', 'breaking news',
+  'limited time', 'exclusive offer', 'special deal', 'save up to',
+  'free trial', 'get started free',
+]
+
 const BULK_SENDER_PATTERNS = [
   'zendesk', 'freshdesk', 'hubspot', 'mailchimp',
   'sendgrid', 'constant contact', 'campaign monitor',
+  'mailgun', 'postmark', 'sparkpost', 'sendinblue', 'brevo',
+  'convertkit', 'drip', 'activecampaign', 'klaviyo',
+  'intercom', 'drift', 'crisp', 'tawk',
+]
+
+const NEWSLETTER_SENDER_DOMAINS = [
+  'mailchimp.com', 'sendgrid.net', 'hubspot.com', 'constantcontact.com',
+  'campaign-archive.com', 'createsend.com', 'mailgun.org',
+  'email.mg.', 'mail.', 'em.', 'e.', 'news.',
+  'microsoft.com', 'linkedin.com', 'quora.com', 'facebook.com',
+  'mercury.com', 'stripe.com', 'paypal.com', 'square.com',
+  'zoom.us', 'calendly.com', 'eventbrite.com', 'meetup.com',
+  'substack.com', 'medium.com', 'ghost.io',
+  'google.com', 'apple.com', 'amazon.com',
+  'notion.so', 'slack.com', 'atlassian.com', 'jira.com',
+  'github.com', 'gitlab.com', 'bitbucket.org',
+  'canva.com', 'figma.com', 'grammarly.com',
+  'juniperresearch.com', 'nice.com', 'abundantiot.com',
+  'lineleader.com', 'textus.com', 'ivoipe.com',
 ]
 
 interface SpamCheckResult {
@@ -38,31 +74,41 @@ function detectSpam(
 ): SpamCheckResult {
   const emailLower = (senderEmail || '').toLowerCase()
   const subjectLower = (subject || '').toLowerCase()
+  const bodyLower = messageText.toLowerCase()
 
-  // 1. Known spam sender patterns
-  for (const pattern of SPAM_SENDER_PATTERNS) {
-    if (emailLower.startsWith(pattern)) {
-      return { isSpam: true, reason: `Automated sender: ${pattern.replace('@', '')}` }
-    }
+  // 1. Check hard spam sender patterns
+  if (SPAM_SENDER_PATTERNS.some(p => emailLower.startsWith(p))) {
+    return { isSpam: true, reason: 'automated_notification' }
   }
 
-  // 2. Spam keywords in subject
-  for (const keyword of SPAM_SUBJECT_KEYWORDS) {
-    if (subjectLower.includes(keyword)) {
-      return { isSpam: true, reason: `Spam keyword in subject: ${keyword}` }
-    }
+  // 2. Check hard spam subject keywords
+  if (SPAM_SUBJECT_KEYWORDS.some(kw => subjectLower.includes(kw))) {
+    return { isSpam: true, reason: 'spam' }
   }
 
-  // 3. Bulk sender patterns
-  for (const pattern of BULK_SENDER_PATTERNS) {
-    if (emailLower.includes(pattern)) {
-      return { isSpam: true, reason: `Bulk sender: ${pattern}` }
-    }
+  // 3. Check newsletter sender domains
+  if (NEWSLETTER_SENDER_DOMAINS.some(d => emailLower.includes(d))) {
+    return { isSpam: true, reason: 'newsletter' }
   }
 
-  // 4. Empty or very short messages
-  if (!messageText || messageText.trim().length < 10) {
-    return { isSpam: true, reason: 'Empty or very short message' }
+  // 4. Check bulk sender platforms
+  if (BULK_SENDER_PATTERNS.some(p => emailLower.includes(p))) {
+    return { isSpam: true, reason: 'marketing' }
+  }
+
+  // 5. Check newsletter subject keywords
+  if (NEWSLETTER_SUBJECT_KEYWORDS.some(kw => subjectLower.includes(kw))) {
+    return { isSpam: true, reason: 'newsletter' }
+  }
+
+  // 6. Check body for unsubscribe links (strong newsletter indicator)
+  if (bodyLower.includes('unsubscribe') || bodyLower.includes('email preferences') || bodyLower.includes('opt out') || bodyLower.includes('manage your subscriptions')) {
+    return { isSpam: true, reason: 'newsletter' }
+  }
+
+  // 7. Check for empty/very short messages
+  if (messageText.trim().length < 10) {
+    return { isSpam: true, reason: 'spam' }
   }
 
   return { isSpam: false, reason: null }

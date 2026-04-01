@@ -30,6 +30,7 @@ export type Category =
   | 'Connection Issue'
   | 'Rate Issue'
   | 'General Inquiry'
+  | 'Newsletter/Marketing'
 
 export interface Account {
   id: string
