@@ -336,7 +336,7 @@ function TeamsBubble({ message, isOutbound }: { message: Message; isOutbound: bo
           isOutbound ? 'bg-[#6264a7]' : 'bg-gray-400'
         )}
       >
-        {(message.sender_name || 'U')[0].toUpperCase()}
+        {(message.sender_name?.trim() || 'U')[0].toUpperCase()}
       </div>
 
       <div>
