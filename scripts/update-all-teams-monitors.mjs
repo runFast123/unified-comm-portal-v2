@@ -45,11 +45,8 @@ function buildPollingWorkflow(company, accountId) {
       // 2. Get authenticated user ID + last poll time
       {
         parameters: {
-          jsCode: `// Get last poll time and the authenticated user's ID (to skip own messages)
-const staticData = $getWorkflowStaticData('global');
-const lastPoll = staticData.lastPollTime || new Date(Date.now() - 2 * 60 * 1000).toISOString();
-const myUserId = staticData.myUserId || '';
-return [{ json: { lastPollTime: lastPoll, myUserId } }];`,
+          jsCode: `// Pass through to Get My User ID — the poll time is read later in Cache node
+return [{ json: { trigger: true } }];`,
         },
         name: 'Get Last Poll Time',
         type: 'n8n-nodes-base.code',
@@ -81,11 +78,13 @@ return [{ json: { lastPollTime: lastPoll, myUserId } }];`,
       {
         parameters: {
           jsCode: `const staticData = $getWorkflowStaticData('global');
-const meData = $('Get My User ID').first().json;
-staticData.myUserId = meData.id || '';
-staticData.myDisplayName = meData.displayName || '';
-const pollData = $('Get Last Poll Time').first().json;
-return [{ json: { lastPollTime: pollData.lastPollTime, myUserId: staticData.myUserId, myDisplayName: staticData.myDisplayName } }];`,
+const meData = $input.first().json;
+if (meData.id) {
+  staticData.myUserId = meData.id;
+  staticData.myDisplayName = meData.displayName || '';
+}
+const lastPoll = staticData.lastPollTime || new Date(Date.now() - 2 * 60 * 1000).toISOString();
+return [{ json: { lastPollTime: lastPoll, myUserId: staticData.myUserId || '', myDisplayName: staticData.myDisplayName || '' } }];`,
         },
         name: 'Cache My User ID',
         type: 'n8n-nodes-base.code',
@@ -278,8 +277,8 @@ return [{ json: { updated: true, lastPollTime: staticData.lastPollTime } }];`,
       },
     ],
     connections: {
-      'Every 1 Minute': { main: [[{ node: 'Get Last Poll Time', type: 'main', index: 0 }, { node: 'Get My User ID', type: 'main', index: 0 }]] },
-      'Get Last Poll Time': { main: [[{ node: 'Cache My User ID', type: 'main', index: 0 }]] },
+      'Every 1 Minute': { main: [[{ node: 'Get Last Poll Time', type: 'main', index: 0 }]] },
+      'Get Last Poll Time': { main: [[{ node: 'Get My User ID', type: 'main', index: 0 }]] },
       'Get My User ID': { main: [[{ node: 'Cache My User ID', type: 'main', index: 0 }]] },
       'Cache My User ID': { main: [[{ node: 'List All Chats', type: 'main', index: 0 }]] },
       'List All Chats': { main: [[{ node: 'Filter Active Chats', type: 'main', index: 0 }]] },
