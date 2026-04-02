@@ -230,7 +230,7 @@ export default function DashboardPage() {
       .select('id, sender_name, email_subject, message_text, received_at, replied, is_spam, conversation_id, channel, accounts!messages_account_id_fkey(name)')
       .eq('direction', 'inbound')
       .order('received_at', { ascending: false })
-      .limit(50)
+      .limit(200)
 
     if (startDate) query = query.gte('received_at', startDate)
 
@@ -240,11 +240,11 @@ export default function DashboardPage() {
     }
 
     switch (type) {
-      case 'total': query = query.eq('is_spam', false); break
+      case 'total': break // show ALL inbound messages (matches the KPI count)
       case 'pending': query = query.eq('reply_required', true).eq('replied', false).eq('is_spam', false); break
       case 'spam': query = query.eq('is_spam', true); break
       case 'sla_breached': query = query.eq('reply_required', true).eq('replied', false).eq('is_spam', false); break
-      case 'ai_processed': break // show all for now
+      case 'ai_processed': query = query.eq('is_spam', false); break
     }
 
     const { data } = await query
@@ -1135,7 +1135,7 @@ export default function DashboardPage() {
         <Card className="animate-slide-up">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-semibold text-gray-900">
-              {dashDrillTitle[dashDrill]} ({dashDrillMsgs.length}{dashDrillMsgs.length >= 50 ? '+' : ''})
+              {dashDrillTitle[dashDrill]} ({dashDrillMsgs.length}{dashDrillMsgs.length >= 200 ? '+' : ''})
             </h3>
             <button
               onClick={() => { setDashDrill(null); setDashDrillMsgs([]) }}
