@@ -37,7 +37,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    const { message_id, message_text, channel, account_id, conversation_id } = body
+    const { message_id, message_text, channel, account_id, conversation_id, force } = body
 
     if (!message_id || !message_text || !account_id || !conversation_id) {
       return NextResponse.json(
@@ -83,6 +83,36 @@ export async function POST(request: Request) {
 
     if (convCheck.account_id !== account_id) {
       return NextResponse.json({ error: 'Conversation does not belong to this account' }, { status: 403 })
+    }
+
+    // Skip AI reply if message is spam/newsletter (unless force=true from manual Generate button)
+    if (!force) {
+      const { data: msgCheck } = await supabase
+        .from('messages')
+        .select('is_spam, spam_reason')
+        .eq('id', message_id)
+        .maybeSingle()
+
+      if (msgCheck?.is_spam) {
+        return NextResponse.json(
+          { message: 'Skipped — message is spam/newsletter', skipped: true },
+          { status: 200 }
+        )
+      }
+
+      // Also check if classification already tagged it as Newsletter/Marketing
+      const { data: classCheck } = await supabase
+        .from('message_classifications')
+        .select('category')
+        .eq('message_id', message_id)
+        .maybeSingle()
+
+      if (classCheck?.category === 'Newsletter/Marketing') {
+        return NextResponse.json(
+          { message: 'Skipped — classified as Newsletter/Marketing', skipped: true },
+          { status: 200 }
+        )
+      }
     }
 
     // Fetch account settings

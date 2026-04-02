@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { Archive, AlertTriangle, CheckCheck } from 'lucide-react'
+import { Archive, AlertTriangle, CheckCheck, Sparkles } from 'lucide-react'
 import { useToast } from '@/components/ui/toast'
 import { ChannelIcon } from '@/components/ui/channel-icon'
 import { Badge } from '@/components/ui/badge'
@@ -201,6 +201,33 @@ export function InboxRow({ item, selected, onSelect, onItemClick, isActive }: In
     }
   }
 
+  const handleGenerateReply = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    toast.info('Generating AI reply...')
+    try {
+      const res = await fetch('/api/ai-reply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message_id: item.message_id,
+          message_text: item.subject_or_preview,
+          channel: item.channel,
+          account_id: item.account_id,
+          conversation_id: item.conversation_id,
+          force: true,
+        }),
+      })
+      if (res.ok) {
+        toast.success('AI reply generated — refresh to see it')
+      } else {
+        const data = await res.json().catch(() => ({}))
+        toast.error(data.error || 'Failed to generate reply')
+      }
+    } catch {
+      toast.error('Failed to generate AI reply')
+    }
+  }
+
   const priorityColorClass = getPriorityColor(item.priority)
   const rawSender = item.sender_name || 'Unknown'
   const senderName = cleanSenderName(rawSender)
@@ -298,8 +325,18 @@ export function InboxRow({ item, selected, onSelect, onItemClick, isActive }: In
       </div>
 
       {/* AI Status */}
-      <div className="flex-shrink-0">
+      <div className="flex-shrink-0 flex items-center gap-1.5">
         {getAiStatusBadge(item.ai_status)}
+        {(item.ai_status === 'no_draft' || item.ai_status === 'classify_only') && (
+          <button
+            onClick={handleGenerateReply}
+            className="inline-flex items-center gap-1 rounded-md bg-teal-50 px-2 py-0.5 text-xs font-medium text-teal-700 hover:bg-teal-100 transition-colors"
+            title="Generate AI reply for this message"
+          >
+            <Sparkles className="h-3 w-3" />
+            Generate
+          </button>
+        )}
       </div>
 
       {/* Quick action buttons on hover */}

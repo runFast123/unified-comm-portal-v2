@@ -266,12 +266,13 @@ export async function POST(request: Request) {
     if (!spamResult.isSpam) {
       // Get account settings for phase flags
       const account = await getAccountSettings(supabase, account_id)
+      const origin = new URL(request.url).origin
+      let skipAIReply = false
 
-      // Phase 1: AI Classification
+      // Phase 1: AI Classification (must complete before Phase 2)
       if (account.phase1_enabled) {
         try {
-          const origin = new URL(request.url).origin
-          await fetch(`${origin}/api/classify`, {
+          const classifyRes = await fetch(`${origin}/api/classify`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -285,15 +286,24 @@ export async function POST(request: Request) {
             }),
             signal: AbortSignal.timeout(30000),
           })
+
+          // Check if classification marked it as Newsletter/Marketing → skip AI reply
+          if (classifyRes.ok) {
+            try {
+              const classifyData = await classifyRes.json()
+              if (classifyData.category === 'Newsletter/Marketing') {
+                skipAIReply = true
+              }
+            } catch { /* ignore parse errors */ }
+          }
         } catch (classifyError) {
           console.error(`Phase 1 classification failed [message_id=${message.id}, account_id=${account_id}, channel=email]:`, classifyError instanceof Error ? classifyError.message : classifyError)
         }
       }
 
-      // Phase 2: AI Reply Generation
-      if (account.phase2_enabled) {
+      // Phase 2: AI Reply Generation — only if not classified as spam/newsletter
+      if (account.phase2_enabled && !skipAIReply) {
         try {
-          const origin = new URL(request.url).origin
           await fetch(`${origin}/api/ai-reply`, {
             method: 'POST',
             headers: {
