@@ -122,6 +122,15 @@ export async function POST(request: Request) {
       }
     }
 
+    // Validate AI output against allowed enum values
+    const validCategories = ['Sales Inquiry', 'Trouble Ticket', 'Payment Issue', 'Service Problem', 'Technical Issue', 'Billing Question', 'Connection Issue', 'Rate Issue', 'General Inquiry', 'Newsletter/Marketing']
+    const validSentiments = ['positive', 'neutral', 'negative']
+    const validUrgencies = ['low', 'medium', 'high', 'urgent']
+    if (!validCategories.includes(classification.category)) classification.category = 'General Inquiry'
+    if (!validSentiments.includes(classification.sentiment)) classification.sentiment = 'neutral'
+    if (!validUrgencies.includes(classification.urgency)) classification.urgency = 'medium'
+    if (typeof classification.confidence !== 'number' || classification.confidence < 0 || classification.confidence > 1) classification.confidence = 0.5
+
     const supabase = supabaseForAccount
 
     // Store classification in message_classifications table

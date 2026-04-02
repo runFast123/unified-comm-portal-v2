@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase-server'
-import { validateWebhookSecret } from '@/lib/api-helpers'
+import { validateWebhookSecret, checkRateLimit } from '@/lib/api-helpers'
 
 export async function POST(request: Request) {
   try {
@@ -31,6 +31,11 @@ export async function POST(request: Request) {
         { error: 'Missing required field: account_id' },
         { status: 400 }
       )
+    }
+
+    // Rate limit per account
+    if (!checkRateLimit(`teams-reply:${account_id}`)) {
+      return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 })
     }
 
     const supabase = await createServiceRoleClient()

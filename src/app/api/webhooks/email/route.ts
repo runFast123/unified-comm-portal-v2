@@ -216,7 +216,7 @@ export async function POST(request: Request) {
         conversation_id: conversationId,
         account_id,
         channel: 'email',
-        sender_name: sender || null,
+        sender_name: senderName || sender || null,
         sender_type: 'customer',
         message_text: plainTextBody,
         message_type: 'text',

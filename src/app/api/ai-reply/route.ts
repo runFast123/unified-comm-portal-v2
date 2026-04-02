@@ -85,6 +85,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Conversation does not belong to this account' }, { status: 403 })
     }
 
+    // Prevent duplicate AI replies for the same message
+    if (!force) {
+      const { data: existingReply } = await supabase
+        .from('ai_replies')
+        .select('id')
+        .eq('message_id', message_id)
+        .maybeSingle()
+      if (existingReply) {
+        return NextResponse.json(
+          { message: 'AI reply already exists for this message', skipped: true, existing_id: existingReply.id },
+          { status: 200 }
+        )
+      }
+    }
+
     // Skip AI reply if message is spam/newsletter (unless force=true from manual Generate button)
     if (!force) {
       const { data: msgCheck } = await supabase
@@ -118,11 +133,15 @@ export async function POST(request: Request) {
     // Fetch account settings
     const account = await getAccountSettings(supabase, account_id)
 
-    // Validate channel against allowed values
+    // Validate channel against allowed values — reject invalid channels
     const validChannels: ChannelType[] = ['email', 'teams', 'whatsapp']
-    const channelKey: ChannelType = validChannels.includes(channel as ChannelType)
-      ? (channel as ChannelType)
-      : 'email'
+    if (!channel || !validChannels.includes(channel as ChannelType)) {
+      return NextResponse.json(
+        { error: `Invalid or missing channel "${channel}". Valid channels: ${validChannels.join(', ')}` },
+        { status: 400 }
+      )
+    }
+    const channelKey: ChannelType = channel as ChannelType
     let systemPrompt: string
 
     if (account.ai_system_prompt && account.ai_system_prompt.trim().length > 0) {

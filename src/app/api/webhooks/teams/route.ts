@@ -125,7 +125,7 @@ export async function POST(request: Request) {
       : null
 
     // Determine if this is an agent message (company user replying in Teams)
-    const isAgent = is_agent_message === true
+    const isAgent = is_agent_message === true || is_agent_message === 'true'
     const senderType = isAgent ? 'agent' : 'customer'
     const direction = isAgent ? 'outbound' : 'inbound'
 
@@ -159,7 +159,23 @@ export async function POST(request: Request) {
       )
     }
 
-    // Trigger notifications (async, non-blocking)
+    // Skip AI processing and notifications for agent messages
+    if (isAgent) {
+      // If agent message, also mark the inbound messages in this conversation as replied
+      await supabase
+        .from('messages')
+        .update({ replied: true })
+        .eq('conversation_id', conversationId)
+        .eq('direction', 'inbound')
+        .eq('replied', false)
+
+      return NextResponse.json(
+        { message_id: message.id, conversation_id: conversationId, is_agent: true },
+        { status: 201 }
+      )
+    }
+
+    // Trigger notifications for customer messages only (async, non-blocking)
     try {
       const { triggerNotifications } = await import('@/lib/notification-service')
       triggerNotifications(supabase, {
@@ -175,22 +191,6 @@ export async function POST(request: Request) {
       }).catch(err => console.error('Notification trigger failed:', err))
     } catch (notifErr) {
       console.error('Failed to load notification service:', notifErr)
-    }
-
-    // Skip AI processing for agent messages (they're our own replies, not customer inquiries)
-    if (isAgent) {
-      // If agent message, also mark the inbound messages in this conversation as replied
-      await supabase
-        .from('messages')
-        .update({ replied: true })
-        .eq('conversation_id', conversationId)
-        .eq('direction', 'inbound')
-        .eq('replied', false)
-
-      return NextResponse.json(
-        { message_id: message.id, conversation_id: conversationId, is_agent: true },
-        { status: 201 }
-      )
     }
 
     // Get account settings for phase flags
