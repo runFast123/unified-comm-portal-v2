@@ -33,6 +33,7 @@ interface ConversationActionsProps {
   aiDraftText: string | null
   participantEmail: string | null
   emailSubject: string | null
+  teamsChatId?: string | null
 }
 
 export function ConversationActions({
@@ -45,6 +46,7 @@ export function ConversationActions({
   aiDraftText,
   participantEmail,
   emailSubject,
+  teamsChatId,
 }: ConversationActionsProps) {
   const router = useRouter()
   const { toast } = useToast()
@@ -308,6 +310,8 @@ export function ConversationActions({
             subject: emailSubject ? `Re: ${emailSubject}` : 'Re: Your inquiry',
             body: aiDraftText,
             conversation_id: conversationId,
+            reply_text: aiDraftText,
+            teams_chat_id: teamsChatId || undefined,
           },
         }),
       })
@@ -345,7 +349,7 @@ export function ConversationActions({
     } finally {
       setLoading(null)
     }
-  }, [aiReplyId, accountId, accountName, aiDraftText, conversationId, participantEmail, router, toast, channel, emailSubject])
+  }, [aiReplyId, accountId, accountName, aiDraftText, conversationId, participantEmail, router, toast, channel, emailSubject, teamsChatId])
 
   const handleEditSend = useCallback(async () => {
     if (!participantEmail) {
@@ -389,6 +393,8 @@ export function ConversationActions({
             subject: emailSubject ? `Re: ${emailSubject}` : 'Re: Your inquiry',
             body: editText,
             conversation_id: conversationId,
+            reply_text: editText,
+            teams_chat_id: teamsChatId || undefined,
           },
         }),
       })
@@ -422,7 +428,7 @@ export function ConversationActions({
     } finally {
       setLoading(null)
     }
-  }, [editText, aiReplyId, accountId, accountName, participantEmail, conversationId, router, toast, channel, emailSubject])
+  }, [editText, aiReplyId, accountId, accountName, participantEmail, conversationId, router, toast, channel, emailSubject, teamsChatId])
 
   const handleManualReply = useCallback(async () => {
     if (!participantEmail) {
@@ -469,6 +475,8 @@ export function ConversationActions({
             subject: emailSubject ? `Re: ${emailSubject}` : 'Re: Your inquiry',
             body: manualText,
             conversation_id: conversationId,
+            reply_text: manualText,
+            teams_chat_id: teamsChatId || undefined,
           },
         }),
       })
@@ -486,7 +494,7 @@ export function ConversationActions({
     } finally {
       setLoading(null)
     }
-  }, [manualText, conversationId, accountId, channel, accountName, participantEmail, router, toast, emailSubject])
+  }, [manualText, conversationId, accountId, channel, accountName, participantEmail, router, toast, emailSubject, teamsChatId])
 
   const handleMarkReplied = useCallback(async () => {
     setLoading('mark_replied')

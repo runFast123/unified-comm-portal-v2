@@ -64,6 +64,7 @@ export default async function ConversationPage({
       participant_name,
       participant_email,
       participant_phone,
+      teams_chat_id,
       tags,
       first_message_at,
       last_message_at,
@@ -260,6 +261,7 @@ export default async function ConversationPage({
               aiDraftText={aiReply?.draft_text || aiReply?.edited_text || null}
               participantEmail={conversation.participant_email}
               emailSubject={emailSubject}
+              teamsChatId={conversation.teams_chat_id || null}
             />
           </div>
         </div>
