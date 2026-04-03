@@ -233,11 +233,10 @@ for (const msg of messages) {
 
   if (!text || text.length < 2) continue;
 
-  // Detect if this message is from an internal user (same org tenant = agent)
+  // Detect if this message is from the portal's API user (skip their messages)
+  // Only the authenticated API user is considered "agent" — other users are customers
   const senderUserId = msg.from?.user?.id || '';
-  const senderTenantId = msg.from?.user?.tenantId || '';
-  // Agent if: same user as API user, OR same tenant as our organization
-  const isAgent = (myUserId && senderUserId === myUserId) || (orgTenantId && senderTenantId === orgTenantId);
+  const isAgent = (myUserId && senderUserId === myUserId);
 
   results.push({
     account_id: '${accountId}',
