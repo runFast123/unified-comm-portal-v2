@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { Archive, AlertTriangle, CheckCheck, Sparkles } from 'lucide-react'
 import { useToast } from '@/components/ui/toast'
+import { isUnread } from '@/hooks/useReadStatus'
 import { ChannelIcon } from '@/components/ui/channel-icon'
 import { Badge } from '@/components/ui/badge'
 import { SLABadge } from '@/components/inbox/sla-badge'
@@ -233,6 +234,7 @@ export function InboxRow({ item, selected, onSelect, onItemClick, isActive }: In
   const senderName = cleanSenderName(rawSender)
   const senderEmail = extractEmail(rawSender)
   const accountName = item.account_name || ''
+  const unread = isUnread(item.conversation_id, item.timestamp)
 
   return (
     <div
@@ -272,7 +274,8 @@ export function InboxRow({ item, selected, onSelect, onItemClick, isActive }: In
           {getInitials(senderName)}
         </div>
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-gray-900 truncate leading-tight">
+          <p className={cn("text-sm truncate leading-tight flex items-center gap-1.5", unread ? "font-bold text-gray-900" : "font-semibold text-gray-700")}>
+            {unread && <span className="inline-block h-2 w-2 rounded-full bg-teal-500 flex-shrink-0" />}
             {senderName}
           </p>
           <p className="text-xs text-gray-400 truncate leading-tight mt-0.5">{accountName}</p>

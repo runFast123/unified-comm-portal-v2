@@ -50,7 +50,18 @@ export function ConversationActions({
 }: ConversationActionsProps) {
   const router = useRouter()
   const { toast } = useToast()
+  const supabaseRef = createClient()
   const [loading, setLoading] = useState<string | null>(null)
+
+  // Helper: update conversation status to waiting_on_customer after reply sent
+  const markWaitingOnCustomer = useCallback(async () => {
+    try {
+      await supabaseRef
+        .from('conversations')
+        .update({ status: 'waiting_on_customer' })
+        .eq('id', conversationId)
+    } catch { /* non-critical */ }
+  }, [conversationId, supabaseRef])
   const [showManualReply, setShowManualReply] = useState(false)
   const [showEditReply, setShowEditReply] = useState(false)
   const [showTemplates, setShowTemplates] = useState(false)
@@ -340,6 +351,7 @@ export function ConversationActions({
         })
 
         toast.success('AI reply approved and sent!')
+        await markWaitingOnCustomer()
       } else {
         toast.warning('Reply approved but sending failed. You can retry from the inbox.')
       }
@@ -418,6 +430,7 @@ export function ConversationActions({
         })
 
         toast.success('Reply sent successfully!')
+        await markWaitingOnCustomer()
       } else {
         toast.error('Failed to send reply.')
       }
@@ -483,6 +496,7 @@ export function ConversationActions({
 
       if (res.ok) {
         toast.success('Manual reply sent!')
+        await markWaitingOnCustomer()
       } else {
         toast.warning('Message saved but sending failed.')
       }
@@ -619,11 +633,11 @@ export function ConversationActions({
 
   return (
     <div className="sticky bottom-0 bg-white border-t border-gray-200 py-3 px-4 z-10 space-y-3">
-      {/* Warning banner */}
+      {/* Warning banner — channel-aware */}
       <div className="flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-700">
         <Info size={14} className="shrink-0 mt-0.5" />
         <span>
-          Replied from Gmail directly? Click <strong>&quot;Mark as Replied&quot;</strong> to sync the status here.
+          Replied from {channel === 'teams' ? 'Teams' : channel === 'whatsapp' ? 'WhatsApp' : 'Gmail'} directly? Click <strong>&quot;Mark as Replied&quot;</strong> to sync the status here.
         </span>
       </div>
 
@@ -749,9 +763,12 @@ export function ConversationActions({
             <ChevronDown size={12} />
           </Button>
           {showTemplates && (
-            <div className="absolute bottom-full left-0 mb-1 w-96 rounded-lg border border-gray-200 bg-white shadow-lg z-20">
-              <div className="px-3 py-2 border-b border-gray-100 space-y-2">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Quick Reply Templates</p>
+            <div className="absolute bottom-full left-0 mb-1 w-[28rem] rounded-xl border border-gray-200 bg-white shadow-xl z-20">
+              <div className="px-4 py-3 border-b border-gray-100 space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold text-gray-800">Canned Responses</p>
+                  <span className="text-xs text-gray-400">{templates.length} templates</span>
+                </div>
                 {/* Search input */}
                 <div className="relative">
                   <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />

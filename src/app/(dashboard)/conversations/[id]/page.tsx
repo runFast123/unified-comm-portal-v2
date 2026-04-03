@@ -3,6 +3,8 @@ import { notFound } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
 import { ChannelIcon } from '@/components/ui/channel-icon'
 import { ConversationThread } from '@/components/dashboard/conversation-thread'
+import { ScrollToBottom } from '@/components/dashboard/scroll-to-bottom'
+import { MarkRead } from '@/components/dashboard/mark-read'
 import { AISidebar } from '@/components/dashboard/ai-sidebar'
 import { ConversationActions } from '@/components/dashboard/conversation-actions'
 import { StatusDropdown } from '@/components/dashboard/status-dropdown'
@@ -223,10 +225,17 @@ export default async function ConversationPage({
                     currentAssignedName={assignedUser?.full_name || assignedUser?.email || null}
                   />
                 </div>
-                <p className="text-xs text-gray-500 truncate max-w-[200px] sm:max-w-none">
-                  {accountName} &middot; {getChannelLabel(channel)}
+                <p className="text-xs text-gray-500 truncate max-w-[200px] sm:max-w-none flex items-center gap-1 flex-wrap">
+                  <span>{accountName.replace(/\s+Teams$/i, '')}</span>
+                  <span>&middot;</span>
+                  <span>{getChannelLabel(channel)}</span>
+                  {channel === 'teams' && conversation.teams_chat_id && (
+                    <span className="inline-flex items-center gap-0.5 rounded bg-indigo-50 px-1.5 py-0 text-[10px] font-medium text-indigo-600">
+                      {conversation.teams_chat_id.includes('uni01_') ? '1:1 Chat' : 'Group'}
+                    </span>
+                  )}
                   {conversation.participant_email && (
-                    <span className="hidden sm:inline"> &middot; {conversation.participant_email}</span>
+                    <span className="hidden sm:inline">&middot; {conversation.participant_email}</span>
                   )}
                 </p>
               </div>
@@ -235,13 +244,18 @@ export default async function ConversationPage({
         </div>
       </div>
 
+      <MarkRead conversationId={id} />
+
       {/* Main content area */}
       <div className="flex flex-1 flex-col lg:flex-row overflow-hidden">
         {/* Message thread */}
         <div className="flex flex-1 flex-col min-h-0">
           <div className="flex-1 overflow-y-auto px-4 sm:px-6">
             {messages && messages.length > 0 ? (
+              <>
               <ConversationThread messages={messages} channel={channel} />
+              <ScrollToBottom messageCount={messages.length} />
+              </>
             ) : (
               <div className="flex items-center justify-center h-full text-gray-400 text-sm">
                 No messages in this conversation yet.

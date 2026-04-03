@@ -96,9 +96,22 @@ export async function findOrCreateConversation(
   }
 
   if (existing) {
+    // Reactivate conversation if it was resolved/waiting — customer sent a new message
+    const updateFields: Record<string, unknown> = { last_message_at: new Date().toISOString() }
+    // Auto-reactivate resolved or waiting conversations on new inbound
+    const reactivateStatuses = ['resolved', 'waiting_on_customer']
+    // Query current status to check if reactivation needed
+    const { data: currentConv } = await supabase
+      .from('conversations')
+      .select('status')
+      .eq('id', existing.id)
+      .maybeSingle()
+    if (currentConv && reactivateStatuses.includes(currentConv.status)) {
+      updateFields.status = 'active'
+    }
     await supabase
       .from('conversations')
-      .update({ last_message_at: new Date().toISOString() })
+      .update(updateFields)
       .eq('id', existing.id)
     return existing.id
   }

@@ -20,6 +20,7 @@ import {
   CheckCircle,
   Reply,
   ArrowUpRight,
+  Send,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -121,6 +122,7 @@ export function InboxPreview({ item }: InboxPreviewProps) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [quickReplyText, setQuickReplyText] = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -222,6 +224,77 @@ export function InboxPreview({ item }: InboxPreviewProps) {
       setActionLoading(null)
     }
   }, [data, toast])
+
+  const handleQuickReply = useCallback(async () => {
+    if (!quickReplyText.trim()) return
+    setActionLoading('quick-reply')
+    try {
+      const actionMap: Record<string, string> = { email: 'send_email_reply', teams: 'send_teams_reply', whatsapp: 'send_whatsapp_reply' }
+      const supabase = createClient()
+
+      // Get conversation details for teams_chat_id
+      const { data: conv } = await supabase
+        .from('conversations')
+        .select('teams_chat_id, participant_email')
+        .eq('id', item.conversation_id)
+        .maybeSingle()
+
+      const res = await fetch('/api/n8n', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: actionMap[item.channel] || 'send_email_reply',
+          account_id: item.account_id,
+          data: {
+            to: conv?.participant_email || '',
+            subject: item.subject_or_preview ? `Re: ${item.subject_or_preview.substring(0, 100)}` : 'Re: Your inquiry',
+            body: quickReplyText,
+            reply_text: quickReplyText,
+            conversation_id: item.conversation_id,
+            teams_chat_id: conv?.teams_chat_id || undefined,
+          },
+        }),
+      })
+
+      if (res.ok) {
+        // Create outbound message record
+        await supabase.from('messages').insert({
+          conversation_id: item.conversation_id,
+          account_id: item.account_id,
+          channel: item.channel,
+          sender_name: item.account_name || 'Agent',
+          sender_type: 'agent',
+          message_text: quickReplyText,
+          direction: 'outbound',
+          replied: true,
+          reply_required: false,
+          timestamp: new Date().toISOString(),
+          received_at: new Date().toISOString(),
+        })
+        // Mark inbound as replied
+        await supabase
+          .from('messages')
+          .update({ replied: true })
+          .eq('conversation_id', item.conversation_id)
+          .eq('direction', 'inbound')
+          .eq('replied', false)
+        // Update conversation status
+        await supabase
+          .from('conversations')
+          .update({ status: 'waiting_on_customer' })
+          .eq('id', item.conversation_id)
+
+        toast.success('Reply sent!')
+        setQuickReplyText('')
+      } else {
+        toast.error('Failed to send reply')
+      }
+    } catch (err: any) {
+      toast.error('Error: ' + err.message)
+    } finally {
+      setActionLoading(null)
+    }
+  }, [quickReplyText, item, toast])
 
   const handleEscalate = useCallback(async () => {
     setActionLoading('escalate')
@@ -432,8 +505,31 @@ export function InboxPreview({ item }: InboxPreviewProps) {
       </div>
 
       {/* Quick Action Buttons */}
-      <div className="shrink-0 border-t border-gray-200 bg-white px-4 py-2.5">
-        <div className="flex items-center gap-2">
+      {/* Quick Reply */}
+      <div className="shrink-0 border-t border-gray-200 bg-white px-4 py-2.5 space-y-2">
+        <div className="flex items-end gap-2">
+          <textarea
+            value={quickReplyText}
+            onChange={(e) => setQuickReplyText(e.target.value)}
+            placeholder="Type a quick reply..."
+            rows={2}
+            className="flex-1 text-sm rounded-lg border border-gray-200 px-3 py-2 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 focus:outline-none resize-none"
+          />
+          <Button
+            variant="primary"
+            size="sm"
+            disabled={!quickReplyText.trim() || actionLoading === 'quick-reply'}
+            onClick={handleQuickReply}
+          >
+            {actionLoading === 'quick-reply' ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <Send size={14} />
+            )}
+            Send
+          </Button>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
           {data.aiDraft && data.aiDraft.status === 'pending_approval' && (
             <Button
               variant="success"
@@ -446,15 +542,9 @@ export function InboxPreview({ item }: InboxPreviewProps) {
               ) : (
                 <CheckCircle size={14} />
               )}
-              Approve
+              Approve AI Draft
             </Button>
           )}
-          <Link href={`/conversations/${item.conversation_id}`}>
-            <Button variant="secondary" size="sm">
-              <Reply size={14} />
-              Reply
-            </Button>
-          </Link>
           <Button
             variant="secondary"
             size="sm"
@@ -471,9 +561,9 @@ export function InboxPreview({ item }: InboxPreviewProps) {
           </Button>
           <div className="flex-1" />
           <Link href={`/conversations/${item.conversation_id}`}>
-            <Button variant="primary" size="sm">
+            <Button variant="secondary" size="sm">
               <ExternalLink size={14} />
-              Open Full Conversation
+              Full View
             </Button>
           </Link>
         </div>

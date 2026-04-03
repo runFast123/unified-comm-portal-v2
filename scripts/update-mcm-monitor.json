@@ -1,0 +1,84 @@
+{
+  "name": "Mycountrymobile - Teams Monitor",
+  "nodes": [
+    {
+      "parameters": {
+        "event": "newChatMessage",
+        "chatId": "19:uni01_nzutm4fap77ipxkbdqrxhy4slpak23avepfyys2cwgia522nqi3q@thread.v2",
+        "pollTimes": {
+          "item": [{"mode": "everyMinute"}]
+        }
+      },
+      "name": "Teams Trigger",
+      "type": "n8n-nodes-base.microsoftTeamsTrigger",
+      "typeVersion": 1,
+      "position": [256, 304],
+      "id": "tt1",
+      "webhookId": "244df82c-676e-4725-ac90-d550e1a676a5",
+      "credentials": {
+        "microsoftTeamsOAuth2Api": {
+          "id": "0lLW5CbkT2yJCDAB",
+          "name": "Aman testing"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://graph.microsoft.com/v1.0/chats/19:uni01_nzutm4fap77ipxkbdqrxhy4slpak23avepfyys2cwgia522nqi3q@thread.v2/messages?$top=1&$orderby=createdDateTime desc",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "microsoftTeamsOAuth2Api",
+        "options": {}
+      },
+      "name": "Fetch Latest Message",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 304],
+      "id": "fm1",
+      "credentials": {
+        "microsoftTeamsOAuth2Api": {
+          "id": "0lLW5CbkT2yJCDAB",
+          "name": "Aman testing"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst messages = response.value || [];\nif (!messages.length) return [];\n\nconst msg = messages[0];\n\n// Skip system/event messages\nif (!msg || !msg.body || !msg.body.content) return [];\nif (msg.messageType && msg.messageType !== 'message') return [];\n// Skip bot/application messages\nif (msg.from && msg.from.application) return [];\n\n// Strip HTML\nconst text = (msg.body.content || '').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\\s+/g, ' ').trim();\nif (!text || text.length < 2) return [];\n\nreturn [{\n  json: {\n    account_id: '723d0a65-e6d7-4c4b-998a-edea742cabd5',\n    sender_name: msg.from?.user?.displayName || 'Unknown',\n    sender_email: msg.from?.user?.email || msg.from?.user?.id || '',\n    message_text: text,\n    teams_message_id: msg.id || '',\n    teams_chat_id: msg.chatId || '19:uni01_nzutm4fap77ipxkbdqrxhy4slpak23avepfyys2cwgia522nqi3q@thread.v2',\n    timestamp: msg.createdDateTime || new Date().toISOString(),\n    message_type: 'message'\n  }\n}];"
+      },
+      "name": "Parse & Filter",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [740, 304],
+      "id": "pf1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://unified-comm-portal.vercel.app/api/webhooks/teams",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "Content-Type", "value": "application/json"},
+            {"name": "X-Webhook-Secret", "value": "my-webhook-secret-123"}
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ account_id: $json.account_id, sender_name: $json.sender_name, sender_email: $json.sender_email, message_text: $json.message_text, teams_message_id: $json.teams_message_id, teams_chat_id: $json.teams_chat_id, timestamp: $json.timestamp, message_type: $json.message_type }) }}",
+        "options": {"timeout": 30000}
+      },
+      "name": "Send to Portal",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [980, 304],
+      "id": "hp1"
+    }
+  ],
+  "connections": {
+    "Teams Trigger": {"main": [[{"node": "Fetch Latest Message", "type": "main", "index": 0}]]},
+    "Fetch Latest Message": {"main": [[{"node": "Parse & Filter", "type": "main", "index": 0}]]},
+    "Parse & Filter": {"main": [[{"node": "Send to Portal", "type": "main", "index": 0}]]}
+  },
+  "settings": {"executionOrder": "v1"}
+}
