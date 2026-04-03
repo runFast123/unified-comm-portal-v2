@@ -49,6 +49,9 @@ interface ContactRecord {
   firstMessageAt: string | null
   topCategory: string | null
   conversations: ContactConversation[]
+  emailCount: number
+  teamsCount: number
+  engagementScore: number
 }
 
 interface ContactConversation {
@@ -260,12 +263,15 @@ export default function ContactsPage() {
             name,
             email,
             accountId: acc.id,
-            accountName: acc.name,
+            accountName: acc.name.replace(/\s+Teams$/i, ''),
             totalConversations: 0,
             lastMessageAt: null,
             firstMessageAt: null,
             topCategory: null,
             conversations: [],
+            emailCount: 0,
+            teamsCount: 0,
+            engagementScore: 0,
           })
         }
 
@@ -288,14 +294,29 @@ export default function ContactsPage() {
           ? `Conversation via ${conv.channel}`
           : `${conv.channel} conversation`
 
+        // Track channel counts
+        const ch = conv.channel as string
+        if (ch === 'email') contact.emailCount++
+        else if (ch === 'teams') contact.teamsCount++
+
         contact.conversations.push({
           id: conv.id as string,
           subject,
           status: conv.status as ConversationStatus,
           category: classificationMap[conv.id as string] || null,
           lastMessageAt: lastMsg,
-          channel: conv.channel as string,
+          channel: ch,
         })
+      }
+
+      // Compute engagement scores
+      for (const contact of contactMap.values()) {
+        // Score = conversations × recency weight (1.0 if today, decays over 30 days)
+        const recencyDays = contact.lastMessageAt
+          ? Math.max(0, (Date.now() - new Date(contact.lastMessageAt).getTime()) / (1000 * 60 * 60 * 24))
+          : 30
+        const recencyWeight = Math.max(0.1, 1 - recencyDays / 30)
+        contact.engagementScore = Math.round(contact.totalConversations * recencyWeight * 10)
       }
 
       // 4) Calculate top category per contact
@@ -574,9 +595,10 @@ export default function ContactsPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Contact</TableHead>
-                <TableHead>Email</TableHead>
                 <TableHead>Company</TableHead>
+                <TableHead>Channels</TableHead>
                 <TableHead>Conversations</TableHead>
+                <TableHead className="hidden md:table-cell">Engagement</TableHead>
                 <TableHead className="hidden md:table-cell">Last Contact</TableHead>
                 <TableHead className="hidden lg:table-cell">Top Category</TableHead>
                 <TableHead>Actions</TableHead>
@@ -600,20 +622,42 @@ export default function ContactsPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <span className="text-sm text-gray-600">
-                        {contact.email || <span className="text-gray-400 italic">No email</span>}
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <Badge variant="info" size="sm">{contact.accountName}</Badge>
+                        {contact.email && (
+                          <span className="text-xs text-gray-400 hidden xl:inline truncate max-w-[120px]">{contact.email}</span>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="info" size="sm">
-                        {contact.accountName}
-                      </Badge>
+                      <div className="flex items-center gap-1">
+                        {contact.emailCount > 0 && (
+                          <span className="flex items-center gap-0.5 rounded bg-red-50 px-1.5 py-0.5 text-[10px] text-red-600">
+                            <Mail className="h-2.5 w-2.5" /> {contact.emailCount}
+                          </span>
+                        )}
+                        {contact.teamsCount > 0 && (
+                          <span className="flex items-center gap-0.5 rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] text-indigo-600">
+                            <MessageSquare className="h-2.5 w-2.5" /> {contact.teamsCount}
+                          </span>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell>
-                      <span className="inline-flex items-center gap-1 text-sm font-medium text-gray-900">
-                        <MessageSquare className="h-3.5 w-3.5 text-gray-400" />
-                        {contact.totalConversations}
-                      </span>
+                      <span className="font-semibold text-gray-900">{contact.totalConversations}</span>
+                    </TableCell>
+                    <TableCell className="hidden md:table-cell">
+                      <div className="flex items-center gap-1.5">
+                        <div className="h-2 w-16 rounded-full bg-gray-100 overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all ${
+                              contact.engagementScore >= 50 ? 'bg-green-500' : contact.engagementScore >= 20 ? 'bg-amber-500' : 'bg-gray-300'
+                            }`}
+                            style={{ width: `${Math.min(contact.engagementScore, 100)}%` }}
+                          />
+                        </div>
+                        <span className="text-xs text-gray-500">{contact.engagementScore}</span>
+                      </div>
                     </TableCell>
                     <TableCell className="hidden whitespace-nowrap md:table-cell">
                       <span className="text-sm text-gray-500">

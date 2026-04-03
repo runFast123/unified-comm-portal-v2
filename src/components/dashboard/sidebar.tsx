@@ -21,6 +21,8 @@ import {
   MessageSquare,
   FileText,
   X,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from 'lucide-react'
 import { signOut } from '@/lib/auth-actions'
 import { useRealtimeMessages } from '@/hooks/useRealtimeMessages'
@@ -56,6 +58,16 @@ const adminNavItems = [
 export function Sidebar({ user, pendingCount, open, onClose }: SidebarProps) {
   const pathname = usePathname()
   const [hasNewMessages, setHasNewMessages] = useState(false)
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return localStorage.getItem('sidebar-collapsed') === 'true'
+  })
+
+  const toggleCollapsed = () => {
+    const next = !collapsed
+    setCollapsed(next)
+    localStorage.setItem('sidebar-collapsed', String(next))
+  }
 
   // Subscribe to realtime messages for badge pulse
   useRealtimeMessages({
@@ -103,19 +115,23 @@ export function Sidebar({ user, pendingCount, open, onClose }: SidebarProps) {
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-sidebar border-r border-sidebar-border transition-transform duration-200 ease-in-out lg:translate-x-0 lg:static lg:z-auto ${
+        className={`fixed inset-y-0 left-0 z-50 flex flex-col bg-sidebar border-r border-sidebar-border transition-all duration-200 ease-in-out lg:translate-x-0 lg:static lg:z-auto ${
+          collapsed ? 'lg:w-[68px]' : 'lg:w-64'
+        } w-64 ${
           open ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         {/* Logo / Brand */}
         <div className="flex h-16 items-center justify-between px-4 border-b border-sidebar-border">
           <Link href="/dashboard" className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-sm">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-sm shrink-0">
               <MessageSquare className="h-5 w-5" />
             </div>
-            <span className="text-lg font-semibold text-sidebar-foreground">
-              Unified Comms
-            </span>
+            {!collapsed && (
+              <span className="text-lg font-semibold text-sidebar-foreground">
+                Unified Comms
+              </span>
+            )}
           </Link>
           <button
             onClick={onClose}
@@ -134,15 +150,16 @@ export function Sidebar({ user, pendingCount, open, onClose }: SidebarProps) {
               className={linkClasses(item.href)}
               aria-current={isActive(item.href) ? 'page' : undefined}
               onClick={onClose}
+              title={collapsed ? item.label : undefined}
             >
               <item.icon className="h-5 w-5 flex-shrink-0" />
-              <span className="flex-1">{item.label}</span>
+              {!collapsed && <span className="flex-1">{item.label}</span>}
               {item.badge && pendingCount > 0 && (
-                <span className="relative flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-xs font-semibold text-white" aria-label={`${pendingCount} pending messages`}>
+                <span className={`relative flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-xs font-semibold text-white ${collapsed ? 'absolute -top-1 -right-1 h-4 min-w-[16px] text-[10px]' : ''}`} aria-label={`${pendingCount} pending messages`}>
                   {hasNewMessages && (
                     <span className="absolute -inset-1 rounded-full bg-red-400 opacity-75 animate-ping" aria-hidden="true" />
                   )}
-                  <span className="relative">{pendingCount > 99 ? '99+' : pendingCount}</span>
+                  <span className="relative">{collapsed ? (pendingCount > 9 ? '9+' : pendingCount) : (pendingCount > 99 ? '99+' : pendingCount)}</span>
                 </span>
               )}
             </Link>
@@ -152,9 +169,12 @@ export function Sidebar({ user, pendingCount, open, onClose }: SidebarProps) {
           {user.role === 'admin' && (
             <>
               <div className="pt-6 pb-2 px-3">
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Admin
-                </p>
+                {!collapsed && (
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Admin
+                  </p>
+                )}
+                {collapsed && <div className="border-t border-sidebar-border" />}
               </div>
               {adminNavItems.map((item) => (
                 <Link
@@ -163,35 +183,51 @@ export function Sidebar({ user, pendingCount, open, onClose }: SidebarProps) {
                   className={linkClasses(item.href)}
                   aria-current={isActive(item.href) ? 'page' : undefined}
                   onClick={onClose}
+                  title={collapsed ? item.label : undefined}
                 >
                   <item.icon className="h-5 w-5 flex-shrink-0" />
-                  <span>{item.label}</span>
+                  {!collapsed && <span>{item.label}</span>}
                 </Link>
               ))}
             </>
           )}
         </nav>
 
+        {/* Collapse toggle — desktop only */}
+        <div className="hidden lg:flex border-t border-sidebar-border p-2">
+          <button
+            onClick={toggleCollapsed}
+            className="flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+            {!collapsed && <span>Collapse</span>}
+          </button>
+        </div>
+
         {/* User Info */}
         <div className="border-t border-sidebar-border p-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-sm font-medium text-accent-foreground">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-sm font-medium text-accent-foreground shrink-0">
               {initials}
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="truncate text-sm font-medium text-sidebar-foreground">
-                {user.full_name || 'User'}
-              </p>
-              <p className="truncate text-xs text-muted-foreground">{user.email}</p>
-            </div>
+            {!collapsed && (
+              <div className="flex-1 min-w-0">
+                <p className="truncate text-sm font-medium text-sidebar-foreground">
+                  {user.full_name || 'User'}
+                </p>
+                <p className="truncate text-xs text-muted-foreground">{user.email}</p>
+              </div>
+            )}
           </div>
           <form action={signOut}>
             <button
               type="submit"
               className="mt-3 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+              title={collapsed ? 'Sign out' : undefined}
             >
-              <LogOut className="h-4 w-4" />
-              Sign out
+              <LogOut className="h-4 w-4 shrink-0" />
+              {!collapsed && 'Sign out'}
             </button>
           </form>
         </div>
