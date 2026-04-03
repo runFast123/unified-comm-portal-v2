@@ -16,7 +16,10 @@ const REPLY_ACTION_WEBHOOK_PREFIXES: Record<ReplyAction, string> = {
 function buildWebhookPath(action: ReplyAction, accountName: string): string {
   const prefix = REPLY_ACTION_WEBHOOK_PREFIXES[action]
   if (!prefix) return ''
-  const slug = accountName.toLowerCase().replace(/[^a-z0-9]/g, '')
+  // Strip " Teams" suffix from account name before slugifying
+  // so "Mycountrymobile Teams" → "mycountrymobile" (matches n8n webhook path)
+  const baseName = accountName.replace(/\s+Teams$/i, '').trim()
+  const slug = baseName.toLowerCase().replace(/[^a-z0-9]/g, '')
   return `${prefix}-${slug}`
 }
 
