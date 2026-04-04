@@ -401,14 +401,41 @@ export function AISidebar({
                 <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-red-500" /> {negCount} negative</span>
               </div>
 
-              {/* Message-level sentiment timeline */}
-              <div className="space-y-1 max-h-32 overflow-y-auto">
-                {sentimentHistory.slice(-5).map((s, i) => (
-                  <div key={i} className="flex items-center gap-2 text-xs">
-                    <span className={cn('h-2 w-2 rounded-full shrink-0',
-                      s.sentiment === 'positive' ? 'bg-green-500' : s.sentiment === 'negative' ? 'bg-red-500' : 'bg-gray-400'
-                    )} />
-                    <span className="text-gray-600 truncate flex-1">{s.preview.substring(0, 50)}</span>
+              {/* Message-level sentiment timeline with hover preview */}
+              <div className="space-y-1 max-h-40 overflow-y-auto">
+                {sentimentHistory.slice(-6).map((s, i) => (
+                  <div key={i} className="group/msg relative">
+                    <div className={cn(
+                      'flex items-center gap-2 text-xs rounded-md px-2 py-1.5 cursor-pointer transition-colors',
+                      s.sentiment === 'positive' ? 'hover:bg-green-50' : s.sentiment === 'negative' ? 'hover:bg-red-50' : 'hover:bg-gray-50'
+                    )}>
+                      <span className={cn('h-2.5 w-2.5 rounded-full shrink-0',
+                        s.sentiment === 'positive' ? 'bg-green-500' : s.sentiment === 'negative' ? 'bg-red-500' : 'bg-gray-400'
+                      )} />
+                      <span className={cn('font-medium shrink-0 w-14',
+                        s.sentiment === 'positive' ? 'text-green-700' : s.sentiment === 'negative' ? 'text-red-700' : 'text-gray-500'
+                      )}>
+                        {s.sentiment === 'positive' ? '😊 Pos' : s.sentiment === 'negative' ? '😟 Neg' : '😐 Neu'}
+                      </span>
+                      <span className="text-gray-600 truncate flex-1">{s.preview.substring(0, 40)}</span>
+                    </div>
+                    {/* Floating preview on hover */}
+                    <div className="absolute left-0 right-0 bottom-full mb-1 hidden group-hover/msg:block z-30">
+                      <div className={cn(
+                        'rounded-lg p-3 shadow-xl border text-xs leading-relaxed max-w-[300px]',
+                        s.sentiment === 'positive' ? 'bg-green-50 border-green-200 text-green-900' :
+                        s.sentiment === 'negative' ? 'bg-red-50 border-red-200 text-red-900' :
+                        'bg-white border-gray-200 text-gray-800'
+                      )}>
+                        <div className="flex items-center gap-1.5 mb-1.5">
+                          <span className={cn('h-2 w-2 rounded-full',
+                            s.sentiment === 'positive' ? 'bg-green-500' : s.sentiment === 'negative' ? 'bg-red-500' : 'bg-gray-400'
+                          )} />
+                          <span className="font-semibold capitalize">{s.sentiment}</span>
+                        </div>
+                        <p className="whitespace-pre-wrap">{s.preview}</p>
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
