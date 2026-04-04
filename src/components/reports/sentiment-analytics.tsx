@@ -18,7 +18,69 @@ import {
   MessageCircle,
   Users,
   ArrowRight,
+  X,
 } from 'lucide-react'
+
+// Reusable floating sentiment table modal
+function SentimentTableModal({ title, messages, onClose }: {
+  title: string
+  messages: { sentiment: string; preview: string }[]
+  onClose: () => void
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-[550px] max-w-[90vw] max-h-[70vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 bg-gray-50">
+          <h3 className="text-sm font-bold text-gray-800">{title}</h3>
+          <button onClick={onClose} className="rounded-full p-1 hover:bg-gray-200 text-gray-400 hover:text-gray-700 transition-colors">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="overflow-y-auto max-h-[55vh]">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 sticky top-0">
+              <tr>
+                <th className="text-left px-5 py-2.5 text-xs font-semibold text-gray-500 uppercase w-24">Sentiment</th>
+                <th className="text-left px-5 py-2.5 text-xs font-semibold text-gray-500 uppercase">Message</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {messages.map((m, i) => (
+                <tr key={i} className={cn(
+                  'transition-colors',
+                  m.sentiment === 'positive' ? 'hover:bg-green-50' : m.sentiment === 'negative' ? 'hover:bg-red-50' : 'hover:bg-gray-50'
+                )}>
+                  <td className="px-5 py-3">
+                    <span className={cn(
+                      'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold',
+                      m.sentiment === 'positive' ? 'bg-green-100 text-green-700' :
+                      m.sentiment === 'negative' ? 'bg-red-100 text-red-700' :
+                      'bg-gray-100 text-gray-600'
+                    )}>
+                      <span className={cn('h-2 w-2 rounded-full',
+                        m.sentiment === 'positive' ? 'bg-green-500' : m.sentiment === 'negative' ? 'bg-red-500' : 'bg-gray-400'
+                      )} />
+                      {m.sentiment === 'positive' ? 'Pos' : m.sentiment === 'negative' ? 'Neg' : 'Neu'}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3 text-xs text-gray-700 leading-relaxed">{m.preview}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 bg-gray-50 text-xs text-gray-500">
+          <span>{messages.length} messages</span>
+          <div className="flex items-center gap-3">
+            <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-green-500" /> {messages.filter(m => m.sentiment === 'positive').length}</span>
+            <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-gray-400" /> {messages.filter(m => m.sentiment === 'neutral').length}</span>
+            <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-red-500" /> {messages.filter(m => m.sentiment === 'negative').length}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -32,6 +94,7 @@ interface CompanySentiment {
   score: number // -100 to +100
   trend: 'improving' | 'stable' | 'declining'
   atRiskConversations: number
+  messages: { sentiment: string; preview: string }[]
 }
 
 interface SentimentByDay {
@@ -104,12 +167,14 @@ function SentimentScoreBar({ score }: { score: number }) {
 
 export function SentimentAnalyticsTab({ dateStart }: { dateStart: string }) {
   const [loading, setLoading] = useState(true)
+  const [modalData, setModalData] = useState<{ title: string; messages: { sentiment: string; preview: string }[] } | null>(null)
   const [overallScore, setOverallScore] = useState(0)
   const [totals, setTotals] = useState({ positive: 0, neutral: 0, negative: 0, total: 0 })
   const [companies, setCompanies] = useState<CompanySentiment[]>([])
   const [dailyTrend, setDailyTrend] = useState<SentimentByDay[]>([])
   const [atRisk, setAtRisk] = useState<AtRiskConversation[]>([])
   const [categories, setCategories] = useState<CategorySentiment[]>([])
+  const [allMessages, setAllMessages] = useState<{ sentiment: string; preview: string }[]>([])
 
   useEffect(() => {
     async function fetchData() {
@@ -147,9 +212,13 @@ export function SentimentAnalyticsTab({ dateStart }: { dateStart: string }) {
       const total = pos + neu + neg
       setTotals({ positive: pos, neutral: neu, negative: neg, total })
       setOverallScore(total > 0 ? Math.round(((pos - neg) / total) * 100) : 0)
+      setAllMessages(classifications.map((c: any) => ({
+        sentiment: c.sentiment,
+        preview: ((c.messages?.sender_name || '').replace(/<[^>]+>/g, '').trim() || 'Customer') + ': ' + (c.messages?.message_text || '').substring(0, 120),
+      })))
 
       // --- Company-wise breakdown ---
-      const companyMap: Record<string, { accountId: string; pos: number; neu: number; neg: number; total: number; recentSentiments: { sentiment: string; time: string }[] }> = {}
+      const companyMap: Record<string, { accountId: string; pos: number; neu: number; neg: number; total: number; recentSentiments: { sentiment: string; time: string }[]; messages: { sentiment: string; preview: string }[] }> = {}
       const convNegCount: Record<string, { count: number; participantName: string; accountName: string; channel: string; lastNeg: string }> = {}
 
       classifications.forEach((c: any) => {
@@ -158,7 +227,7 @@ export function SentimentAnalyticsTab({ dateStart }: { dateStart: string }) {
         const convId = c.messages?.conversation_id || ''
 
         if (!companyMap[accName]) {
-          companyMap[accName] = { accountId: accId, pos: 0, neu: 0, neg: 0, total: 0, recentSentiments: [] }
+          companyMap[accName] = { accountId: accId, pos: 0, neu: 0, neg: 0, total: 0, recentSentiments: [], messages: [] }
         }
         const co = companyMap[accName]
         co.total++
@@ -166,6 +235,7 @@ export function SentimentAnalyticsTab({ dateStart }: { dateStart: string }) {
         else if (c.sentiment === 'negative') co.neg++
         else co.neu++
         co.recentSentiments.push({ sentiment: c.sentiment, time: c.classified_at })
+        co.messages.push({ sentiment: c.sentiment, preview: (c.messages?.sender_name?.replace(/<[^>]+>/g, '').trim() || '') + ': ' + (c.messages?.message_text || '').substring(0, 100) })
 
         // Track at-risk conversations (2+ negative messages)
         if (c.sentiment === 'negative' && convId) {
@@ -209,6 +279,7 @@ export function SentimentAnalyticsTab({ dateStart }: { dateStart: string }) {
           score,
           trend,
           atRiskConversations: atRiskCount,
+          messages: data.messages || [],
         }
       }).sort((a, b) => a.score - b.score) // Worst first
 
@@ -291,9 +362,12 @@ export function SentimentAnalyticsTab({ dateStart }: { dateStart: string }) {
         <SentimentStatCard label="Negative" value={totals.negative} subtitle={`${totals.total > 0 ? Math.round((totals.negative / totals.total) * 100) : 0}% of total`} icon={Frown} color="bg-red-500" bgColor="border-red-100 bg-red-50" />
       </div>
 
-      {/* Overall Sentiment Score Bar */}
-      <ReportCard title="Overall Sentiment Score" description={`Based on ${totals.total} classified messages`}>
-        <SentimentScoreBar score={overallScore} />
+      {/* Overall Sentiment Score Bar — clickable */}
+      <ReportCard title="Overall Sentiment Score" description={`Based on ${totals.total} classified messages — click to see details`}>
+        <button className="w-full text-left hover:opacity-90 transition-opacity" onClick={() => setModalData({ title: 'All Messages — Sentiment Details', messages: allMessages })}>
+          <SentimentScoreBar score={overallScore} />
+          <p className="text-[10px] text-teal-600 text-center mt-2">Click to view all messages</p>
+        </button>
       </ReportCard>
 
       {/* Daily Sentiment Trend */}
@@ -335,7 +409,7 @@ export function SentimentAnalyticsTab({ dateStart }: { dateStart: string }) {
       <ReportCard title="Sentiment by Company" description="Sorted by worst score first — companies needing attention at the top">
         <div className="space-y-3">
           {companies.map((co) => (
-            <div key={co.accountName} className="rounded-xl border border-gray-200 p-4 hover:border-gray-300 transition-colors">
+            <div key={co.accountName} className="rounded-xl border border-gray-200 p-4 hover:border-teal-300 hover:shadow-sm transition-all cursor-pointer" onClick={() => setModalData({ title: `${co.accountName} — Sentiment Details`, messages: co.messages })}>
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-3">
                   <span className="font-semibold text-gray-800">{co.accountName}</span>
@@ -372,6 +446,7 @@ export function SentimentAnalyticsTab({ dateStart }: { dateStart: string }) {
                 <span>{co.neutral} neutral</span>
                 <span>{co.negative} negative ({co.total > 0 ? Math.round((co.negative / co.total) * 100) : 0}%)</span>
               </div>
+              <p className="text-[10px] text-teal-600 text-center mt-1">Click to view messages</p>
             </div>
           ))}
           {companies.length === 0 && (
@@ -520,6 +595,15 @@ export function SentimentAnalyticsTab({ dateStart }: { dateStart: string }) {
           )}
         </div>
       </ReportCard>
+
+      {/* Floating table modal */}
+      {modalData && (
+        <SentimentTableModal
+          title={modalData.title}
+          messages={modalData.messages}
+          onClose={() => setModalData(null)}
+        />
+      )}
     </div>
   )
 }
