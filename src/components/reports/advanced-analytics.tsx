@@ -60,18 +60,21 @@ interface EscalatedConv {
 
 // ─── Donut Chart ──────────────────────────────────────────────────────────────
 
-function DonutChart({ segments, size = 120 }: { segments: { label: string; value: number; color: string }[]; size?: number }) {
+function DonutChart({ segments, size = 140 }: { segments: { label: string; value: number; color: string }[]; size?: number }) {
   const total = segments.reduce((s, seg) => s + seg.value, 0)
   if (total === 0) return <p className="text-sm text-gray-400 text-center py-4">No data</p>
-  const radius = size / 2 - 8
+  const strokeW = 16
+  const radius = size / 2 - strokeW / 2 - 4
   const circumference = 2 * Math.PI * radius
   let offset = 0
+  const fontSize = total >= 1000 ? 'text-base' : total >= 100 ? 'text-lg' : 'text-xl'
 
   return (
-    <div className="flex items-center gap-6">
-      <svg width={size} height={size} className="shrink-0">
-        <circle cx={size/2} cy={size/2} r={radius} fill="none" stroke="#f3f4f6" strokeWidth={14} />
+    <div className="flex items-center gap-6 flex-wrap sm:flex-nowrap">
+      <svg width={size} height={size} className="shrink-0 mx-auto sm:mx-0">
+        <circle cx={size/2} cy={size/2} r={radius} fill="none" stroke="#f3f4f6" strokeWidth={strokeW} />
         {segments.map((seg, i) => {
+          if (seg.value === 0) return null
           const pct = seg.value / total
           const dash = circumference * pct
           const gap = circumference - dash
@@ -81,21 +84,22 @@ function DonutChart({ segments, size = 120 }: { segments: { label: string; value
             <circle
               key={i}
               cx={size/2} cy={size/2} r={radius}
-              fill="none" stroke={seg.color} strokeWidth={14}
+              fill="none" stroke={seg.color} strokeWidth={strokeW}
               strokeDasharray={`${dash} ${gap}`}
               transform={`rotate(${rot} ${size/2} ${size/2})`}
               className="transition-all duration-500"
             />
           )
         })}
-        <text x={size/2} y={size/2} textAnchor="middle" dominantBaseline="central" className="fill-gray-900 text-xl font-bold">{total}</text>
+        <text x={size/2} y={size/2 - 6} textAnchor="middle" dominantBaseline="central" className={`fill-gray-900 ${fontSize} font-bold`}>{total}</text>
+        <text x={size/2} y={size/2 + 12} textAnchor="middle" dominantBaseline="central" className="fill-gray-400 text-[10px]">total</text>
       </svg>
-      <div className="space-y-1.5">
+      <div className="space-y-1 flex-1 min-w-0">
         {segments.filter(s => s.value > 0).map((seg, i) => (
           <div key={i} className="flex items-center gap-2 text-sm">
-            <span className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: seg.color }} />
-            <span className="text-gray-600">{seg.label}</span>
-            <span className="font-semibold text-gray-900 ml-auto">{seg.value}</span>
+            <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: seg.color }} />
+            <span className="text-gray-600 truncate text-xs">{seg.label}</span>
+            <span className="font-semibold text-gray-900 ml-auto text-xs whitespace-nowrap">{seg.value} <span className="text-gray-400 font-normal">({Math.round((seg.value / total) * 100)}%)</span></span>
           </div>
         ))}
       </div>
