@@ -317,7 +317,6 @@ export default async function ConversationPage({
             conversationId={id}
             latestMessage={(messages || []).filter((m: any) => m.direction === 'inbound').pop()?.message_text || null}
             category={classification?.category || null}
-            onInsert={() => {}}
           />
 
           {/* Bottom action bar */}
