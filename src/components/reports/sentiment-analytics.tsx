@@ -432,6 +432,93 @@ export function SentimentAnalyticsTab({ dateStart }: { dateStart: string }) {
           </div>
         </ReportCard>
       )}
+
+      {/* Response Impact */}
+      <ReportCard title="Response Impact" description="How companies are trending — improving, stable, or declining">
+        <div className="grid grid-cols-3 gap-4">
+          {(() => {
+            const improving = companies.filter(c => c.trend === 'improving').length
+            const stable = companies.filter(c => c.trend === 'stable').length
+            const declining = companies.filter(c => c.trend === 'declining').length
+            return (
+              <>
+                <div className="rounded-xl border border-green-100 bg-green-50 p-4 text-center">
+                  <TrendingUp className="h-8 w-8 mx-auto text-green-500 mb-2" />
+                  <p className="text-2xl font-bold text-green-700">{improving}</p>
+                  <p className="text-xs text-green-600 mt-1">Improving</p>
+                </div>
+                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-center">
+                  <Minus className="h-8 w-8 mx-auto text-gray-400 mb-2" />
+                  <p className="text-2xl font-bold text-gray-700">{stable}</p>
+                  <p className="text-xs text-gray-500 mt-1">Stable</p>
+                </div>
+                <div className="rounded-xl border border-red-100 bg-red-50 p-4 text-center">
+                  <TrendingDown className="h-8 w-8 mx-auto text-red-500 mb-2" />
+                  <p className="text-2xl font-bold text-red-700">{declining}</p>
+                  <p className="text-xs text-red-600 mt-1">Declining</p>
+                </div>
+              </>
+            )
+          })()}
+        </div>
+      </ReportCard>
+
+      {/* Key Insights — actionable alerts */}
+      <ReportCard title="Key Insights" description="Actionable takeaways from sentiment analysis">
+        <div className="space-y-3">
+          {totals.negative > 0 && totals.total > 0 && (
+            <div className="flex items-start gap-3 rounded-lg bg-red-50 border border-red-200 p-3">
+              <AlertTriangle className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-red-800">
+                  {Math.round((totals.negative / totals.total) * 100)}% of messages have negative sentiment
+                </p>
+                <p className="text-xs text-red-600 mt-0.5">
+                  {totals.negative} out of {totals.total} classified messages. {atRisk.length > 0 ? `${atRisk.length} conversations are at risk.` : ''}
+                </p>
+              </div>
+            </div>
+          )}
+          {companies.filter(c => c.trend === 'declining').length > 0 && (
+            <div className="flex items-start gap-3 rounded-lg bg-amber-50 border border-amber-200 p-3">
+              <TrendingDown className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-amber-800">
+                  {companies.filter(c => c.trend === 'declining').length} companies have declining sentiment
+                </p>
+                <p className="text-xs text-amber-600 mt-0.5">
+                  {companies.filter(c => c.trend === 'declining').map(c => c.accountName).join(', ')} — review recent interactions.
+                </p>
+              </div>
+            </div>
+          )}
+          {categories.filter(c => c.total > 5 && (c.negative / c.total) > 0.3).length > 0 && (
+            <div className="flex items-start gap-3 rounded-lg bg-blue-50 border border-blue-200 p-3">
+              <MessageCircle className="h-5 w-5 text-blue-500 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-blue-800">High-friction categories detected</p>
+                <p className="text-xs text-blue-600 mt-0.5">
+                  {categories.filter(c => c.total > 5 && (c.negative / c.total) > 0.3).map(c => `${c.category} (${Math.round((c.negative / c.total) * 100)}% negative)`).join(', ')}
+                </p>
+              </div>
+            </div>
+          )}
+          {totals.positive > totals.negative && (
+            <div className="flex items-start gap-3 rounded-lg bg-green-50 border border-green-200 p-3">
+              <Smile className="h-5 w-5 text-green-500 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-green-800">Overall sentiment is positive</p>
+                <p className="text-xs text-green-600 mt-0.5">
+                  {Math.round((totals.positive / totals.total) * 100)}% positive — customers are generally satisfied.
+                </p>
+              </div>
+            </div>
+          )}
+          {totals.total === 0 && (
+            <p className="text-sm text-gray-400 text-center py-4">No sentiment data available for this period.</p>
+          )}
+        </div>
+      </ReportCard>
     </div>
   )
 }

@@ -168,12 +168,15 @@ function HorizontalBars({ items, colorFn }: { items: { label: string; value: num
 
 function StatCard({ label, value, subtitle, icon: Icon, color }: { label: string; value: string | number; subtitle?: string; icon: React.ElementType; color: string }) {
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-xs font-medium text-gray-500">{label}</p>
-          <p className="mt-1 text-2xl font-bold text-gray-900">{value}</p>
-          {subtitle && <p className="mt-0.5 text-xs text-gray-400">{subtitle}</p>}
+    <div className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
+      <div className="flex items-center gap-3">
+        <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg shrink-0', color)}>
+          <Icon className="h-5 w-5 text-white" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-[11px] font-medium text-gray-500 truncate">{label}</p>
+          <p className="text-xl font-bold text-gray-900 leading-tight">{value}</p>
+          {subtitle && <p className="text-[10px] text-gray-400 truncate">{subtitle}</p>}
         </div>
         <div className={cn('flex h-9 w-9 items-center justify-center rounded-lg', color)}>
           <Icon className="h-4 w-4 text-white" />
@@ -249,7 +252,7 @@ export function OverviewEnhancements({ dateStart }: { dateStart: string }) {
 
       <ReportCard title="Spam Detection" description={`${totalSpam} spam vs ${totalReal} real messages this period`}>
         <div className="space-y-4">
-          <div className="flex items-center gap-4">
+          <div className="grid grid-cols-3 gap-3">
             <StatCard label="Spam Caught" value={totalSpam} icon={ShieldAlert} color="bg-red-500" />
             <StatCard label="Real Messages" value={totalReal} icon={CheckCircle} color="bg-green-500" />
             <StatCard label="Catch Rate" value={totalReal + totalSpam > 0 ? `${Math.round((totalSpam / (totalReal + totalSpam)) * 100)}%` : '0%'} icon={Shield} color="bg-teal-600" />
