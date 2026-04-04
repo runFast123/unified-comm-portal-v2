@@ -150,6 +150,14 @@ export async function POST(request: Request) {
     // Fetch account settings
     const account = await getAccountSettings(supabase, account_id)
 
+    // Check if Phase 2 (AI Reply) is enabled for this account
+    if (!account.phase2_enabled && !force) {
+      return NextResponse.json(
+        { message: 'Phase 2 (AI Reply) is disabled for this account', skipped: true },
+        { status: 200 }
+      )
+    }
+
     // Validate channel against allowed values — reject invalid channels
     const validChannels: ChannelType[] = ['email', 'teams', 'whatsapp']
     if (!channel || !validChannels.includes(channel as ChannelType)) {
