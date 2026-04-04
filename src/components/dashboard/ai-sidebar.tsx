@@ -151,6 +151,93 @@ function FormattedDraft({ text }: { text: string }) {
   return <div className="space-y-0.5">{elements}</div>
 }
 
+function SentimentBar({ posCount, neuCount, negCount, total, sentimentHistory }: {
+  posCount: number; neuCount: number; negCount: number; total: number; sentimentHistory: SentimentPoint[]
+}) {
+  const [showDetails, setShowDetails] = useState(false)
+
+  return (
+    <div className="relative">
+      {/* Clickable bar */}
+      <button
+        onClick={() => setShowDetails(!showDetails)}
+        className="w-full text-left"
+        title="Click to see message details"
+      >
+        <div className={cn('flex items-center gap-1 h-4 rounded-full overflow-hidden bg-gray-100 cursor-pointer ring-offset-1 transition-all', showDetails && 'ring-2 ring-teal-400')}>
+          {posCount > 0 && <div className="h-full bg-green-500" style={{ width: `${(posCount / total) * 100}%` }} />}
+          {neuCount > 0 && <div className="h-full bg-gray-400" style={{ width: `${(neuCount / total) * 100}%` }} />}
+          {negCount > 0 && <div className="h-full bg-red-500" style={{ width: `${(negCount / total) * 100}%` }} />}
+        </div>
+        <div className="flex justify-between text-[10px] text-gray-500 mt-1">
+          <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-green-500" /> {posCount} positive</span>
+          <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-gray-400" /> {neuCount} neutral</span>
+          <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-red-500" /> {negCount} negative</span>
+        </div>
+      </button>
+
+      {/* Floating window — toggled on click */}
+      {showDetails && (
+        <div className="absolute left-0 right-0 top-full mt-2 z-30 animate-in slide-in-from-top-2 fade-in duration-200">
+          <div className="rounded-xl bg-white border border-gray-200 shadow-2xl overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between px-3 py-2 bg-gray-50 border-b border-gray-100">
+              <p className="text-[11px] font-semibold text-gray-600">Sentiment Details</p>
+              <button onClick={() => setShowDetails(false)} className="text-gray-400 hover:text-gray-600 text-xs">✕</button>
+            </div>
+
+            {/* Content */}
+            <div className="p-3 space-y-3 max-h-72 overflow-y-auto">
+              {posCount > 0 && (
+                <div>
+                  <p className="text-[10px] font-bold text-green-700 mb-1.5 flex items-center gap-1">
+                    <span className="h-2.5 w-2.5 rounded-full bg-green-500" /> Positive Messages ({posCount})
+                  </p>
+                  <div className="space-y-1">
+                    {sentimentHistory.filter(s => s.sentiment === 'positive').map((s, i) => (
+                      <div key={`p${i}`} className="rounded-lg bg-green-50 border border-green-100 px-3 py-2 text-xs text-green-800 leading-relaxed">
+                        {s.preview}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {negCount > 0 && (
+                <div>
+                  <p className="text-[10px] font-bold text-red-700 mb-1.5 flex items-center gap-1">
+                    <span className="h-2.5 w-2.5 rounded-full bg-red-500" /> Negative Messages ({negCount})
+                  </p>
+                  <div className="space-y-1">
+                    {sentimentHistory.filter(s => s.sentiment === 'negative').map((s, i) => (
+                      <div key={`n${i}`} className="rounded-lg bg-red-50 border border-red-100 px-3 py-2 text-xs text-red-800 leading-relaxed">
+                        {s.preview}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {neuCount > 0 && (
+                <div>
+                  <p className="text-[10px] font-bold text-gray-600 mb-1.5 flex items-center gap-1">
+                    <span className="h-2.5 w-2.5 rounded-full bg-gray-400" /> Neutral Messages ({neuCount})
+                  </p>
+                  <div className="space-y-1">
+                    {sentimentHistory.filter(s => s.sentiment === 'neutral').map((s, i) => (
+                      <div key={`u${i}`} className="rounded-lg bg-gray-50 border border-gray-100 px-3 py-2 text-xs text-gray-700 leading-relaxed">
+                        {s.preview}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function AISidebar({
   classification,
   aiReply,
@@ -389,56 +476,14 @@ export function AISidebar({
                 )}
               </div>
 
-              {/* Sentiment breakdown */}
-              <div className="flex items-center gap-1 h-3 rounded-full overflow-hidden bg-gray-100">
-                {posCount > 0 && <div className="h-full bg-green-500 transition-all" style={{ width: `${(posCount / sentimentValues.length) * 100}%` }} />}
-                {neuCount > 0 && <div className="h-full bg-gray-400 transition-all" style={{ width: `${(neuCount / sentimentValues.length) * 100}%` }} />}
-                {negCount > 0 && <div className="h-full bg-red-500 transition-all" style={{ width: `${(negCount / sentimentValues.length) * 100}%` }} />}
-              </div>
-              <div className="flex justify-between text-[10px] text-gray-500">
-                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-green-500" /> {posCount} positive</span>
-                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-gray-400" /> {neuCount} neutral</span>
-                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-red-500" /> {negCount} negative</span>
-              </div>
-
-              {/* Message-level sentiment timeline with hover preview */}
-              <div className="space-y-1 max-h-40 overflow-y-auto">
-                {sentimentHistory.slice(-6).map((s, i) => (
-                  <div key={i} className="group/msg relative">
-                    <div className={cn(
-                      'flex items-center gap-2 text-xs rounded-md px-2 py-1.5 cursor-pointer transition-colors',
-                      s.sentiment === 'positive' ? 'hover:bg-green-50' : s.sentiment === 'negative' ? 'hover:bg-red-50' : 'hover:bg-gray-50'
-                    )}>
-                      <span className={cn('h-2.5 w-2.5 rounded-full shrink-0',
-                        s.sentiment === 'positive' ? 'bg-green-500' : s.sentiment === 'negative' ? 'bg-red-500' : 'bg-gray-400'
-                      )} />
-                      <span className={cn('font-medium shrink-0 w-14',
-                        s.sentiment === 'positive' ? 'text-green-700' : s.sentiment === 'negative' ? 'text-red-700' : 'text-gray-500'
-                      )}>
-                        {s.sentiment === 'positive' ? '😊 Pos' : s.sentiment === 'negative' ? '😟 Neg' : '😐 Neu'}
-                      </span>
-                      <span className="text-gray-600 truncate flex-1">{s.preview.substring(0, 40)}</span>
-                    </div>
-                    {/* Floating preview on hover */}
-                    <div className="absolute left-0 right-0 bottom-full mb-1 hidden group-hover/msg:block z-30">
-                      <div className={cn(
-                        'rounded-lg p-3 shadow-xl border text-xs leading-relaxed max-w-[300px]',
-                        s.sentiment === 'positive' ? 'bg-green-50 border-green-200 text-green-900' :
-                        s.sentiment === 'negative' ? 'bg-red-50 border-red-200 text-red-900' :
-                        'bg-white border-gray-200 text-gray-800'
-                      )}>
-                        <div className="flex items-center gap-1.5 mb-1.5">
-                          <span className={cn('h-2 w-2 rounded-full',
-                            s.sentiment === 'positive' ? 'bg-green-500' : s.sentiment === 'negative' ? 'bg-red-500' : 'bg-gray-400'
-                          )} />
-                          <span className="font-semibold capitalize">{s.sentiment}</span>
-                        </div>
-                        <p className="whitespace-pre-wrap">{s.preview}</p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              {/* Sentiment breakdown bar — clickable to show/hide message details */}
+              <SentimentBar
+                posCount={posCount}
+                neuCount={neuCount}
+                negCount={negCount}
+                total={sentimentValues.length}
+                sentimentHistory={sentimentHistory}
+              />
             </div>
           </SidebarSection>
         )
