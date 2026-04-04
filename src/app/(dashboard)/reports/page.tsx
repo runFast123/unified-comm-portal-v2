@@ -41,9 +41,10 @@ import {
   ConversationsTab,
   SpamFiltersTab,
 } from '@/components/reports/advanced-analytics'
-import { MessageSquare, ShieldAlert } from 'lucide-react'
+import { MessageSquare, ShieldAlert, Smile } from 'lucide-react'
+import { SentimentAnalyticsTab } from '@/components/reports/sentiment-analytics'
 
-type ReportTab = 'overview' | 'channels' | 'categories' | 'ai-performance' | 'trends' | 'conversations' | 'spam-filters' | 'imported-data'
+type ReportTab = 'overview' | 'channels' | 'categories' | 'ai-performance' | 'trends' | 'conversations' | 'sentiment' | 'spam-filters' | 'imported-data'
 
 const tabs: { id: ReportTab; label: string; icon: React.ElementType }[] = [
   { id: 'overview', label: 'Overview', icon: BarChart3 },
@@ -52,6 +53,7 @@ const tabs: { id: ReportTab; label: string; icon: React.ElementType }[] = [
   { id: 'ai-performance', label: 'AI Performance', icon: Bot },
   { id: 'trends', label: 'Trends', icon: TrendingUp },
   { id: 'conversations', label: 'Conversations', icon: MessageSquare },
+  { id: 'sentiment', label: 'Sentiment', icon: Smile },
   { id: 'spam-filters', label: 'Spam & Filters', icon: ShieldAlert },
   { id: 'imported-data', label: 'Imported Data', icon: FileSpreadsheet },
 ]
@@ -954,7 +956,12 @@ export default function ReportsPage() {
         <ConversationsTab />
       )}
 
-      {/* NEW: Spam & Filters Tab */}
+      {/* Sentiment Analytics Tab */}
+      {activeTab === 'sentiment' && (
+        <SentimentAnalyticsTab dateStart={getDateRangeStart(dateRange, customFrom)} />
+      )}
+
+      {/* Spam & Filters Tab */}
       {activeTab === 'spam-filters' && (
         <SpamFiltersTab dateStart={getDateRangeStart(dateRange, customFrom)} />
       )}
