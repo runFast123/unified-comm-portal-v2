@@ -21,60 +21,116 @@ import {
   X,
 } from 'lucide-react'
 
-// Reusable floating sentiment table modal
-function SentimentTableModal({ title, messages, onClose }: {
+// Message type with conversation link support
+interface SentimentMessage {
+  sentiment: string
+  preview: string
+  senderName?: string
+  conversationId?: string
+  channel?: string
+}
+
+// Reusable floating sentiment table modal — with sentiment filter tabs and clickable rows
+function SentimentTableModal({ title, messages, onClose, initialFilter }: {
   title: string
-  messages: { sentiment: string; preview: string }[]
+  messages: SentimentMessage[]
   onClose: () => void
+  initialFilter?: 'all' | 'positive' | 'neutral' | 'negative'
 }) {
+  const [filter, setFilter] = useState<'all' | 'positive' | 'neutral' | 'negative'>(initialFilter || 'all')
+  const filtered = filter === 'all' ? messages : messages.filter(m => m.sentiment === filter)
+  const posCount = messages.filter(m => m.sentiment === 'positive').length
+  const neuCount = messages.filter(m => m.sentiment === 'neutral').length
+  const negCount = messages.filter(m => m.sentiment === 'negative').length
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-[550px] max-w-[90vw] max-h-[70vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+      <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-[650px] max-w-[95vw] max-h-[80vh] overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 bg-gray-50">
           <h3 className="text-sm font-bold text-gray-800">{title}</h3>
           <button onClick={onClose} className="rounded-full p-1 hover:bg-gray-200 text-gray-400 hover:text-gray-700 transition-colors">
             <X className="h-4 w-4" />
           </button>
         </div>
+        {/* Sentiment filter tabs */}
+        <div className="flex items-center gap-1 px-5 py-2 border-b border-gray-100 bg-white">
+          {([
+            { key: 'all' as const, label: 'All', count: messages.length, color: 'bg-gray-600' },
+            { key: 'positive' as const, label: 'Positive', count: posCount, color: 'bg-green-500' },
+            { key: 'neutral' as const, label: 'Neutral', count: neuCount, color: 'bg-gray-400' },
+            { key: 'negative' as const, label: 'Negative', count: negCount, color: 'bg-red-500' },
+          ]).map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setFilter(tab.key)}
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors',
+                filter === tab.key
+                  ? 'bg-gray-800 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              )}
+            >
+              <span className={cn('h-2 w-2 rounded-full', filter === tab.key ? 'bg-white' : tab.color)} />
+              {tab.label} ({tab.count})
+            </button>
+          ))}
+        </div>
         <div className="overflow-y-auto max-h-[55vh]">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 sticky top-0">
               <tr>
                 <th className="text-left px-5 py-2.5 text-xs font-semibold text-gray-500 uppercase w-24">Sentiment</th>
+                <th className="text-left px-5 py-2.5 text-xs font-semibold text-gray-500 uppercase">Sender</th>
                 <th className="text-left px-5 py-2.5 text-xs font-semibold text-gray-500 uppercase">Message</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {messages.map((m, i) => (
-                <tr key={i} className={cn(
-                  'transition-colors',
-                  m.sentiment === 'positive' ? 'hover:bg-green-50' : m.sentiment === 'negative' ? 'hover:bg-red-50' : 'hover:bg-gray-50'
-                )}>
-                  <td className="px-5 py-3">
-                    <span className={cn(
-                      'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold',
-                      m.sentiment === 'positive' ? 'bg-green-100 text-green-700' :
-                      m.sentiment === 'negative' ? 'bg-red-100 text-red-700' :
-                      'bg-gray-100 text-gray-600'
-                    )}>
-                      <span className={cn('h-2 w-2 rounded-full',
-                        m.sentiment === 'positive' ? 'bg-green-500' : m.sentiment === 'negative' ? 'bg-red-500' : 'bg-gray-400'
-                      )} />
-                      {m.sentiment === 'positive' ? 'Pos' : m.sentiment === 'negative' ? 'Neg' : 'Neu'}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3 text-xs text-gray-700 leading-relaxed">{m.preview}</td>
-                </tr>
-              ))}
+              {filtered.length === 0 && (
+                <tr><td colSpan={3} className="px-5 py-8 text-center text-xs text-gray-400">No messages match this filter</td></tr>
+              )}
+              {filtered.map((m, i) => {
+                const row = (
+                  <tr key={i} className={cn(
+                    'transition-colors cursor-pointer',
+                    m.sentiment === 'positive' ? 'hover:bg-green-50' : m.sentiment === 'negative' ? 'hover:bg-red-50' : 'hover:bg-gray-50'
+                  )}>
+                    <td className="px-5 py-3">
+                      <span className={cn(
+                        'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold',
+                        m.sentiment === 'positive' ? 'bg-green-100 text-green-700' :
+                        m.sentiment === 'negative' ? 'bg-red-100 text-red-700' :
+                        'bg-gray-100 text-gray-600'
+                      )}>
+                        <span className={cn('h-2 w-2 rounded-full',
+                          m.sentiment === 'positive' ? 'bg-green-500' : m.sentiment === 'negative' ? 'bg-red-500' : 'bg-gray-400'
+                        )} />
+                        {m.sentiment === 'positive' ? 'Pos' : m.sentiment === 'negative' ? 'Neg' : 'Neu'}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3 text-xs font-medium text-gray-800 truncate max-w-[120px]">{m.senderName || 'Unknown'}</td>
+                    <td className="px-5 py-3 text-xs text-gray-600 leading-relaxed">
+                      <span className="line-clamp-2">{m.preview || 'No message text'}</span>
+                      {m.conversationId && (
+                        <span className="text-[10px] text-teal-600 ml-1">→ View conversation</span>
+                      )}
+                    </td>
+                  </tr>
+                )
+                return m.conversationId ? (
+                  <Link key={i} href={`/conversations/${m.conversationId}`} className="contents">
+                    {row}
+                  </Link>
+                ) : row
+              })}
             </tbody>
           </table>
         </div>
         <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 bg-gray-50 text-xs text-gray-500">
-          <span>{messages.length} messages</span>
+          <span>{filtered.length} of {messages.length} messages</span>
           <div className="flex items-center gap-3">
-            <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-green-500" /> {messages.filter(m => m.sentiment === 'positive').length}</span>
-            <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-gray-400" /> {messages.filter(m => m.sentiment === 'neutral').length}</span>
-            <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-red-500" /> {messages.filter(m => m.sentiment === 'negative').length}</span>
+            <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-green-500" /> {posCount}</span>
+            <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-gray-400" /> {neuCount}</span>
+            <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-red-500" /> {negCount}</span>
           </div>
         </div>
       </div>
@@ -94,7 +150,7 @@ interface CompanySentiment {
   score: number // -100 to +100
   trend: 'improving' | 'stable' | 'declining'
   atRiskConversations: number
-  messages: { sentiment: string; preview: string; channel?: string }[]
+  messages: SentimentMessage[]
 }
 
 interface SentimentByDay {
@@ -119,6 +175,7 @@ interface CategorySentiment {
   neutral: number
   negative: number
   total: number
+  messages: SentimentMessage[]
 }
 
 // ─── Stat Card ────────────────────────────────────────────────────────────────
@@ -172,12 +229,12 @@ interface ChannelSentiment {
   negative: number
   total: number
   score: number
-  messages: { sentiment: string; preview: string; channel?: string }[]
+  messages: SentimentMessage[]
 }
 
 export function SentimentAnalyticsTab({ dateStart }: { dateStart: string }) {
   const [loading, setLoading] = useState(true)
-  const [modalData, setModalData] = useState<{ title: string; messages: { sentiment: string; preview: string }[] } | null>(null)
+  const [modalData, setModalData] = useState<{ title: string; messages: SentimentMessage[]; initialFilter?: 'all' | 'positive' | 'neutral' | 'negative' } | null>(null)
   const [channelFilter, setChannelFilter] = useState<'all' | 'email' | 'teams' | 'whatsapp'>('all')
   const [overallScore, setOverallScore] = useState(0)
   const [totals, setTotals] = useState({ positive: 0, neutral: 0, negative: 0, total: 0 })
@@ -186,7 +243,7 @@ export function SentimentAnalyticsTab({ dateStart }: { dateStart: string }) {
   const [dailyTrend, setDailyTrend] = useState<SentimentByDay[]>([])
   const [atRisk, setAtRisk] = useState<AtRiskConversation[]>([])
   const [categories, setCategories] = useState<CategorySentiment[]>([])
-  const [allMessages, setAllMessages] = useState<{ sentiment: string; preview: string }[]>([])
+  const [allMessages, setAllMessages] = useState<SentimentMessage[]>([])
 
   useEffect(() => {
     async function fetchData() {
@@ -227,11 +284,14 @@ export function SentimentAnalyticsTab({ dateStart }: { dateStart: string }) {
       setOverallScore(total > 0 ? Math.round(((pos - neg) / total) * 100) : 0)
       setAllMessages(classifications.map((c: any) => ({
         sentiment: c.sentiment,
-        preview: ((c.messages?.sender_name || '').replace(/<[^>]+>/g, '').trim() || 'Customer') + ': ' + (c.messages?.message_text || '').substring(0, 120),
+        senderName: (c.messages?.sender_name || '').replace(/<[^>]+>/g, '').replace(/^["']+|["']+$/g, '').trim() || 'Customer',
+        preview: (c.messages?.message_text || '').substring(0, 150),
+        conversationId: c.messages?.conversation_id || undefined,
+        channel: c.messages?.channel || 'email',
       })))
 
       // --- Channel-wise breakdown ---
-      const chMap: Record<string, { pos: number; neu: number; neg: number; total: number; messages: { sentiment: string; preview: string }[] }> = {}
+      const chMap: Record<string, { pos: number; neu: number; neg: number; total: number; messages: SentimentMessage[] }> = {}
       classifications.forEach((c: any) => {
         const ch = c.messages?.channel || 'email'
         if (!chMap[ch]) chMap[ch] = { pos: 0, neu: 0, neg: 0, total: 0, messages: [] }
@@ -241,7 +301,10 @@ export function SentimentAnalyticsTab({ dateStart }: { dateStart: string }) {
         else chMap[ch].neu++
         chMap[ch].messages.push({
           sentiment: c.sentiment,
-          preview: ((c.messages?.sender_name || '').replace(/<[^>]+>/g, '').trim() || 'Customer') + ': ' + (c.messages?.message_text || '').substring(0, 120),
+          senderName: (c.messages?.sender_name || '').replace(/<[^>]+>/g, '').replace(/^["']+|["']+$/g, '').trim() || 'Customer',
+          preview: (c.messages?.message_text || '').substring(0, 150),
+          conversationId: c.messages?.conversation_id || undefined,
+          channel: ch,
         })
       })
       setChannelSentiments(['email', 'teams', 'whatsapp'].map(ch => {
@@ -258,7 +321,7 @@ export function SentimentAnalyticsTab({ dateStart }: { dateStart: string }) {
       }))
 
       // --- Company-wise breakdown ---
-      const companyMap: Record<string, { accountId: string; pos: number; neu: number; neg: number; total: number; recentSentiments: { sentiment: string; time: string }[]; messages: { sentiment: string; preview: string; channel?: string }[] }> = {}
+      const companyMap: Record<string, { accountId: string; pos: number; neu: number; neg: number; total: number; recentSentiments: { sentiment: string; time: string }[]; messages: SentimentMessage[] }> = {}
       const convNegCount: Record<string, { count: number; participantName: string; accountName: string; channel: string; lastNeg: string }> = {}
 
       classifications.forEach((c: any) => {
@@ -275,7 +338,13 @@ export function SentimentAnalyticsTab({ dateStart }: { dateStart: string }) {
         else if (c.sentiment === 'negative') co.neg++
         else co.neu++
         co.recentSentiments.push({ sentiment: c.sentiment, time: c.classified_at })
-        co.messages.push({ sentiment: c.sentiment, preview: (c.messages?.sender_name?.replace(/<[^>]+>/g, '').trim() || '') + ': ' + (c.messages?.message_text || '').substring(0, 100), channel: c.messages?.channel || 'email' })
+        co.messages.push({
+          sentiment: c.sentiment,
+          senderName: (c.messages?.sender_name || '').replace(/<[^>]+>/g, '').replace(/^["']+|["']+$/g, '').trim() || 'Customer',
+          preview: (c.messages?.message_text || '').substring(0, 150),
+          conversationId: convId || undefined,
+          channel: c.messages?.channel || 'email',
+        })
 
         // Track at-risk conversations (2+ negative messages)
         if (c.sentiment === 'negative' && convId) {
@@ -364,18 +433,25 @@ export function SentimentAnalyticsTab({ dateStart }: { dateStart: string }) {
       })))
 
       // --- Sentiment by category ---
-      const catMap: Record<string, { positive: number; neutral: number; negative: number; total: number }> = {}
+      const catMap: Record<string, { positive: number; neutral: number; negative: number; total: number; messages: SentimentMessage[] }> = {}
       classifications.forEach((c: any) => {
         const cat = c.category || 'Unknown'
-        if (!catMap[cat]) catMap[cat] = { positive: 0, neutral: 0, negative: 0, total: 0 }
+        if (!catMap[cat]) catMap[cat] = { positive: 0, neutral: 0, negative: 0, total: 0, messages: [] }
         catMap[cat].total++
         if (c.sentiment === 'positive') catMap[cat].positive++
         else if (c.sentiment === 'negative') catMap[cat].negative++
         else catMap[cat].neutral++
+        catMap[cat].messages.push({
+          sentiment: c.sentiment,
+          senderName: (c.messages?.sender_name || '').replace(/<[^>]+>/g, '').replace(/^["']+|["']+$/g, '').trim() || 'Customer',
+          preview: (c.messages?.message_text || '').substring(0, 150),
+          conversationId: c.messages?.conversation_id || undefined,
+          channel: c.messages?.channel || 'email',
+        })
       })
       setCategories(
         Object.entries(catMap)
-          .map(([category, data]) => ({ category, ...data }))
+          .map(([category, data]) => ({ category, ...data, messages: data.messages }))
           .sort((a, b) => (b.negative / b.total) - (a.negative / a.total))
       )
 
@@ -577,21 +653,41 @@ export function SentimentAnalyticsTab({ dateStart }: { dateStart: string }) {
       </ReportCard>
 
       {/* Sentiment by Category */}
-      <ReportCard title="Sentiment by Category" description="Which issue types generate the most negative customer reactions">
+      <ReportCard title="Sentiment by Category" description="Click any category to view messages — click sentiment bar sections to filter">
         <div className="space-y-2">
           {categories.map((cat) => {
             const negPct = cat.total > 0 ? Math.round((cat.negative / cat.total) * 100) : 0
             return (
-              <div key={cat.category} className="flex items-center gap-3">
-                <span className="text-sm text-gray-700 w-40 truncate shrink-0">{cat.category}</span>
-                <div className="flex-1 flex items-center gap-1 h-5 rounded overflow-hidden bg-gray-100">
-                  {cat.positive > 0 && <div className="h-full bg-green-500" style={{ width: `${(cat.positive / cat.total) * 100}%` }} />}
-                  {cat.neutral > 0 && <div className="h-full bg-gray-300" style={{ width: `${(cat.neutral / cat.total) * 100}%` }} />}
-                  {cat.negative > 0 && <div className="h-full bg-red-400" style={{ width: `${(cat.negative / cat.total) * 100}%` }} />}
+              <div key={cat.category} className="flex items-center gap-3 rounded-lg px-2 py-1.5 -mx-2 hover:bg-gray-50 cursor-pointer transition-colors"
+                onClick={() => setModalData({ title: `${cat.category} — Sentiment Details`, messages: cat.messages })}>
+                <span className="text-sm text-gray-700 w-40 truncate shrink-0 font-medium">{cat.category}</span>
+                <div className="flex-1 flex items-center gap-0.5 h-5 rounded overflow-hidden bg-gray-100">
+                  {cat.positive > 0 && (
+                    <div className="h-full bg-green-500 hover:bg-green-600 transition-colors"
+                      style={{ width: `${(cat.positive / cat.total) * 100}%` }}
+                      title={`${cat.positive} positive — click to filter`}
+                      onClick={(e) => { e.stopPropagation(); setModalData({ title: `${cat.category} — Positive Messages`, messages: cat.messages, initialFilter: 'positive' }) }}
+                    />
+                  )}
+                  {cat.neutral > 0 && (
+                    <div className="h-full bg-gray-300 hover:bg-gray-400 transition-colors"
+                      style={{ width: `${(cat.neutral / cat.total) * 100}%` }}
+                      title={`${cat.neutral} neutral — click to filter`}
+                      onClick={(e) => { e.stopPropagation(); setModalData({ title: `${cat.category} — Neutral Messages`, messages: cat.messages, initialFilter: 'neutral' }) }}
+                    />
+                  )}
+                  {cat.negative > 0 && (
+                    <div className="h-full bg-red-400 hover:bg-red-500 transition-colors"
+                      style={{ width: `${(cat.negative / cat.total) * 100}%` }}
+                      title={`${cat.negative} negative — click to filter`}
+                      onClick={(e) => { e.stopPropagation(); setModalData({ title: `${cat.category} — Negative Messages`, messages: cat.messages, initialFilter: 'negative' }) }}
+                    />
+                  )}
                 </div>
                 <span className={cn('text-xs font-semibold w-10 text-right', negPct >= 30 ? 'text-red-600' : 'text-gray-500')}>
-                  {negPct}% neg
+                  {negPct}%
                 </span>
+                <ArrowRight className="h-3 w-3 text-gray-300 shrink-0" />
               </div>
             )
           })}
@@ -723,6 +819,7 @@ export function SentimentAnalyticsTab({ dateStart }: { dateStart: string }) {
           title={modalData.title}
           messages={modalData.messages}
           onClose={() => setModalData(null)}
+          initialFilter={modalData.initialFilter}
         />
       )}
     </div>
