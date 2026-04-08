@@ -199,7 +199,7 @@ async function getAIConfig(): Promise<AIConfig> {
   return {
     base_url: process.env.AI_BASE_URL || 'https://integrate.api.nvidia.com/v1',
     api_key: apiKey,
-    model: process.env.AI_MODEL || 'openai/gpt-oss-120b',
+    model: process.env.AI_MODEL || 'moonshot-ai/kimi-k2.5',
     max_tokens: Number(process.env.AI_MAX_TOKENS) || 4096,
     temperature: Number(process.env.AI_TEMPERATURE) || 1.0,
   }
