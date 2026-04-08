@@ -383,6 +383,10 @@ export default function DashboardPage() {
       setLoading(true)
       const supabase = createClient()
       const rangeISO = getDateRangeStart(dateRange, customFrom)
+      // Custom "to" date — set to end of day if provided
+      const customToISO = dateRange === 'custom' && customTo
+        ? new Date(customTo + 'T23:59:59.999Z').toISOString()
+        : null
 
       try {
         // Build scoped queries - non-admins only see their company's data
@@ -401,6 +405,7 @@ export default function DashboardPage() {
           .gte('received_at', rangeISO)
           .eq('direction', 'inbound')
           .limit(10000)
+        if (customToISO) channelMsgQuery = channelMsgQuery.lte('received_at', customToISO)
         if (accountIdFilter) channelMsgQuery = channelMsgQuery.eq('account_id', accountIdFilter)
 
         let channelPendingQuery = supabase
@@ -411,6 +416,7 @@ export default function DashboardPage() {
           .eq('reply_required', true)
           .eq('replied', false)
           .limit(10000)
+        if (customToISO) channelPendingQuery = channelPendingQuery.lte('received_at', customToISO)
         if (accountIdFilter) channelPendingQuery = channelPendingQuery.eq('account_id', accountIdFilter)
 
         let aiSentQuery = supabase
@@ -419,6 +425,7 @@ export default function DashboardPage() {
           .gte('sent_at', rangeISO)
           .eq('status', 'sent')
           .limit(10000)
+        if (customToISO) aiSentQuery = aiSentQuery.lte('sent_at', customToISO)
         if (accountIdFilter) aiSentQuery = aiSentQuery.eq('account_id', accountIdFilter)
 
         // Combine category + sentiment into a single query (same table, same date filter)
@@ -427,6 +434,7 @@ export default function DashboardPage() {
           .select('category, sentiment')
           .gte('classified_at', rangeISO)
           .limit(10000)
+        if (customToISO) classificationQuery = classificationQuery.lte('classified_at', customToISO)
 
         // Account pending counts (for account overview table)
         let pendingByAccountQuery = supabase
@@ -454,6 +462,7 @@ export default function DashboardPage() {
           .eq('direction', 'inbound')
           .gte('received_at', rangeISO)
           .limit(10000)
+        if (customToISO) slaInboundQuery = slaInboundQuery.lte('received_at', customToISO)
         if (accountIdFilter) slaInboundQuery = slaInboundQuery.eq('account_id', accountIdFilter)
 
         // SLA: outbound replies in range
@@ -464,6 +473,7 @@ export default function DashboardPage() {
           .gte('timestamp', rangeISO)
           .limit(10000)
           .order('timestamp', { ascending: true })
+        if (customToISO) slaOutboundQuery = slaOutboundQuery.lte('timestamp', customToISO)
         if (accountIdFilter) slaOutboundQuery = slaOutboundQuery.eq('account_id', accountIdFilter)
 
         // Fetch ALL data in a single Promise.all (no sequential awaits)
@@ -652,6 +662,7 @@ export default function DashboardPage() {
             .eq('direction', 'inbound')
             .eq('is_spam', true)
             .gte('received_at', rangeISO)
+          if (customToISO) spamQuery = spamQuery.lte('received_at', customToISO)
           if (accountIdFilter) spamQuery = spamQuery.eq('account_id', accountIdFilter)
           const { count: spamTotal } = await spamQuery
           setSpamFilteredToday(spamTotal ?? 0)
