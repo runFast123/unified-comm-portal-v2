@@ -86,7 +86,7 @@ export function SuggestedReplies({ conversationId, latestMessage, category }: Su
 
   return (
     <div className="shrink-0 border-t border-gray-100 bg-gray-50/50 px-4 py-2">
-      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
+      <div className="flex flex-wrap items-center gap-2 pb-1">
         {loading && (
           <div className="flex items-center gap-1.5 text-xs text-gray-400 shrink-0">
             <Loader2 className="h-3 w-3 animate-spin" />

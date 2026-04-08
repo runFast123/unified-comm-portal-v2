@@ -177,13 +177,10 @@ function StatCard({ label, value, subtitle, icon: Icon, color }: { label: string
         <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg shrink-0', color)}>
           <Icon className="h-5 w-5 text-white" />
         </div>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="text-[11px] font-medium text-gray-500 truncate">{label}</p>
           <p className="text-xl font-bold text-gray-900 leading-tight">{value}</p>
           {subtitle && <p className="text-[10px] text-gray-400 truncate">{subtitle}</p>}
-        </div>
-        <div className={cn('flex h-9 w-9 items-center justify-center rounded-lg', color)}>
-          <Icon className="h-4 w-4 text-white" />
         </div>
       </div>
     </div>

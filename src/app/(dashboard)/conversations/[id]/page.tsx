@@ -236,61 +236,61 @@ export default async function ConversationPage({
     <div className="flex h-[calc(100vh-4rem)] flex-col">
       {/* Conversation header */}
       <div className="shrink-0 border-b border-gray-200 bg-white px-4 sm:px-6 py-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-            <Link
-              href="/inbox"
-              className="text-gray-400 hover:text-teal-700 transition-colors"
-            >
-              <ArrowLeft size={20} />
-            </Link>
-            <div className="flex items-center gap-3">
-              <ChannelIcon channel={channel} size={22} />
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <h1 className="font-semibold text-gray-900 truncate max-w-[150px] sm:max-w-none">{participantName}</h1>
-                  <BookmarkButton conversationId={id} participantName={participantName} accountName={accountName} />
-                  <StatusDropdown
-                    conversationId={id}
-                    currentStatus={status}
-                  />
-                  <span className={cn(
-                    'rounded-full px-2 py-0.5 text-xs font-medium',
-                    getPriorityColor(priority)
-                  )}>
-                    {priority}
-                  </span>
-                  <AgentAssignment
-                    conversationId={id}
-                    currentAssignedTo={conversation.assigned_to || null}
-                    currentAssignedName={assignedUser?.full_name || assignedUser?.email || null}
-                  />
-                </div>
-                <div className="flex items-center gap-2 flex-wrap text-xs text-gray-500">
-                  <span>{accountName.replace(/\s+Teams$/i, '')}</span>
-                  <span>&middot;</span>
-                  <span>{getChannelLabel(channel)}</span>
-                  {channel === 'teams' && conversation.teams_chat_id && (
-                    <span className="inline-flex items-center gap-0.5 rounded bg-indigo-50 px-1.5 py-0 text-[10px] font-medium text-indigo-600">
-                      {conversation.teams_chat_id.includes('uni01_') ? '1:1 Chat' : 'Group'}
-                    </span>
-                  )}
-                  {conversation.participant_email && (
-                    <span className="hidden sm:inline">&middot; {conversation.participant_email}</span>
-                  )}
-                  {totalConversations > 1 && (
-                    <span className="hidden sm:inline">&middot; {totalConversations} conversations</span>
-                  )}
-                </div>
-                {/* Conversation timer */}
-                <div className="flex items-center gap-3 text-[10px] text-gray-400 mt-0.5 flex-wrap">
-                  {firstMsgAt && <span>Active {formatDuration(activeDurationMs)}</span>}
-                  {lastMsgAt && <span>&middot; Last reply {formatDuration(lastReplyMs)} ago</span>}
-                  <span>&middot; {messageCount} messages ({inboundCount} inbound)</span>
-                </div>
-              </div>
+        {/* Top row: back + name + actions */}
+        <div className="flex items-center gap-3 sm:gap-4">
+          <Link
+            href="/inbox"
+            className="text-gray-400 hover:text-teal-700 transition-colors shrink-0"
+          >
+            <ArrowLeft size={20} />
+          </Link>
+          <ChannelIcon channel={channel} size={20} className="shrink-0" />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="font-semibold text-gray-900 text-base truncate max-w-[200px] sm:max-w-[300px]">{participantName}</h1>
+              <BookmarkButton conversationId={id} participantName={participantName} accountName={accountName} />
+            </div>
+            <div className="flex items-center gap-1.5 text-xs text-gray-500 mt-0.5">
+              <span>{accountName.replace(/\s+Teams$/i, '')}</span>
+              <span className="text-gray-300">&middot;</span>
+              <span>{getChannelLabel(channel)}</span>
+              {channel === 'teams' && conversation.teams_chat_id && (
+                <span className="inline-flex items-center gap-0.5 rounded bg-indigo-50 px-1.5 py-0 text-[10px] font-medium text-indigo-600">
+                  {conversation.teams_chat_id.includes('uni01_') ? '1:1' : 'Group'}
+                </span>
+              )}
+              {conversation.participant_email && (
+                <span className="hidden sm:inline text-gray-400">&middot; {conversation.participant_email}</span>
+              )}
             </div>
           </div>
+          {/* Status & priority badges */}
+          <div className="flex items-center gap-2 shrink-0">
+            <StatusDropdown
+              conversationId={id}
+              currentStatus={status}
+            />
+            <span className={cn(
+              'rounded-full px-2 py-0.5 text-xs font-medium',
+              getPriorityColor(priority)
+            )}>
+              {priority}
+            </span>
+            <AgentAssignment
+              conversationId={id}
+              currentAssignedTo={conversation.assigned_to || null}
+              currentAssignedName={assignedUser?.full_name || assignedUser?.email || null}
+            />
+          </div>
+        </div>
+        {/* Timer row */}
+        <div className="flex items-center gap-3 text-[10px] text-gray-400 mt-1.5 ml-[52px] sm:ml-[60px] flex-wrap">
+          {firstMsgAt && <span>Active {formatDuration(activeDurationMs)}</span>}
+          {lastMsgAt && <span>&middot; Last reply {formatDuration(lastReplyMs)} ago</span>}
+          <span>&middot; {messageCount} msgs ({inboundCount} inbound)</span>
+          {totalConversations > 1 && (
+            <span>&middot; {totalConversations} conversations</span>
+          )}
         </div>
       </div>
 
