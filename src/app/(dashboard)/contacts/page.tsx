@@ -24,7 +24,7 @@ import { Select } from '@/components/ui/select'
 import { Modal } from '@/components/ui/modal'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
 import { EmptyState } from '@/components/ui/empty-state'
-import { timeAgo } from '@/lib/utils'
+import { timeAgo, cn } from '@/lib/utils'
 import { useUser } from '@/context/user-context'
 import type { ConversationStatus } from '@/types/database'
 
@@ -52,6 +52,7 @@ interface ContactRecord {
   emailCount: number
   teamsCount: number
   engagementScore: number
+  aiTags: string[]
 }
 
 interface ContactConversation {
@@ -273,6 +274,7 @@ export default function ContactsPage() {
             emailCount: 0,
             teamsCount: 0,
             engagementScore: 0,
+            aiTags: [],
           })
         }
 
@@ -310,14 +312,24 @@ export default function ContactsPage() {
         })
       }
 
-      // Compute engagement scores
+      // Compute engagement scores + AI auto-tags
       for (const contact of contactMap.values()) {
-        // Score = conversations × recency weight (1.0 if today, decays over 30 days)
         const recencyDays = contact.lastMessageAt
           ? Math.max(0, (Date.now() - new Date(contact.lastMessageAt).getTime()) / (1000 * 60 * 60 * 24))
           : 30
         const recencyWeight = Math.max(0.1, 1 - recencyDays / 30)
         contact.engagementScore = Math.round(contact.totalConversations * recencyWeight * 10)
+
+        // AI Auto-Tags
+        const tags: string[] = []
+        if (contact.engagementScore >= 50 && contact.totalConversations >= 3) tags.push('VIP')
+        if (contact.firstMessageAt && recencyDays <= 7 && contact.totalConversations <= 2) tags.push('New Lead')
+        if (recencyDays >= 30 && contact.totalConversations >= 2) tags.push('Churning')
+        const hasEscalated = contact.conversations.some(c => c.status === 'escalated')
+        if (hasEscalated) tags.push('At Risk')
+        if (contact.topCategory === 'Sales Inquiry') tags.push('Sales')
+        if (contact.topCategory === 'Trouble Ticket' || contact.topCategory === 'Technical Issue') tags.push('Support')
+        contact.aiTags = tags
       }
 
       // 4) Calculate top category per contact
@@ -600,6 +612,7 @@ export default function ContactsPage() {
                 <TableHead>Channels</TableHead>
                 <TableHead>Conversations</TableHead>
                 <TableHead className="hidden md:table-cell">Engagement</TableHead>
+                <TableHead className="hidden lg:table-cell">AI Tags</TableHead>
                 <TableHead className="hidden md:table-cell">Last Contact</TableHead>
                 <TableHead className="hidden lg:table-cell">Top Category</TableHead>
                 <TableHead>Actions</TableHead>
@@ -658,6 +671,23 @@ export default function ContactsPage() {
                           />
                         </div>
                         <span className="text-xs text-gray-500">{contact.engagementScore}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="hidden lg:table-cell">
+                      <div className="flex flex-wrap gap-1">
+                        {contact.aiTags.map((tag, ti) => (
+                          <span key={ti} className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold',
+                            tag === 'VIP' ? 'bg-amber-100 text-amber-700' :
+                            tag === 'At Risk' ? 'bg-red-100 text-red-700' :
+                            tag === 'New Lead' ? 'bg-green-100 text-green-700' :
+                            tag === 'Churning' ? 'bg-orange-100 text-orange-700' :
+                            tag === 'Sales' ? 'bg-blue-100 text-blue-700' :
+                            tag === 'Support' ? 'bg-purple-100 text-purple-700' :
+                            'bg-gray-100 text-gray-600'
+                          )}>
+                            {tag}
+                          </span>
+                        ))}
                       </div>
                     </TableCell>
                     <TableCell className="hidden whitespace-nowrap md:table-cell">

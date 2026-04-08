@@ -9,6 +9,7 @@ import { ConversationRealtime } from '@/components/dashboard/conversation-realti
 import { AISidebar } from '@/components/dashboard/ai-sidebar'
 import { ConversationActions } from '@/components/dashboard/conversation-actions'
 import { SuggestedReplies } from '@/components/dashboard/suggested-replies'
+import { BookmarkButton } from '@/components/dashboard/conversation-bookmarks'
 import { StatusDropdown } from '@/components/dashboard/status-dropdown'
 import { AgentAssignment } from '@/components/dashboard/agent-assignment'
 import { InternalNotes } from '@/components/dashboard/internal-notes'
@@ -248,6 +249,7 @@ export default async function ConversationPage({
               <div>
                 <div className="flex flex-wrap items-center gap-2">
                   <h1 className="font-semibold text-gray-900 truncate max-w-[150px] sm:max-w-none">{participantName}</h1>
+                  <BookmarkButton conversationId={id} participantName={participantName} accountName={accountName} />
                   <StatusDropdown
                     conversationId={id}
                     currentStatus={status}
