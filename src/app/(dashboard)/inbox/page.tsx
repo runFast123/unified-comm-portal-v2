@@ -94,8 +94,12 @@ export default function InboxPage() {
       search: '',
     }
   })
+  const INBOX_PAGE_SIZE = 50
   const [items, setItems] = useState<InboxItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [hasMore, setHasMore] = useState(false)
+  const [totalCount, setTotalCount] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>('list')
 
@@ -213,7 +217,7 @@ export default function InboxPage() {
 
       messagesQuery = messagesQuery
         .order('received_at', { ascending: false })
-        .limit(100)
+        .limit(INBOX_PAGE_SIZE)
 
       // Apply dashboard filter from URL params
       if (dashboardFilter === 'pending') {
@@ -332,17 +336,93 @@ export default function InboxPage() {
       deduped.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
 
       setItems(deduped)
+      setHasMore(deduped.length >= INBOX_PAGE_SIZE)
+      setTotalCount(deduped.length)
     } catch (err: any) {
       console.error('Failed to fetch inbox items:', err)
       setError(err.message ?? 'Failed to load inbox messages')
     } finally {
       setLoading(false)
     }
-  }, [isAdmin, userAccountId, inboxView, dashboardFilter])
+  }, [isAdmin, userAccountId, inboxView, dashboardFilter, INBOX_PAGE_SIZE])
 
   useEffect(() => {
     fetchInboxItems()
   }, [fetchInboxItems])
+
+  // Load more messages (append to existing list)
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore) return
+    setLoadingMore(true)
+    try {
+      const supabase = createClient()
+      const lastItem = items[items.length - 1]
+      if (!lastItem) return
+
+      let moreQuery = supabase
+        .from('messages')
+        .select(`
+          id, conversation_id, account_id, channel, sender_name, message_text,
+          email_subject, direction, reply_required, replied, is_spam, spam_reason,
+          timestamp, received_at,
+          accounts!messages_account_id_fkey ( id, name, phase2_enabled ),
+          message_classifications ( category, sentiment, urgency, confidence, classified_at ),
+          ai_replies ( status, created_at ),
+          conversations!messages_conversation_id_fkey ( status, assigned_to )
+        `)
+        .eq('direction', 'inbound')
+        .lt('received_at', lastItem.timestamp)
+        .order('received_at', { ascending: false })
+        .limit(INBOX_PAGE_SIZE)
+
+      if (inboxView === 'inbox') moreQuery = moreQuery.eq('is_spam', false)
+      else if (inboxView === 'newsletter') moreQuery = moreQuery.eq('is_spam', true).in('spam_reason', ['newsletter', 'marketing', 'automated_notification', 'ai_classified_newsletter'])
+      else moreQuery = moreQuery.eq('is_spam', true).not('spam_reason', 'in', '(newsletter,marketing,automated_notification,ai_classified_newsletter)')
+
+      if (!isAdmin && userAccountId) moreQuery = moreQuery.eq('account_id', userAccountId)
+
+      const { data: moreMessages } = await moreQuery
+
+      if (moreMessages && moreMessages.length > 0) {
+        const mapped: InboxItem[] = moreMessages.map((msg: any) => {
+          const account = msg.accounts as any
+          const classification = msg.message_classifications?.[0] as any
+          const aiReply = msg.ai_replies?.[0] as any
+          const conv = msg.conversations as any
+          return {
+            id: `${msg.conversation_id}-${msg.id}`,
+            message_id: msg.id,
+            conversation_id: msg.conversation_id,
+            account_id: msg.account_id,
+            account_name: account?.name || 'Unknown',
+            channel: msg.channel,
+            sender_name: msg.sender_name,
+            subject_or_preview: msg.email_subject || msg.message_text?.substring(0, 100) || 'No preview',
+            timestamp: msg.received_at || msg.timestamp,
+            time_waiting: msg.received_at || msg.timestamp,
+            is_read: msg.replied,
+            priority: derivePriority(classification?.urgency) as Priority,
+            category: classification?.category || null,
+            sentiment: classification?.sentiment || null,
+            ai_status: mapAiStatus(aiReply?.status, account?.phase2_enabled ?? false),
+            urgency: (classification?.urgency || null) as any,
+            ai_confidence: classification?.confidence != null ? Math.round(Number(classification.confidence) * 100) : null,
+            conversation_status: (conv?.status || 'active') as any,
+            assigned_to: conv?.assigned_to || null,
+          }
+        })
+        setItems(prev => [...prev, ...mapped])
+        setHasMore(moreMessages.length >= INBOX_PAGE_SIZE)
+        setTotalCount(prev => prev + mapped.length)
+      } else {
+        setHasMore(false)
+      }
+    } catch (err) {
+      console.error('Failed to load more:', err)
+    } finally {
+      setLoadingMore(false)
+    }
+  }, [items, loadingMore, hasMore, isAdmin, userAccountId, inboxView, INBOX_PAGE_SIZE])
 
   // Real-time: auto-refresh inbox when new messages arrive (debounced 3s)
   const debounceRef = useRef<NodeJS.Timeout | null>(null)
@@ -1037,6 +1117,22 @@ export default function InboxPage() {
       {/* Kanban board view */}
       {!loading && !error && inboxView === 'inbox' && filteredItems.length > 0 && viewMode === 'kanban' && (
         <InboxKanban items={filteredItems} />
+      )}
+
+      {/* Load More button */}
+      {!loading && !error && hasMore && (
+        <div className="flex justify-center py-4">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={loadMore}
+            disabled={loadingMore}
+            className="px-6"
+          >
+            {loadingMore ? <Loader2 size={14} className="animate-spin" /> : null}
+            {loadingMore ? 'Loading...' : `Load More (showing ${items.length})`}
+          </Button>
+        </div>
       )}
     </div>
   )

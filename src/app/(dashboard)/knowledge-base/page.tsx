@@ -26,6 +26,7 @@ import { Select } from '@/components/ui/select'
 import { Modal } from '@/components/ui/modal'
 import { Toggle } from '@/components/ui/toggle'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
+import { Pagination } from '@/components/ui/pagination'
 import { EmptyState } from '@/components/ui/empty-state'
 import type { KBArticle } from '@/types/database'
 import { cn, truncate, timeAgo } from '@/lib/utils'
@@ -220,6 +221,8 @@ export default function KnowledgeBasePage() {
   const [articles, setArticles] = useState<KBArticle[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const KB_PAGE_SIZE = 20
+  const [kbPage, setKbPage] = useState(1)
   const [searchQuery, setSearchQuery] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
   const [selectedArticle, setSelectedArticle] = useState<KBArticle | null>(null)
@@ -307,6 +310,17 @@ export default function KnowledgeBasePage() {
       return matchesSearch && matchesCategory && matchesAccount
     })
   }, [articles, searchQuery, categoryFilter, accountFilter, accounts])
+
+  // Reset page on filter change
+  useEffect(() => {
+    setKbPage(1)
+  }, [searchQuery, categoryFilter, accountFilter])
+
+  const totalKbPages = Math.ceil(filteredArticles.length / KB_PAGE_SIZE)
+  const paginatedArticles = useMemo(() => {
+    const start = (kbPage - 1) * KB_PAGE_SIZE
+    return filteredArticles.slice(start, start + KB_PAGE_SIZE)
+  }, [filteredArticles, kbPage, KB_PAGE_SIZE])
 
   // Handlers
   function handleSyncNow() {
@@ -605,7 +619,7 @@ export default function KnowledgeBasePage() {
             }
           />
         ) : (
-          <Table>
+          <><Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Title</TableHead>
@@ -619,7 +633,7 @@ export default function KnowledgeBasePage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredArticles.map((article) => (
+              {paginatedArticles.map((article) => (
                 <TableRow key={article.id}>
                   <TableCell>
                     <button
@@ -699,6 +713,14 @@ export default function KnowledgeBasePage() {
               ))}
             </TableBody>
           </Table>
+          <Pagination
+            currentPage={kbPage}
+            totalPages={totalKbPages}
+            totalItems={filteredArticles.length}
+            pageSize={KB_PAGE_SIZE}
+            onPageChange={setKbPage}
+          />
+          </>
         )}
       </Card>
 

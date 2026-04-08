@@ -21,6 +21,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
+import { Pagination } from '@/components/ui/pagination'
 import { Modal } from '@/components/ui/modal'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -141,6 +142,10 @@ export default function ContactsPage() {
   const [contacts, setContacts] = useState<ContactRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  // Pagination
+  const CONTACTS_PAGE_SIZE = 25
+  const [contactsPage, setContactsPage] = useState(1)
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('')
@@ -426,6 +431,17 @@ export default function ContactsPage() {
     return result
   }, [contacts, searchQuery, accountFilter, categoryFilter, sortBy])
 
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setContactsPage(1)
+  }, [searchQuery, accountFilter, categoryFilter, sortBy])
+
+  const totalContactPages = Math.ceil(filteredContacts.length / CONTACTS_PAGE_SIZE)
+  const paginatedContacts = useMemo(() => {
+    const start = (contactsPage - 1) * CONTACTS_PAGE_SIZE
+    return filteredContacts.slice(start, start + CONTACTS_PAGE_SIZE)
+  }, [filteredContacts, contactsPage, CONTACTS_PAGE_SIZE])
+
   // -------------------------------------------------------------------------
   // Handlers
   // -------------------------------------------------------------------------
@@ -603,7 +619,7 @@ export default function ContactsPage() {
             }
           />
         ) : (
-          <Table>
+          <><Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Contact</TableHead>
@@ -618,7 +634,7 @@ export default function ContactsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredContacts.map((contact, idx) => {
+              {paginatedContacts.map((contact, idx) => {
                 const key = `${contact.name}-${contact.email || ''}-${contact.accountId}-${idx}`
                 return (
                   <TableRow
@@ -717,6 +733,14 @@ export default function ContactsPage() {
               })}
             </TableBody>
           </Table>
+          <Pagination
+            currentPage={contactsPage}
+            totalPages={totalContactPages}
+            totalItems={filteredContacts.length}
+            pageSize={CONTACTS_PAGE_SIZE}
+            onPageChange={setContactsPage}
+          />
+          </>
         )}
       </Card>
 
