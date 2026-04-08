@@ -199,7 +199,8 @@ export default async function ConversationPage({
   const channel = conversation.channel as ChannelType
   const priority = derivePriority(conversation.priority)
   const status = (conversation.status || 'active') as ConversationStatus
-  const participantName = conversation.participant_name || conversation.participant_email || 'Unknown'
+  const rawName = conversation.participant_name || conversation.participant_email || 'Unknown'
+  const participantName = rawName.replace(/<[^>]+>/g, '').replace(/^["']+|["']+$/g, '').replace(/\s*\.\s*$/, '').replace(/\s+/g, ' ').trim() || 'Unknown'
   const accountName = account?.name || 'Unknown Account'
   // Get the email subject from the first inbound message
   const firstInboundMsg = (messages || []).find((m: any) => m.direction === 'inbound')

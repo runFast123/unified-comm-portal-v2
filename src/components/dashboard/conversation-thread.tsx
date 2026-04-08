@@ -360,35 +360,48 @@ function EmailMessage({ message, isOutbound }: { message: Message; isOutbound: b
   )
 }
 
+function cleanSenderName(raw: string | null): string {
+  if (!raw) return 'Unknown'
+  return raw
+    .replace(/<[^>]+>/g, '')       // strip HTML tags
+    .replace(/^["']+|["']+$/g, '') // strip surrounding quotes
+    .replace(/\s*\.\s*$/, '')      // strip trailing dot
+    .replace(/\s+/g, ' ')          // normalize spaces
+    .trim() || 'Unknown'
+}
+
 function TeamsBubble({ message, isOutbound }: { message: Message; isOutbound: boolean }) {
+  const senderName = cleanSenderName(message.sender_name)
+  const initials = senderName.split(' ').filter(Boolean).map(w => w[0]).join('').substring(0, 2).toUpperCase() || 'U'
+
   return (
-    <div className={cn('flex gap-2 max-w-[80%]', isOutbound ? 'ml-auto flex-row-reverse' : 'mr-auto')}>
+    <div className={cn('flex gap-3 max-w-[85%]', isOutbound ? 'ml-auto flex-row-reverse' : 'mr-auto')}>
       <div
         className={cn(
-          'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white',
-          isOutbound ? 'bg-[#6264a7]' : 'bg-gray-400'
+          'flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white shadow-sm',
+          isOutbound ? 'bg-[#6264a7]' : 'bg-gradient-to-br from-gray-400 to-gray-500'
         )}
       >
-        {(message.sender_name?.trim() || 'U')[0].toUpperCase()}
+        {initials}
       </div>
 
-      <div>
-        <span className={cn('mb-1 block text-xs font-medium', isOutbound ? 'text-right' : 'text-left', 'text-gray-500')}>
-          {message.sender_name || 'Unknown'}
-          {message.sender_type === 'ai' && <> <AIBadge /></>}
-        </span>
+      <div className="min-w-0 flex-1">
+        <div className={cn('mb-1 flex items-center gap-2', isOutbound ? 'justify-end' : 'justify-start')}>
+          <span className="text-xs font-semibold text-gray-700">{senderName}</span>
+          {message.sender_type === 'ai' && <AIBadge />}
+          <span className="text-[10px] text-gray-400">{formatRelativeTime(message.timestamp)}</span>
+        </div>
 
         <div
           className={cn(
-            'rounded-lg px-4 py-2.5',
-            isOutbound ? 'bg-[#e8e8f5] text-gray-900' : 'bg-gray-100 text-gray-900'
+            'rounded-xl px-4 py-3 shadow-sm',
+            isOutbound
+              ? 'bg-gradient-to-br from-[#e8e8f5] to-[#ddddf5] border border-[#d0d0e8]'
+              : 'bg-white border border-gray-200'
           )}
         >
-          <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.message_text}</p>
+          <p className="text-sm leading-relaxed whitespace-pre-wrap text-gray-900">{message.message_text}</p>
           {message.attachments && renderAttachments(message.attachments)}
-          <div className="mt-1.5 flex items-center justify-end gap-2">
-            <span className="text-[10px] text-gray-400" title={formatTime(message.timestamp)}>{formatRelativeTime(message.timestamp)}</span>
-          </div>
         </div>
       </div>
     </div>
@@ -396,11 +409,12 @@ function TeamsBubble({ message, isOutbound }: { message: Message; isOutbound: bo
 }
 
 function WhatsAppBubble({ message, isOutbound }: { message: Message; isOutbound: boolean }) {
+  const senderName = cleanSenderName(message.sender_name)
   return (
     <div className={cn('max-w-[75%]', isOutbound ? 'ml-auto' : 'mr-auto')}>
       {!isOutbound && (
         <span className="mb-0.5 block text-xs font-medium text-teal-700">
-          {message.sender_name || 'Unknown'}
+          {senderName}
           {message.sender_type === 'ai' && <> <AIBadge /></>}
         </span>
       )}
@@ -431,7 +445,7 @@ export function ConversationThread({ messages, channel }: ConversationThreadProp
   let prevTimestamp: string | null = null
 
   return (
-    <div className="space-y-4 py-4">
+    <div className="space-y-3 py-4">
       {messages.map((message, idx) => {
         const isOutbound = message.direction === 'outbound'
         const msgDate = formatDate(message.timestamp)
