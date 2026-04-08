@@ -308,7 +308,7 @@ export default function InboxPage() {
           conversation_id: msg.conversation_id,
           conversation_status: conversation?.status ?? null,
           assigned_to: conversation?.assigned_to ?? null,
-          timestamp: msg.timestamp,
+          timestamp: msg.received_at || msg.timestamp,
           is_spam: msg.is_spam ?? false,
           spam_reason: msg.spam_reason ?? null,
         } satisfies InboxItem
@@ -386,8 +386,12 @@ export default function InboxPage() {
       if (moreMessages && moreMessages.length > 0) {
         const mapped: InboxItem[] = moreMessages.map((msg: any) => {
           const account = msg.accounts as any
-          const classification = msg.message_classifications?.[0] as any
-          const aiReply = msg.ai_replies?.[0] as any
+          const classification = Array.isArray(msg.message_classifications)
+            ? [...msg.message_classifications].sort((a: any, b: any) => new Date(b.classified_at || 0).getTime() - new Date(a.classified_at || 0).getTime())[0] ?? null
+            : msg.message_classifications ?? null
+          const aiReply = Array.isArray(msg.ai_replies)
+            ? [...msg.ai_replies].sort((a: any, b: any) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())[0] ?? null
+            : msg.ai_replies ?? null
           const conv = msg.conversations as any
           return {
             id: `${msg.conversation_id}-${msg.id}`,
