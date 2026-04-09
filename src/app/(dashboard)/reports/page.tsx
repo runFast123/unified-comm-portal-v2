@@ -188,7 +188,7 @@ function getDayName(date: Date): string {
 // --- Page ---
 
 export default function ReportsPage() {
-  const { isAdmin, account_id: userAccountId } = useUser()
+  const { isAdmin, companyAccountIds } = useUser()
   const [activeTab, setActiveTab] = useState<ReportTab>('overview')
   const [dateRange, setDateRange] = useState<DateRange>('7d')
   const [loading, setLoading] = useState(true)
@@ -234,7 +234,7 @@ export default function ReportsPage() {
     const endDate = getDateRangeEnd(dateRange, customTo)
 
     try {
-      const accountIdFilter = !isAdmin && userAccountId ? userAccountId : null
+      const accountIdFilter = !isAdmin && companyAccountIds.length > 0 ? companyAccountIds : null
 
       // 1. Fetch messages for the date range
       let messagesQuery = supabase
@@ -245,7 +245,7 @@ export default function ReportsPage() {
         .order('received_at', { ascending: true })
         .limit(10000)
       if (endDate) messagesQuery = messagesQuery.lte('received_at', endDate)
-      if (accountIdFilter) messagesQuery = messagesQuery.eq('account_id', accountIdFilter)
+      if (accountIdFilter) messagesQuery = messagesQuery.in('account_id', accountIdFilter)
       const { data: messages } = await messagesQuery
 
       // 2. Fetch classifications
@@ -264,14 +264,14 @@ export default function ReportsPage() {
         .gte('created_at', startDate)
         .limit(10000)
       if (endDate) aiQuery = aiQuery.lte('created_at', endDate)
-      if (accountIdFilter) aiQuery = aiQuery.eq('account_id', accountIdFilter)
+      if (accountIdFilter) aiQuery = aiQuery.in('account_id', accountIdFilter)
       const { data: aiReplies } = await aiQuery
 
       // 4. Fetch sheets sync
       let sheetsQuery = supabase
         .from('google_sheets_sync')
         .select('*')
-      if (accountIdFilter) sheetsQuery = sheetsQuery.or(`account_id.eq.${accountIdFilter},account_id.is.null`)
+      if (accountIdFilter) sheetsQuery = sheetsQuery.or(accountIdFilter.map(id => `account_id.eq.${id}`).concat('account_id.is.null').join(','))
       const { data: sheets } = await sheetsQuery
 
       // 5. Build message volume by day
@@ -437,7 +437,7 @@ export default function ReportsPage() {
           .gte('received_at', prevStart)
           .lte('received_at', prevEnd)
           .eq('direction', 'inbound')
-        if (accountIdFilter) prevMsgQuery = prevMsgQuery.eq('account_id', accountIdFilter)
+        if (accountIdFilter) prevMsgQuery = prevMsgQuery.in('account_id', accountIdFilter)
         const { data: prevMessages } = await prevMsgQuery
 
         let prevClassQuery = supabase
@@ -452,7 +452,7 @@ export default function ReportsPage() {
           .select('status')
           .gte('created_at', prevStart)
           .lte('created_at', prevEnd)
-        if (accountIdFilter) prevAiQuery = prevAiQuery.eq('account_id', accountIdFilter)
+        if (accountIdFilter) prevAiQuery = prevAiQuery.in('account_id', accountIdFilter)
         const { data: prevAiReplies } = await prevAiQuery
 
         setPrevTotalMessages((prevMessages || []).length)
@@ -503,7 +503,7 @@ export default function ReportsPage() {
     } finally {
       setLoading(false)
     }
-  }, [dateRange, customFrom, customTo, compareEnabled, isAdmin, userAccountId])
+  }, [dateRange, customFrom, customTo, compareEnabled, isAdmin, companyAccountIds])
 
   useEffect(() => {
     fetchReportData()

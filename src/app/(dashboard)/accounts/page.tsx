@@ -32,7 +32,7 @@ function getBaseName(accountName: string): string {
 }
 
 export default function AccountsPage() {
-  const { isAdmin, account_id: userAccountId } = useUser()
+  const { isAdmin, companyAccountIds } = useUser()
   const [accounts, setAccounts] = useState<AccountWithStats[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -44,8 +44,8 @@ export default function AccountsPage() {
         .from('accounts')
         .select('*')
         .order('name')
-      if (!isAdmin && userAccountId) {
-        accountsQuery = accountsQuery.eq('id', userAccountId)
+      if (!isAdmin && companyAccountIds.length > 0) {
+        accountsQuery = accountsQuery.in('id', companyAccountIds)
       }
       const { data: accountRows, error } = await accountsQuery
 
@@ -107,7 +107,7 @@ export default function AccountsPage() {
     }
 
     fetchAccounts()
-  }, [isAdmin, userAccountId])
+  }, [isAdmin, companyAccountIds])
 
   if (loading) {
     return (

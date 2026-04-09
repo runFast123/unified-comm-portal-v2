@@ -137,7 +137,7 @@ function getInitials(name: string): string {
 
 export default function ContactsPage() {
   const supabase = createClient()
-  const { isAdmin, account_id: userAccountId } = useUser()
+  const { isAdmin, companyAccountIds } = useUser()
 
   const [contacts, setContacts] = useState<ContactRecord[]>([])
   const [loading, setLoading] = useState(true)
@@ -169,12 +169,12 @@ export default function ContactsPage() {
       .select('id, name')
       .eq('is_active', true)
       .order('name')
-    if (!isAdmin && userAccountId) {
-      query = query.eq('id', userAccountId)
+    if (!isAdmin && companyAccountIds.length > 0) {
+      query = query.in('id', companyAccountIds)
     }
     const { data } = await query
     if (data) setAccounts(data)
-  }, [isAdmin, userAccountId])
+  }, [isAdmin, companyAccountIds])
 
   // -------------------------------------------------------------------------
   // Fetch contacts — aggregated from conversations + messages
@@ -201,9 +201,9 @@ export default function ContactsPage() {
         .not('participant_name', 'is', null)
         .limit(10000)
 
-      // Company scoping for non-admins
-      if (!isAdmin && userAccountId) {
-        convQuery = convQuery.eq('account_id', userAccountId)
+      // Company scoping for non-admins (include sibling channel accounts)
+      if (!isAdmin && companyAccountIds.length > 0) {
+        convQuery = convQuery.in('account_id', companyAccountIds)
       }
 
       const { data: conversations, error: convError } = await convQuery
@@ -361,7 +361,7 @@ export default function ContactsPage() {
     } finally {
       setLoading(false)
     }
-  }, [isAdmin, userAccountId])
+  }, [isAdmin, companyAccountIds])
 
   useEffect(() => {
     fetchContacts()

@@ -217,7 +217,7 @@ function getCategoryVariant(category: string): 'info' | 'warning' | 'success' | 
 
 export default function KnowledgeBasePage() {
   const supabase = createClient()
-  const { isAdmin, account_id: userAccountId } = useUser()
+  const { isAdmin, companyAccountIds } = useUser()
   const [articles, setArticles] = useState<KBArticle[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -242,9 +242,9 @@ export default function KnowledgeBasePage() {
       .select('id, name')
       .eq('is_active', true)
       .order('name')
-    // Non-admins only see their own company
-    if (!isAdmin && userAccountId) {
-      query = query.eq('id', userAccountId)
+    // Non-admins see their company's accounts (including sibling channels)
+    if (!isAdmin && companyAccountIds.length > 0) {
+      query = query.in('id', companyAccountIds)
     }
     const { data } = await query
     if (data) setAccounts(data)
@@ -259,9 +259,9 @@ export default function KnowledgeBasePage() {
       .select('*')
       .order('updated_at', { ascending: false })
 
-    // Non-admins: only see articles for their company or shared (account_id IS NULL)
-    if (!isAdmin && userAccountId) {
-      query = query.or(`account_id.eq.${userAccountId},account_id.is.null`)
+    // Non-admins: see articles for their company (all channels) or shared (account_id IS NULL)
+    if (!isAdmin && companyAccountIds.length > 0) {
+      query = query.or(companyAccountIds.map(id => `account_id.eq.${id}`).concat('account_id.is.null').join(','))
     }
 
     const { data, error: fetchError } = await query
@@ -386,7 +386,7 @@ export default function KnowledgeBasePage() {
 
   function handleOpenAdd() {
     setEditingId(null)
-    setEditForm({ title: '', content: '', category: 'General', tags: '', account_id: !isAdmin && userAccountId ? userAccountId : '' })
+    setEditForm({ title: '', content: '', category: 'General', tags: '', account_id: !isAdmin && companyAccountIds.length > 0 ? companyAccountIds[0] : '' })
     setEditModalOpen(true)
   }
 

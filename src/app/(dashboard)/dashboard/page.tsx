@@ -431,10 +431,11 @@ export default function DashboardPage() {
         // Combine category + sentiment into a single query (same table, same date filter)
         let classificationQuery = supabase
           .from('message_classifications')
-          .select('category, sentiment')
+          .select('category, sentiment, messages!inner(account_id)' as any)
           .gte('classified_at', rangeISO)
           .limit(10000)
         if (customToISO) classificationQuery = classificationQuery.lte('classified_at', customToISO)
+        if (accountIdFilter) classificationQuery = (classificationQuery as any).in('messages.account_id', accountIdFilter)
 
         // Account pending counts (for account overview table)
         let pendingByAccountQuery = supabase
@@ -513,7 +514,7 @@ export default function DashboardPage() {
         }
 
         // --- Process sentiment + category from combined query ---
-        const classificationData = classificationResult.data ?? []
+        const classificationData = (classificationResult.data ?? []) as any[]
         if (classificationData.length > 0) {
           const total = classificationData.length
           const pos = classificationData.filter((r: { sentiment: string }) => r.sentiment === 'positive').length
@@ -743,12 +744,14 @@ export default function DashboardPage() {
 
         // Fetch escalated conversations
         try {
-          const { data: escalated } = await supabase
+          let escalatedQuery = supabase
             .from('conversations')
-            .select('id, participant_name, participant_email, channel, last_message_at, account:accounts!inner(name), assigned:users!conversations_assigned_to_fkey(full_name)')
+            .select('id, participant_name, participant_email, channel, last_message_at, account_id, account:accounts!inner(name), assigned:users!conversations_assigned_to_fkey(full_name)')
             .eq('status', 'escalated')
             .order('last_message_at', { ascending: false })
             .limit(10)
+          if (accountIdFilter) escalatedQuery = escalatedQuery.in('account_id', accountIdFilter)
+          const { data: escalated } = await escalatedQuery
 
           setEscalatedConversations((escalated || []).map((c: Record<string, unknown>) => {
             const acc = c.account as Record<string, unknown> | null
