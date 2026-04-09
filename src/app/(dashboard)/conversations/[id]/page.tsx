@@ -18,7 +18,7 @@ import {
   getChannelLabel,
   getPriorityColor,
 } from '@/lib/utils'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase-server'
 import type {
   ChannelType,
   Priority,
@@ -84,10 +84,12 @@ export default async function ConversationPage({
   }
 
   // Non-admin users can only access conversations for their own company (including sibling channel accounts)
+  // Uses service role client to bypass RLS for the account lookup
   if (!userIsAdmin && userAccountId) {
-    const { data: myAccount } = await supabase.from('accounts').select('name').eq('id', userAccountId).maybeSingle()
+    const adminSupabase = await createServiceRoleClient()
+    const { data: myAccount } = await adminSupabase.from('accounts').select('name').eq('id', userAccountId).maybeSingle()
     const baseName = (myAccount?.name || '').replace(/\s+Teams$/i, '').replace(/\s+WhatsApp$/i, '').trim()
-    const { data: companyAccounts } = await supabase.from('accounts').select('id, name').eq('is_active', true)
+    const { data: companyAccounts } = await adminSupabase.from('accounts').select('id, name').eq('is_active', true)
     const allowedIds = new Set(
       (companyAccounts || [])
         .filter((a: any) => a.name.replace(/\s+Teams$/i, '').replace(/\s+WhatsApp$/i, '').trim() === baseName)

@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase-server'
 import { DashboardShell } from '@/components/dashboard/dashboard-shell'
 import type { User } from '@/types/database'
 
@@ -34,24 +34,30 @@ export default async function DashboardLayout({
   }
 
   // Fetch sibling account IDs (same company, different channels) for non-admin users
+  // Uses service role client to bypass RLS — user's session client can only see their own account
   let companyAccountIds: string[] = user.account_id ? [user.account_id] : []
   if (user.role !== 'admin' && user.account_id) {
-    const { data: myAccount } = await supabase
-      .from('accounts')
-      .select('name')
-      .eq('id', user.account_id)
-      .maybeSingle()
-    if (myAccount?.name) {
-      const baseName = myAccount.name.replace(/\s+Teams$/i, '').replace(/\s+WhatsApp$/i, '').trim()
-      const { data: allAccounts } = await supabase
+    try {
+      const adminSupabase = await createServiceRoleClient()
+      const { data: myAccount } = await adminSupabase
         .from('accounts')
-        .select('id, name')
-        .eq('is_active', true)
-      if (allAccounts) {
-        companyAccountIds = allAccounts
-          .filter(a => a.name.replace(/\s+Teams$/i, '').replace(/\s+WhatsApp$/i, '').trim() === baseName)
-          .map(a => a.id)
+        .select('name')
+        .eq('id', user.account_id)
+        .maybeSingle()
+      if (myAccount?.name) {
+        const baseName = myAccount.name.replace(/\s+Teams$/i, '').replace(/\s+WhatsApp$/i, '').trim()
+        const { data: allAccounts } = await adminSupabase
+          .from('accounts')
+          .select('id, name')
+          .eq('is_active', true)
+        if (allAccounts) {
+          companyAccountIds = allAccounts
+            .filter(a => a.name.replace(/\s+Teams$/i, '').replace(/\s+WhatsApp$/i, '').trim() === baseName)
+            .map(a => a.id)
+        }
       }
+    } catch (err) {
+      console.error('Failed to fetch sibling accounts:', err)
     }
   }
 
