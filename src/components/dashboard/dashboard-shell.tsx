@@ -33,6 +33,7 @@ import type { User } from '@/types/database'
 interface DashboardShellProps {
   user: Pick<User, 'email' | 'full_name' | 'role' | 'account_id'>
   pendingCount: number
+  companyAccountIds?: string[]
   children: React.ReactNode
 }
 
@@ -100,7 +101,7 @@ const NAV_SHORTCUTS: Record<string, string> = {
   k: '/knowledge-base',
 }
 
-export function DashboardShell({ user, pendingCount, children }: DashboardShellProps) {
+export function DashboardShell({ user, pendingCount, companyAccountIds, children }: DashboardShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
@@ -187,7 +188,7 @@ export function DashboardShell({ user, pendingCount, children }: DashboardShellP
   }, [handleGlobalKeyDown])
 
   return (
-    <UserProvider user={user}>
+    <UserProvider user={user} serverCompanyAccountIds={companyAccountIds}>
     <div className="flex h-screen overflow-hidden bg-background">
       <Sidebar
         user={user}

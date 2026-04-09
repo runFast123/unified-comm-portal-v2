@@ -33,18 +33,40 @@ export default async function DashboardLayout({
     account_id: profile?.account_id ?? null,
   }
 
+  // Fetch sibling account IDs (same company, different channels) for non-admin users
+  let companyAccountIds: string[] = user.account_id ? [user.account_id] : []
+  if (user.role !== 'admin' && user.account_id) {
+    const { data: myAccount } = await supabase
+      .from('accounts')
+      .select('name')
+      .eq('id', user.account_id)
+      .maybeSingle()
+    if (myAccount?.name) {
+      const baseName = myAccount.name.replace(/\s+Teams$/i, '').replace(/\s+WhatsApp$/i, '').trim()
+      const { data: allAccounts } = await supabase
+        .from('accounts')
+        .select('id, name')
+        .eq('is_active', true)
+      if (allAccounts) {
+        companyAccountIds = allAccounts
+          .filter(a => a.name.replace(/\s+Teams$/i, '').replace(/\s+WhatsApp$/i, '').trim() === baseName)
+          .map(a => a.id)
+      }
+    }
+  }
+
   // Fetch pending reply count (scoped for non-admins)
   let pendingQuery = supabase
     .from('ai_replies')
     .select('*', { count: 'exact', head: true })
     .eq('status', 'pending_approval')
-  if (user.role !== 'admin' && user.account_id) {
-    pendingQuery = pendingQuery.eq('account_id', user.account_id)
+  if (user.role !== 'admin' && companyAccountIds.length > 0) {
+    pendingQuery = pendingQuery.in('account_id', companyAccountIds)
   }
   const { count: pendingCount } = await pendingQuery
 
   return (
-    <DashboardShell user={user} pendingCount={pendingCount ?? 0}>
+    <DashboardShell user={user} pendingCount={pendingCount ?? 0} companyAccountIds={companyAccountIds}>
       {children}
     </DashboardShell>
   )
