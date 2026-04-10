@@ -219,6 +219,11 @@ export default function InboxPage() {
         .order('received_at', { ascending: false })
         .limit(INBOX_PAGE_SIZE)
 
+      // Apply channel filter server-side (so Teams/Email/WhatsApp filter actually fetches correct data)
+      if (filters.channel !== 'all') {
+        messagesQuery = messagesQuery.eq('channel', filters.channel)
+      }
+
       // Apply dashboard filter from URL params
       if (dashboardFilter === 'pending') {
         messagesQuery = messagesQuery.eq('reply_required', true).eq('replied', false)
@@ -345,7 +350,7 @@ export default function InboxPage() {
     } finally {
       setLoading(false)
     }
-  }, [isAdmin, companyAccountIds, inboxView, dashboardFilter, INBOX_PAGE_SIZE])
+  }, [isAdmin, companyAccountIds, inboxView, dashboardFilter, filters.channel, INBOX_PAGE_SIZE])
 
   useEffect(() => {
     fetchInboxItems()
@@ -380,6 +385,7 @@ export default function InboxPage() {
       else if (inboxView === 'newsletter') moreQuery = moreQuery.eq('is_spam', true).in('spam_reason', ['newsletter', 'marketing', 'automated_notification', 'ai_classified_newsletter'])
       else moreQuery = moreQuery.eq('is_spam', true).not('spam_reason', 'in', '(newsletter,marketing,automated_notification,ai_classified_newsletter)')
 
+      if (filters.channel !== 'all') moreQuery = moreQuery.eq('channel', filters.channel)
       if (!isAdmin && companyAccountIds.length > 0) moreQuery = moreQuery.in('account_id', companyAccountIds)
 
       const { data: moreMessages } = await moreQuery
@@ -428,7 +434,7 @@ export default function InboxPage() {
     } finally {
       setLoadingMore(false)
     }
-  }, [items, loadingMore, hasMore, isAdmin, companyAccountIds, inboxView, INBOX_PAGE_SIZE])
+  }, [items, loadingMore, hasMore, isAdmin, companyAccountIds, inboxView, filters.channel, INBOX_PAGE_SIZE])
 
   // Real-time: auto-refresh inbox when new messages arrive (debounced 3s)
   const debounceRef = useRef<NodeJS.Timeout | null>(null)
