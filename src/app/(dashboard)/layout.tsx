@@ -51,13 +51,13 @@ export default async function DashboardLayout({
           .select('id, name')
           .eq('is_active', true)
         if (allAccounts) {
-          companyAccountIds = allAccounts
-            .filter(a => a.name.replace(/\s+Teams$/i, '').replace(/\s+WhatsApp$/i, '').trim() === baseName)
-            .map(a => a.id)
+          const matches = allAccounts.filter(a => a.name.replace(/\s+Teams$/i, '').replace(/\s+WhatsApp$/i, '').trim() === baseName)
+          companyAccountIds = matches.map(a => a.id)
+          console.log(`[SIBLING] user=${user.email} baseName="${baseName}" found=${matches.length} ids=${JSON.stringify(companyAccountIds)}`)
         }
       }
     } catch (err) {
-      console.error('Failed to fetch sibling accounts:', err)
+      console.error('[SIBLING ERROR]', err instanceof Error ? err.message : err)
     }
   }
 
