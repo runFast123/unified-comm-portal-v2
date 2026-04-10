@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServiceRoleClient, createServerSupabaseClient } from '@/lib/supabase-server'
 import { callAI, getAccountSettings, checkRateLimit } from '@/lib/api-helpers'
+import { logInfo, logError } from '@/lib/logger'
 import type { Category, Sentiment, Urgency } from '@/types/database'
 
 const DEFAULT_CLASSIFICATION_PROMPT = `You are a customer message classifier for a telecommunications company. Analyze the customer message and return a JSON object with the following fields:
@@ -274,9 +275,11 @@ export async function POST(request: Request) {
       }
     }
 
+    logInfo('ai', 'classify', `Classified as ${classification.category} / ${classification.sentiment}`, { message_id, account_id, category: classification.category, sentiment: classification.sentiment, confidence: classification.confidence })
     return NextResponse.json(stored, { status: 200 })
   } catch (error) {
     console.error('Classification error:', error)
+    logError('ai', 'classify_error', error instanceof Error ? error.message : 'Unknown error')
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

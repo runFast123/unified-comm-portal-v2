@@ -1,5 +1,3 @@
-import { createServiceRoleClient } from '@/lib/supabase-server'
-
 export type LogLevel = 'info' | 'warn' | 'error' | 'debug'
 export type LogCategory = 'webhook' | 'ai' | 'auth' | 'system' | 'n8n' | 'notification' | 'export'
 
@@ -14,28 +12,38 @@ interface LogEntry {
 }
 
 /**
- * Structured logger that writes to the audit_log table in Supabase.
- * Uses service role client to bypass RLS.
- * Non-blocking — errors in logging never affect the caller.
+ * Structured logger that writes to the audit_log table via direct REST API.
+ * Uses service role key to bypass RLS. Non-blocking — errors never affect the caller.
  */
 export async function log(entry: LogEntry): Promise<void> {
   try {
-    const supabase = await createServiceRoleClient()
-    await supabase.from('audit_log').insert({
-      action: `[${entry.level.toUpperCase()}] ${entry.category}:${entry.action}`,
-      details: JSON.stringify({
-        message: entry.message,
-        level: entry.level,
-        category: entry.category,
-        ...entry.metadata,
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    if (!supabaseUrl || !serviceKey) return
+
+    await fetch(`${supabaseUrl}/rest/v1/audit_log`, {
+      method: 'POST',
+      headers: {
+        'apikey': serviceKey,
+        'Authorization': `Bearer ${serviceKey}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=minimal',
+      },
+      body: JSON.stringify({
+        action: `[${entry.level.toUpperCase()}] ${entry.category}:${entry.action}`,
+        details: JSON.stringify({
+          message: entry.message,
+          level: entry.level,
+          category: entry.category,
+          ...entry.metadata,
+        }),
+        user_id: entry.user_id || null,
+        account_id: entry.account_id || null,
+        created_at: new Date().toISOString(),
       }),
-      user_id: entry.user_id || null,
-      account_id: entry.account_id || null,
-      created_at: new Date().toISOString(),
     })
   } catch {
     // Never let logging errors affect the main flow
-    console.error(`[Logger] Failed to write log: ${entry.category}:${entry.action} - ${entry.message}`)
   }
 }
 

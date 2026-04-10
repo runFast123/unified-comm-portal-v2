@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase-server'
+import { logInfo, logError } from '@/lib/logger'
 import {
   validateWebhookSecret,
   findOrCreateConversation,
@@ -337,12 +338,14 @@ export async function POST(request: Request) {
       }
     }
 
+    logInfo('webhook', 'email_received', `Email from ${senderEmail}`, { account_id, message_id: message.id, is_spam: spamResult.isSpam })
     return NextResponse.json(
       { message_id: message.id, is_spam: spamResult.isSpam },
       { status: 201 }
     )
   } catch (error) {
     console.error('Email webhook error:', error)
+    logError('webhook', 'email_error', error instanceof Error ? error.message : 'Unknown error')
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

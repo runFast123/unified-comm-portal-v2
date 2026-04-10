@@ -276,6 +276,7 @@ export async function POST(request: Request) {
       }
     }
 
+    logInfo('webhook', 'teams_received', `Teams message from ${sender_name}`, { account_id, message_id: message.id })
     return NextResponse.json(
       { message_id: message.id, conversation_id: conversationId },
       { status: 201 }

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServiceRoleClient, createServerSupabaseClient } from '@/lib/supabase-server'
+import { logInfo, logError } from '@/lib/logger'
 
 const N8N_BASE_URL = (process.env.N8N_BASE_URL || 'http://localhost:5678').replace(/\/+$/, '')
 const N8N_API_KEY = process.env.N8N_API_KEY || ''
@@ -232,6 +233,7 @@ export async function POST(request: Request) {
       )
     }
 
+    logInfo('n8n', action, `Triggered ${action} for ${account.name}`, { account_id, webhook: webhookPath })
     return NextResponse.json(
       {
         message: `Successfully triggered ${action}`,
@@ -241,6 +243,7 @@ export async function POST(request: Request) {
     )
   } catch (error) {
     console.error('n8n POST error:', error)
+    logError('n8n', 'trigger_error', error instanceof Error ? error.message : 'Unknown error')
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServiceRoleClient, createServerSupabaseClient } from '@/lib/supabase-server'
 import { callAI, getAccountSettings, checkRateLimit } from '@/lib/api-helpers'
+import { logInfo, logError } from '@/lib/logger'
 import type { ChannelType, AIReplyStatus } from '@/types/database'
 
 const CHANNEL_SYSTEM_PROMPTS: Record<ChannelType, string> = {
@@ -445,9 +446,11 @@ export async function POST(request: Request) {
       }
     }
 
+    logInfo('ai', 'reply_generated', `AI reply for ${channel} message`, { message_id, account_id, confidence: confidenceScore, status: aiReply?.status, kb_articles_used: matchedKbIds.length })
     return NextResponse.json(aiReply, { status: 200 })
   } catch (error) {
     console.error('AI reply generation error:', error)
+    logError('ai', 'reply_error', error instanceof Error ? error.message : 'Unknown error')
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
