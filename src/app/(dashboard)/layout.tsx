@@ -3,6 +3,10 @@ import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supab
 import { DashboardShell } from '@/components/dashboard/dashboard-shell'
 import type { User } from '@/types/database'
 
+// Force dynamic rendering — layout must run on every request to compute
+// user-specific companyAccountIds (different per user session)
+export const dynamic = 'force-dynamic'
+
 export default async function DashboardLayout({
   children,
 }: {
@@ -51,13 +55,13 @@ export default async function DashboardLayout({
           .select('id, name')
           .eq('is_active', true)
         if (allAccounts) {
-          const matches = allAccounts.filter(a => a.name.replace(/\s+Teams$/i, '').replace(/\s+WhatsApp$/i, '').trim() === baseName)
-          companyAccountIds = matches.map(a => a.id)
-          console.log(`[SIBLING] user=${user.email} baseName="${baseName}" found=${matches.length} ids=${JSON.stringify(companyAccountIds)}`)
+          companyAccountIds = allAccounts
+            .filter(a => a.name.replace(/\s+Teams$/i, '').replace(/\s+WhatsApp$/i, '').trim() === baseName)
+            .map(a => a.id)
         }
       }
     } catch (err) {
-      console.error('[SIBLING ERROR]', err instanceof Error ? err.message : err)
+      console.error('Failed to fetch sibling accounts:', err)
     }
   }
 
