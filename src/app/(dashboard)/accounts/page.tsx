@@ -36,6 +36,11 @@ export default function AccountsPage() {
   const [accounts, setAccounts] = useState<AccountWithStats[]>([])
   const [loading, setLoading] = useState(true)
 
+  // Debug: log companyAccountIds to verify sibling lookup
+  useEffect(() => {
+    console.log('[Accounts] companyAccountIds:', companyAccountIds, 'isAdmin:', isAdmin)
+  }, [companyAccountIds, isAdmin])
+
   useEffect(() => {
     async function fetchAccounts() {
       const supabase = createClient()
