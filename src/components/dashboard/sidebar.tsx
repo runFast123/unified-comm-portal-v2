@@ -52,6 +52,7 @@ const adminNavItems = [
   { label: 'AI Settings', href: '/admin/ai-settings', icon: Brain },
   { label: 'Notifications', href: '/admin/notifications', icon: Bell },
   { label: 'System Health', href: '/admin/health', icon: Activity },
+  { label: 'System Logs', href: '/admin/logs', icon: FileText },
   { label: 'Users', href: '/admin/users', icon: UserCog },
 ]
 

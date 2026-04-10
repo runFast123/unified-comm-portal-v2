@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase-server'
+import { logInfo, logError } from '@/lib/logger'
 import {
   validateWebhookSecret,
   checkRateLimit,
@@ -281,6 +282,7 @@ export async function POST(request: Request) {
     )
   } catch (error) {
     console.error('Teams webhook error:', error)
+    logError('webhook', 'teams_inbound', error instanceof Error ? error.message : 'Unknown error')
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
