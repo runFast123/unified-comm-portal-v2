@@ -32,12 +32,10 @@ export function UserProvider({ user, serverCompanyAccountIds, children }: {
 
   const [companyAccountIds, setCompanyAccountIds] = useState<string[]>(initialIds)
 
-  // For non-admin users: fetch sibling accounts via API to ensure we always get the full list
-  // This is the reliable fallback — the server-side layout may cache results
+  // For non-admin users: always fetch sibling accounts via API
+  // The server-side layout fetch has proven unreliable (RLS/caching issues)
   useEffect(() => {
     if (user.role === 'admin' || !user.account_id) return
-    // If server already provided multiple IDs, skip the API call
-    if (serverCompanyAccountIds && serverCompanyAccountIds.length > 1) return
 
     fetch('/api/user-accounts')
       .then(res => res.json())
@@ -47,7 +45,7 @@ export function UserProvider({ user, serverCompanyAccountIds, children }: {
         }
       })
       .catch(() => { /* keep the initial IDs */ })
-  }, [user.role, user.account_id, serverCompanyAccountIds])
+  }, [user.role, user.account_id])
 
   return (
     <UserContext.Provider value={{ ...user, isAdmin: user.role === 'admin', companyAccountIds }}>
