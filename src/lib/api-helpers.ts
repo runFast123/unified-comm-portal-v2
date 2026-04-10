@@ -291,9 +291,22 @@ export async function verifyAccountAccess(
     return true
   }
 
-  // Non-admin users can only access their own account
+  // Non-admin users can access their own account + sibling channel accounts
   if (user.account_id === accountId) {
     return true
+  }
+
+  // Check sibling accounts (same company, different channel)
+  if (user.account_id) {
+    const { data: myAccount } = await supabase.from('accounts').select('name').eq('id', user.account_id).maybeSingle()
+    if (myAccount?.name) {
+      const baseName = myAccount.name.replace(/\s+Teams$/i, '').replace(/\s+WhatsApp$/i, '').trim()
+      const { data: targetAccount } = await supabase.from('accounts').select('name').eq('id', accountId).maybeSingle()
+      if (targetAccount?.name) {
+        const targetBase = targetAccount.name.replace(/\s+Teams$/i, '').replace(/\s+WhatsApp$/i, '').trim()
+        if (baseName === targetBase) return true
+      }
+    }
   }
 
   return false

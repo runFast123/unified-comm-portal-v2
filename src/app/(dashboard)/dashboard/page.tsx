@@ -239,6 +239,8 @@ export default function DashboardPage() {
       if (startDate) aiQuery = aiQuery.gte('created_at', startDate)
       if (selectedAccountIds.size > 0) {
         aiQuery = aiQuery.in('account_id', Array.from(selectedAccountIds))
+      } else if (!isAdmin && companyAccountIds.length > 0) {
+        aiQuery = aiQuery.in('account_id', companyAccountIds)
       }
 
       const { data: aiData } = await aiQuery
@@ -272,9 +274,11 @@ export default function DashboardPage() {
 
     if (startDate) query = query.gte('received_at', startDate)
 
-    // Apply account filter if selected
+    // Apply account filter if selected, or scope to company for non-admins
     if (selectedAccountIds.size > 0) {
       query = query.in('account_id', Array.from(selectedAccountIds))
+    } else if (!isAdmin && companyAccountIds.length > 0) {
+      query = query.in('account_id', companyAccountIds)
     }
 
     // Match drill-down filters exactly to KPI card queries

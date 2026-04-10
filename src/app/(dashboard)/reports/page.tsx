@@ -469,10 +469,13 @@ export default function ReportsPage() {
       try {
         const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
 
-        const [volResult, aiResult] = await Promise.all([
-          supabase.from('messages').select('received_at').eq('direction', 'inbound').gte('received_at', thirtyDaysAgo).limit(10000),
-          supabase.from('ai_replies').select('created_at').eq('status', 'sent').gte('created_at', thirtyDaysAgo).limit(10000),
-        ])
+        let volQuery = supabase.from('messages').select('received_at').eq('direction', 'inbound').gte('received_at', thirtyDaysAgo).limit(10000)
+        let aiTrendQuery = supabase.from('ai_replies').select('created_at').eq('status', 'sent').gte('created_at', thirtyDaysAgo).limit(10000)
+        if (accountIdFilter) {
+          volQuery = volQuery.in('account_id', accountIdFilter)
+          aiTrendQuery = aiTrendQuery.in('account_id', accountIdFilter)
+        }
+        const [volResult, aiResult] = await Promise.all([volQuery, aiTrendQuery])
 
         // Daily volume
         const volByDay: Record<string, number> = {}

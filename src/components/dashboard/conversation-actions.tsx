@@ -371,7 +371,7 @@ export function ConversationActions({
     } finally {
       setLoading(null)
     }
-  }, [aiReplyId, accountId, accountName, aiDraftText, conversationId, participantEmail, router, toast, channel, emailSubject, teamsChatId])
+  }, [aiReplyId, accountId, accountName, aiDraftText, conversationId, participantEmail, router, toast, channel, emailSubject, teamsChatId, markWaitingOnCustomer])
 
   const handleEditSend = useCallback(async () => {
     if (!participantEmail && channel !== 'teams') {
@@ -451,7 +451,7 @@ export function ConversationActions({
     } finally {
       setLoading(null)
     }
-  }, [editText, aiReplyId, accountId, accountName, participantEmail, conversationId, router, toast, channel, emailSubject, teamsChatId])
+  }, [editText, aiReplyId, accountId, accountName, participantEmail, conversationId, router, toast, channel, emailSubject, teamsChatId, markWaitingOnCustomer])
 
   const handleManualReply = useCallback(async () => {
     if (!participantEmail && channel !== 'teams') {
@@ -519,7 +519,7 @@ export function ConversationActions({
     } finally {
       setLoading(null)
     }
-  }, [manualText, conversationId, accountId, channel, accountName, participantEmail, router, toast, emailSubject, teamsChatId])
+  }, [manualText, conversationId, accountId, channel, accountName, participantEmail, router, toast, emailSubject, teamsChatId, markWaitingOnCustomer])
 
   const handleMarkReplied = useCallback(async () => {
     setLoading('mark_replied')

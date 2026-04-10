@@ -28,7 +28,7 @@ interface CompanyGroup {
 }
 
 function getBaseName(accountName: string): string {
-  return accountName.replace(/\s+Teams$/i, '').trim()
+  return accountName.replace(/\s+Teams$/i, '').replace(/\s+WhatsApp$/i, '').trim()
 }
 
 export default function AccountsPage() {

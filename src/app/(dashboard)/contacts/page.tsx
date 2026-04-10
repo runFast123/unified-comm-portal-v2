@@ -269,7 +269,7 @@ export default function ContactsPage() {
             name,
             email,
             accountId: acc.id,
-            accountName: acc.name.replace(/\s+Teams$/i, ''),
+            accountName: acc.name.replace(/\s+Teams$/i, '').replace(/\s+WhatsApp$/i, '').trim(),
             totalConversations: 0,
             lastMessageAt: null,
             firstMessageAt: null,

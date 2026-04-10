@@ -186,18 +186,18 @@ export async function POST(request: Request) {
     // Fetch ALL Knowledge Base articles for this company
     // For Teams accounts (e.g. "Mycountrymobile Teams"), KB may be linked to the
     // email account ("Mycountrymobile"). Find sibling account by base company name.
-    const baseName = account.name.replace(/\s+Teams$/i, '').trim()
+    const baseName = account.name.replace(/\s+Teams$/i, '').replace(/\s+WhatsApp$/i, '').trim()
     let kbAccountIds = [account_id]
 
     // Find sibling accounts with same base name (e.g. email version of a Teams account)
     const { data: siblingAccounts } = await supabase
       .from('accounts')
-      .select('id')
-      .ilike('name', baseName)
+      .select('id, name')
       .eq('is_active', true)
     if (siblingAccounts) {
       for (const sib of siblingAccounts) {
-        if (!kbAccountIds.includes(sib.id)) kbAccountIds.push(sib.id)
+        const sibBase = sib.name.replace(/\s+Teams$/i, '').replace(/\s+WhatsApp$/i, '').trim()
+        if (sibBase === baseName && !kbAccountIds.includes(sib.id)) kbAccountIds.push(sib.id)
       }
     }
 
