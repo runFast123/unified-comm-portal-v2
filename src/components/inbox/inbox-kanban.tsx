@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { MessageSquare, Clock } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { ChannelIcon } from '@/components/ui/channel-icon'
 import { cn, timeAgo } from '@/lib/utils'
 import type { InboxItem } from '@/types/database'
 
@@ -62,11 +63,18 @@ export function InboxKanban({ items }: InboxKanbanProps) {
                 href={`/conversations/${item.conversation_id}`}
                 className="block rounded-lg bg-white border border-gray-200 p-3 hover:shadow-md hover:border-teal-300 transition-all group"
               >
-                <div className="flex items-center gap-2 mb-1.5">
+                <div className="flex items-center gap-2 mb-1">
+                  <ChannelIcon channel={item.channel} size={14} />
                   <span className="text-sm font-medium text-gray-800 truncate group-hover:text-teal-700">
                     {cleanName(item.sender_name)}
                   </span>
+                  {item.channel === 'teams' && (
+                    <span className="shrink-0 rounded bg-indigo-50 px-1 py-0 text-[8px] font-bold text-indigo-600">Teams</span>
+                  )}
                 </div>
+                <p className="text-[11px] text-gray-400 truncate mb-1">
+                  {(item.account_name || '').replace(/\s+Teams$/i, '').replace(/\s+WhatsApp$/i, '')}
+                </p>
                 <p className="text-xs text-gray-500 truncate mb-2">
                   {item.subject_or_preview?.substring(0, 60) || 'No preview'}
                 </p>

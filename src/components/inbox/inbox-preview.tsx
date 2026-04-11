@@ -50,6 +50,7 @@ interface ConversationData {
   participantName: string | null
   participantEmail: string | null
   accountName: string | null
+  teamsChatId: string | null
   emailSubject: string | null
   fullMessageText: string | null
 }
@@ -155,7 +156,7 @@ export function InboxPreview({ item }: InboxPreviewProps) {
             .limit(1),
           supabase
             .from('conversations')
-            .select('participant_name, participant_email, accounts!conversations_account_id_fkey ( name )')
+            .select('participant_name, participant_email, teams_chat_id, accounts!conversations_account_id_fkey ( name )')
             .eq('id', item.conversation_id)
             .single(),
         ])
@@ -181,6 +182,7 @@ export function InboxPreview({ item }: InboxPreviewProps) {
           participantName: convResult.data?.participant_name || null,
           participantEmail: convResult.data?.participant_email || null,
           accountName: account?.name || null,
+          teamsChatId: convResult.data?.teams_chat_id || null,
           emailSubject: firstInbound?.email_subject || selectedMessage?.email_subject || null,
           fullMessageText: selectedMessage?.message_text || null,
         })
@@ -357,9 +359,14 @@ export function InboxPreview({ item }: InboxPreviewProps) {
                     <span>&middot;</span>
                     <span className="inline-flex items-center gap-1 shrink-0">
                       <Building2 size={10} />
-                      {data.accountName}
+                      {(data.accountName || '').replace(/\s+Teams$/i, '').replace(/\s+WhatsApp$/i, '')}
                     </span>
                   </>
+                )}
+                {item.channel === 'teams' && (
+                  <span className="inline-flex shrink-0 rounded bg-indigo-50 px-1.5 py-0 text-[10px] font-semibold text-indigo-600 border border-indigo-100">
+                    Teams {data.teamsChatId?.includes('uni01_') ? '1:1' : 'Group'}
+                  </span>
                 )}
               </div>
             </div>

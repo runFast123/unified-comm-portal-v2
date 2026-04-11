@@ -262,8 +262,8 @@ export function InboxRow({ item, selected, onSelect, onItemClick, isActive }: In
         <ChannelIcon channel={item.channel} size={16} />
       </div>
 
-      {/* Sender avatar + Name + Company */}
-      <div className="w-44 flex-shrink-0 min-w-0 flex items-center gap-2.5">
+      {/* Sender avatar + Name + Company + Channel badge */}
+      <div className="w-48 flex-shrink-0 min-w-0 flex items-center gap-2.5">
         <div
           className={cn(
             'flex-shrink-0 h-8 w-8 rounded-full flex items-center justify-center text-[11px] font-bold text-white',
@@ -278,7 +278,21 @@ export function InboxRow({ item, selected, onSelect, onItemClick, isActive }: In
             {unread && <span className="inline-block h-1.5 w-1.5 rounded-full bg-teal-500 mr-1" />}
             {senderName}
           </p>
-          <p className="text-[11px] text-gray-400 truncate leading-tight">{accountName}</p>
+          <div className="flex items-center gap-1 mt-0.5">
+            <p className="text-[11px] text-gray-400 truncate leading-tight">
+              {accountName.replace(/\s+Teams$/i, '').replace(/\s+WhatsApp$/i, '')}
+            </p>
+            {item.channel === 'teams' && (
+              <span className="inline-flex shrink-0 rounded bg-indigo-50 px-1 py-0 text-[9px] font-semibold text-indigo-600 border border-indigo-100">
+                Teams
+              </span>
+            )}
+            {item.channel === 'whatsapp' && (
+              <span className="inline-flex shrink-0 rounded bg-green-50 px-1 py-0 text-[9px] font-semibold text-green-600 border border-green-100">
+                WA
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
