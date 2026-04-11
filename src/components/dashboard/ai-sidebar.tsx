@@ -42,6 +42,13 @@ export interface AISidebarProps {
     preview: string
     date: string
   }[]
+  channel?: string
+  teamsContext?: {
+    chatType: '1:1' | 'group'
+    accountName: string
+    participantName: string
+    messageCount: number
+  } | null
 }
 
 function SidebarSection({
@@ -270,6 +277,8 @@ export function AISidebar({
   kbArticles,
   sentimentHistory = [],
   customerHistory = [],
+  channel,
+  teamsContext,
 }: AISidebarProps) {
   const [draftExpanded, setDraftExpanded] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -295,6 +304,38 @@ export function AISidebar({
 
   return (
     <div className="space-y-3">
+      {/* Teams Context Card */}
+      {channel === 'teams' && teamsContext && (
+        <div className="rounded-xl bg-gradient-to-r from-indigo-50 to-violet-50 border border-indigo-200 p-3">
+          <div className="flex items-center gap-2 mb-2">
+            <svg className="h-4 w-4 text-indigo-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
+            </svg>
+            <span className="text-xs font-bold text-indigo-800 uppercase tracking-wider">Teams Chat</span>
+          </div>
+          <div className="space-y-1.5 text-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-indigo-600">Type</span>
+              <span className="font-semibold text-indigo-900">
+                {teamsContext.chatType === '1:1' ? '1:1 Direct Message' : 'Group Chat'}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-indigo-600">Account</span>
+              <span className="font-medium text-indigo-900">{teamsContext.accountName}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-indigo-600">Contact</span>
+              <span className="font-medium text-indigo-900">{teamsContext.participantName}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-indigo-600">Messages</span>
+              <span className="font-medium text-indigo-900">{teamsContext.messageCount} in this chat</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Conversation Summary */}
       {classification?.topic_summary && (
         <div className="rounded-xl bg-gradient-to-r from-teal-50 to-cyan-50 border border-teal-200 p-3">

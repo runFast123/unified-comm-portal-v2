@@ -266,18 +266,36 @@ export default async function ConversationPage({
               <BookmarkButton conversationId={id} participantName={participantName} accountName={accountName} />
             </div>
             <div className="flex items-center gap-1.5 text-xs text-gray-500 mt-0.5">
-              <span>{accountName.replace(/\s+Teams$/i, '')}</span>
+              <span>{accountName.replace(/\s+Teams$/i, '').replace(/\s+WhatsApp$/i, '')}</span>
               <span className="text-gray-300">&middot;</span>
               <span>{getChannelLabel(channel)}</span>
               {channel === 'teams' && conversation.teams_chat_id && (
-                <span className="inline-flex items-center gap-0.5 rounded bg-indigo-50 px-1.5 py-0 text-[10px] font-medium text-indigo-600">
-                  {conversation.teams_chat_id.includes('uni01_') ? '1:1' : 'Group'}
+                <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 border border-indigo-100 px-2 py-0.5 text-[10px] font-semibold text-indigo-700">
+                  <span className={conversation.teams_chat_id.includes('uni01_') ? '' : 'mr-0.5'}>
+                    {conversation.teams_chat_id.includes('uni01_') ? '1:1 Direct Message' : 'Group Chat'}
+                  </span>
                 </span>
               )}
-              {conversation.participant_email && (
+              {channel !== 'teams' && conversation.participant_email && (
                 <span className="hidden sm:inline text-gray-400">&middot; {conversation.participant_email}</span>
               )}
             </div>
+            {/* Teams context bar */}
+            {channel === 'teams' && (
+              <div className="flex items-center gap-2 text-[10px] text-indigo-500 mt-0.5">
+                <span className="font-medium">Teams</span>
+                <span className="text-indigo-300">|</span>
+                <span>{accountName}</span>
+                {conversation.participant_email && (
+                  <>
+                    <span className="text-indigo-300">|</span>
+                    <span>{conversation.participant_email}</span>
+                  </>
+                )}
+                <span className="text-indigo-300">|</span>
+                <span>{messageCount} messages in this chat</span>
+              </div>
+            )}
           </div>
           {/* Status & priority badges */}
           <div className="flex items-center gap-2 shrink-0">
@@ -374,6 +392,13 @@ export default async function ConversationPage({
             kbArticles={kbArticleTitles}
             sentimentHistory={sentimentHistory}
             customerHistory={customerHistory}
+            channel={channel}
+            teamsContext={channel === 'teams' ? {
+              chatType: conversation.teams_chat_id?.includes('uni01_') ? '1:1' : 'group',
+              accountName: accountName.replace(/\s+Teams$/i, '').replace(/\s+WhatsApp$/i, '').trim(),
+              participantName,
+              messageCount,
+            } : null}
           />
           <InternalNotes conversationId={id} authorName={currentUserName || undefined} />
         </div>

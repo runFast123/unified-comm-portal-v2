@@ -724,6 +724,19 @@ export function ConversationActions({
       {/* Reply compose areas */}
       {showManualReply && (
         <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-2">
+          {/* Teams reply destination indicator */}
+          {channel === 'teams' && teamsChatId && (
+            <div className="flex items-center gap-2 rounded-lg bg-indigo-50 border border-indigo-100 px-3 py-2 text-xs text-indigo-700">
+              <svg className="h-4 w-4 shrink-0 text-indigo-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+              <span>
+                Replying to <strong>{participantName || participantEmail || 'customer'}</strong> via Teams
+                {teamsChatId.includes('uni01_') ? ' (1:1 Direct Message)' : ' (Group Chat)'}
+                <span className="text-indigo-400 ml-1">• {accountName.replace(/\s+Teams$/i, '')}</span>
+              </span>
+            </div>
+          )}
           {/* Reply preview */}
           {showPreview && manualText.trim() && (
             <div className="rounded-lg border border-teal-200 bg-white p-4 space-y-2">
