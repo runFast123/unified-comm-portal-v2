@@ -317,7 +317,7 @@ export default function DashboardPage() {
     })
     setDashDrillMsgs(mapped)
     setDashDrillLoading(false)
-  }, [dashDrill, dateRange, selectedAccountIds, customFrom])
+  }, [dashDrill, dateRange, selectedAccountIds, customFrom, isAdmin, companyAccountIds])
 
   const dashDrillTitle: Record<string, string> = {
     total: 'All Messages',

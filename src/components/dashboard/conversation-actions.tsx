@@ -339,7 +339,7 @@ export function ConversationActions({
     } catch (err) {
       console.warn('Failed to update template usage count:', err)
     }
-  }, [])
+  }, [interpolateVars])
 
   const handleApprove = useCallback(async () => {
     if (!aiReplyId) return

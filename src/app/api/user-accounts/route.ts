@@ -73,7 +73,6 @@ export async function GET() {
     return NextResponse.json({
       accountIds: siblingIds.length > 0 ? siblingIds : [profile.account_id],
       accounts: siblingAccounts,
-      debug: { baseName, found: siblingIds.length, myName: myAccount.name }
     })
   } catch (err) {
     console.error('[user-accounts] Error:', err)

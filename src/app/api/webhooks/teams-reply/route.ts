@@ -82,7 +82,7 @@ export async function POST(request: Request) {
       .select('id')
       .eq('conversation_id', conversation_id)
       .eq('direction', 'outbound')
-      .eq('message_text', reply_text.substring(0, 200))
+      .like('message_text', reply_text.substring(0, 100).replace(/%/g, '\\%').replace(/_/g, '\\_') + '%')
       .gte('timestamp', new Date(Date.now() - 5 * 60 * 1000).toISOString())
       .limit(1)
       .maybeSingle()

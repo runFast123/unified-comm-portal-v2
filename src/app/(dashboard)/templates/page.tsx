@@ -31,8 +31,6 @@ import type { ReplyTemplate } from '@/types/database'
 import { cn, truncate, timeAgo } from '@/lib/utils'
 import { useUser } from '@/context/user-context'
 
-const supabase = createClient()
-
 interface AccountOption {
   id: string
   name: string
@@ -67,6 +65,7 @@ function getCategoryVariant(category: string): 'info' | 'warning' | 'success' | 
 // ---------------------------------------------------------------------------
 
 export default function TemplatesPage() {
+  const supabase = createClient()
   const { isAdmin, companyAccountIds } = useUser()
   const [templates, setTemplates] = useState<ReplyTemplate[]>([])
   const [loading, setLoading] = useState(true)
@@ -132,7 +131,8 @@ export default function TemplatesPage() {
   useEffect(() => {
     fetchTemplates()
     fetchAccounts()
-  }, [])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin, companyAccountIds])
 
   // Derived stats
   const totalTemplates = templates.length

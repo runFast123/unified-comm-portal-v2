@@ -411,7 +411,7 @@ export default function InboxPage() {
             : msg.ai_replies ?? null
           const conv = msg.conversations as any
           return {
-            id: `${msg.conversation_id}-${msg.id}`,
+            id: msg.id,
             message_id: msg.id,
             conversation_id: msg.conversation_id,
             account_id: msg.account_id,
@@ -431,6 +431,8 @@ export default function InboxPage() {
             conversation_status: (conv?.status || 'active') as any,
             assigned_to: conv?.assigned_to || null,
             tags: conv?.tags || null,
+            is_spam: msg.is_spam ?? false,
+            spam_reason: msg.spam_reason ?? null,
           }
         })
         setItems(prev => [...prev, ...mapped])

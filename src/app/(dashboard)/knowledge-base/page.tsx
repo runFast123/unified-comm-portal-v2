@@ -290,7 +290,8 @@ export default function KnowledgeBasePage() {
   useEffect(() => {
     fetchArticles()
     fetchAccounts()
-  }, [])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin, companyAccountIds])
 
   // Derived stats
   const totalArticles = articles.length

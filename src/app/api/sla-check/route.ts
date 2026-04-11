@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase-server'
+import { validateWebhookSecret } from '@/lib/api-helpers'
 
 /**
  * SLA Auto-Escalation Endpoint
@@ -16,7 +17,7 @@ export async function POST(request: Request) {
     const webhookSecret = request.headers.get('x-webhook-secret')
     const expectedSecret = process.env.N8N_WEBHOOK_SECRET
 
-    if (!webhookSecret || webhookSecret !== expectedSecret) {
+    if (!validateWebhookSecret(request)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
