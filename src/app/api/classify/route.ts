@@ -235,6 +235,7 @@ export async function POST(request: Request) {
 
       // If ai_config.auto_resolve_marketing is enabled, also resolve the
       // conversation so it drops out of the active inbox entirely.
+      // deploy-marker: v2 — eca7c44 follow-up
       try {
         const { data: cfg } = await supabase
           .from('ai_config')
