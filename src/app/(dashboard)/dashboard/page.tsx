@@ -1013,78 +1013,49 @@ export default function DashboardPage() {
       </div>
 
       {/* KPI Row */}
-      {isWidgetVisible('kpis') && <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 [&>div]:min-w-0">
-        <div onClick={() => handleDashKpiClick('total')} className={`cursor-pointer relative rounded-xl border bg-gradient-to-br from-blue-50 to-blue-100 p-5 shadow-sm transition-all hover:shadow-lg ${dashDrill === 'total' ? 'border-blue-500 ring-2 ring-blue-100' : 'border-gray-200'}`}>
-          <div className="absolute left-0 top-0 h-full w-1 rounded-l-xl bg-blue-600" />
-          <div className="flex items-start justify-between">
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-gray-500">Total Messages</p>
-              <p className="mt-1 text-3xl font-bold text-gray-900">{filteredKpis.totalMessagesToday}</p>
-              <div className="mt-2 flex items-center gap-1 text-xs font-medium text-blue-600">
-                <TrendingUp className="h-3.5 w-3.5" />
-                <span>{getDateRangeLabel(dateRange)}</span>
-              </div>
-            </div>
-            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-blue-200/60 text-blue-600">
-              <MessageCircle className="h-5 w-5" />
-            </div>
-          </div>
-        </div>
+      {isWidgetVisible('kpis') && <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 [&>*]:min-w-0">
+        <KPICard
+          title="Total Messages"
+          value={filteredKpis.totalMessagesToday}
+          trend="up"
+          trendLabel={getDateRangeLabel(dateRange)}
+          icon={MessageCircle}
+          color="blue"
+          onClick={() => handleDashKpiClick('total')}
+          active={dashDrill === 'total'}
+        />
 
-        <div onClick={() => handleDashKpiClick('pending')} className={`cursor-pointer relative rounded-xl border bg-gradient-to-br from-amber-50 to-amber-100 p-5 shadow-sm transition-all hover:shadow-lg ${dashDrill === 'pending' ? 'border-amber-500 ring-2 ring-amber-100' : 'border-gray-200'}`}>
-          <div className="absolute left-0 top-0 h-full w-1 rounded-l-xl bg-amber-500" />
-          {filteredKpis.pendingReplies > 10 && (
-            <span className="absolute -right-1 -top-1 flex h-3 w-3">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75" />
-              <span className="relative inline-flex h-3 w-3 rounded-full bg-red-500" />
-            </span>
-          )}
-          <div className="flex items-start justify-between">
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-gray-500">Pending</p>
-              <p className="mt-1 text-3xl font-bold text-gray-900">{filteredKpis.pendingReplies}</p>
-              <p className="mt-1 text-xs text-gray-400">Awaiting review</p>
-            </div>
-            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-amber-200/60 text-amber-600">
-              <Clock className="h-5 w-5" />
-            </div>
-          </div>
-        </div>
+        <KPICard
+          title="Pending"
+          value={filteredKpis.pendingReplies}
+          subtitle="Awaiting review"
+          icon={Clock}
+          color="amber"
+          alert={filteredKpis.pendingReplies > 10}
+          onClick={() => handleDashKpiClick('pending')}
+          active={dashDrill === 'pending'}
+        />
 
-        <div onClick={() => handleDashKpiClick('ai_processed')} className={`cursor-pointer relative rounded-xl border bg-gradient-to-br from-teal-50 to-teal-100 p-5 shadow-sm transition-all hover:shadow-lg ${dashDrill === 'ai_processed' ? 'border-teal-500 ring-2 ring-teal-100' : 'border-gray-200'}`}>
-          <div className="absolute left-0 top-0 h-full w-1 rounded-l-xl bg-teal-600" />
-          <div className="flex items-start justify-between">
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-gray-500">AI Processed</p>
-              <p className="mt-1 text-3xl font-bold text-gray-900">{filteredKpis.aiRepliesSent}</p>
-              <div className="mt-2 flex items-center gap-1 text-xs font-medium text-teal-600">
-                <TrendingUp className="h-3.5 w-3.5" />
-                <span>{getDateRangeLabel(dateRange)}</span>
-              </div>
-            </div>
-            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-teal-200/60 text-teal-600">
-              <Bot className="h-5 w-5" />
-            </div>
-          </div>
-        </div>
+        <KPICard
+          title="AI Processed"
+          value={filteredKpis.aiRepliesSent}
+          trend="up"
+          trendLabel={getDateRangeLabel(dateRange)}
+          icon={Bot}
+          color="teal"
+          onClick={() => handleDashKpiClick('ai_processed')}
+          active={dashDrill === 'ai_processed'}
+        />
 
-        <div className="relative rounded-xl border border-gray-200 bg-gradient-to-br from-green-50 to-green-100 p-5 shadow-sm">
-          <div className="absolute left-0 top-0 h-full w-1 rounded-l-xl bg-green-600" />
-          <div className="flex items-start justify-between">
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-gray-500">Response Rate</p>
-              <p className="mt-1 text-3xl font-bold text-gray-900">
-                {filteredKpis.totalMessagesToday > 0
-                  ? `${Math.round(((filteredKpis.aiRepliesSent) / filteredKpis.totalMessagesToday) * 100)}%`
-                  : '--'}
-              </p>
-              <p className="mt-1 text-xs text-gray-400">AI replies / total</p>
-            </div>
-            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-green-200/60 text-green-600">
-              <TrendingUp className="h-5 w-5" />
-            </div>
-          </div>
-        </div>
+        <KPICard
+          title="Response Rate"
+          value={filteredKpis.totalMessagesToday > 0
+            ? `${Math.round(((filteredKpis.aiRepliesSent) / filteredKpis.totalMessagesToday) * 100)}%`
+            : '--'}
+          subtitle="AI replies / total"
+          icon={TrendingUp}
+          color="green"
+        />
 
         {/* Sentiment gauge card */}
         <div className="relative rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
@@ -1125,89 +1096,57 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="">
-          <KPICard
-            title="Top Issue Category"
-            value={filteredKpis.topCategory.name}
-            subtitle={filteredKpis.topCategory.count > 0 ? `${filteredKpis.topCategory.count} messages` : 'No data yet'}
-            trend="neutral"
-            icon={Tag}
-            color="text-amber-600"
-          />
-        </div>
+        <KPICard
+          title="Top Issue Category"
+          value={filteredKpis.topCategory.name}
+          subtitle={filteredKpis.topCategory.count > 0 ? `${filteredKpis.topCategory.count} messages` : 'No data yet'}
+          icon={Tag}
+          color="amber"
+        />
       </div>}
 
       {/* SLA Performance + Spam */}
       {isWidgetVisible('sla') && <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="relative rounded-xl border border-gray-200 bg-gradient-to-br from-indigo-50 to-indigo-100 p-5 shadow-sm">
-          <div className="absolute left-0 top-0 h-full w-1 rounded-l-xl bg-indigo-600" />
-          <div className="flex items-start justify-between">
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-gray-500">Avg Response Time</p>
-              <p className="mt-1 text-3xl font-bold text-gray-900">
-                {slaStats.avgResponseMins > 0
-                  ? slaStats.avgResponseMins >= 60
-                    ? `${Math.floor(slaStats.avgResponseMins / 60)}h ${slaStats.avgResponseMins % 60}m`
-                    : `${slaStats.avgResponseMins}m`
-                  : '--'}
-              </p>
-              <p className="mt-1 text-xs text-gray-400">From received to first reply</p>
-            </div>
-            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-indigo-200/60 text-indigo-600">
-              <Timer className="h-5 w-5" />
-            </div>
-          </div>
-        </div>
+        <KPICard
+          title="Avg Response Time"
+          value={slaStats.avgResponseMins > 0
+            ? slaStats.avgResponseMins >= 60
+              ? `${Math.floor(slaStats.avgResponseMins / 60)}h ${slaStats.avgResponseMins % 60}m`
+              : `${slaStats.avgResponseMins}m`
+            : '--'}
+          subtitle="From received to first reply"
+          icon={Timer}
+          color="indigo"
+        />
 
-        <div className="relative rounded-xl border border-gray-200 bg-gradient-to-br from-emerald-50 to-emerald-100 p-5 shadow-sm">
-          <div className="absolute left-0 top-0 h-full w-1 rounded-l-xl bg-emerald-600" />
-          <div className="flex items-start justify-between">
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-gray-500">SLA Compliance</p>
-              <p className="mt-1 text-3xl font-bold text-gray-900">
-                {slaStats.compliancePct}%
-              </p>
-              <p className="mt-1 text-xs text-gray-400">Replied within 4h threshold</p>
-            </div>
-            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-emerald-200/60 text-emerald-600">
-              <ShieldCheck className="h-5 w-5" />
-            </div>
-          </div>
-        </div>
+        <KPICard
+          title="SLA Compliance"
+          value={`${slaStats.compliancePct}%`}
+          subtitle="Replied within 4h threshold"
+          icon={ShieldCheck}
+          color="emerald"
+        />
 
-        <div onClick={() => handleDashKpiClick('sla_breached')} className={`cursor-pointer relative rounded-xl border bg-gradient-to-br from-red-50 to-red-100 p-5 shadow-sm transition-all hover:shadow-lg ${dashDrill === 'sla_breached' ? 'border-red-500 ring-2 ring-red-100' : 'border-gray-200'}`}>
-          <div className="absolute left-0 top-0 h-full w-1 rounded-l-xl bg-red-500" />
-          {slaStats.breachedCount > 0 && (
-            <span className="absolute -right-1 -top-1 flex h-3 w-3">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75" />
-              <span className="relative inline-flex h-3 w-3 rounded-full bg-red-500" />
-            </span>
-          )}
-          <div className="flex items-start justify-between">
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-gray-500">SLA Breached</p>
-              <p className="mt-1 text-3xl font-bold text-gray-900">{slaStats.breachedCount}</p>
-              <p className="mt-1 text-xs text-gray-400">Messages past critical threshold</p>
-            </div>
-            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-red-200/60 text-red-600">
-              <ShieldAlert className="h-5 w-5" />
-            </div>
-          </div>
-        </div>
+        <KPICard
+          title="SLA Breached"
+          value={slaStats.breachedCount}
+          subtitle="Messages past critical threshold"
+          icon={ShieldAlert}
+          color="red"
+          alert={slaStats.breachedCount > 0}
+          onClick={() => handleDashKpiClick('sla_breached')}
+          active={dashDrill === 'sla_breached'}
+        />
 
-        <div onClick={() => handleDashKpiClick('spam')} className={`cursor-pointer relative rounded-xl border bg-gradient-to-br from-orange-50 to-orange-100 p-5 shadow-sm transition-all hover:shadow-lg ${dashDrill === 'spam' ? 'border-orange-500 ring-2 ring-orange-100' : 'border-gray-200'}`}>
-          <div className="absolute left-0 top-0 h-full w-1 rounded-l-xl bg-orange-500" />
-          <div className="flex items-start justify-between">
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-gray-500">Spam Filtered</p>
-              <p className="mt-1 text-3xl font-bold text-gray-900">{spamFilteredToday}</p>
-              <p className="mt-1 text-xs text-gray-400">{getDateRangeLabel(dateRange)}</p>
-            </div>
-            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-orange-200/60 text-orange-600">
-              <AlertTriangle className="h-5 w-5" />
-            </div>
-          </div>
-        </div>
+        <KPICard
+          title="Spam Filtered"
+          value={spamFilteredToday}
+          subtitle={getDateRangeLabel(dateRange)}
+          icon={AlertTriangle}
+          color="orange"
+          onClick={() => handleDashKpiClick('spam')}
+          active={dashDrill === 'spam'}
+        />
       </div>}
 
       {/* KPI Drill-down Panel */}
