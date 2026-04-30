@@ -24,9 +24,21 @@ interface SendBody {
   teams_chat_id?: string | null
   /** Optional outbound attachments. Email-only for this pass. */
   attachments?: OutboundAttachment[]
+  /**
+   * Undo-Send window in milliseconds. When > 0, the request inserts a row
+   * into `pending_sends` with `send_at = now() + delay_ms` and returns
+   * `{ pending_id, send_at }` instead of dispatching immediately. The
+   * dispatch-scheduled cron picks up the row when due. Defaults to 0
+   * (immediate send) for backwards compatibility with existing callers.
+   */
+  delay_ms?: number
 }
 
 const DUP_WINDOW_MS = 15_000
+
+// Cap the undo window so a malicious / buggy client can't squat on a row
+// for an hour. 60s is plenty for any reasonable Gmail-style undo UI.
+const MAX_DELAY_MS = 60_000
 
 export async function POST(request: Request) {
   const requestId = await getRequestId()
@@ -108,6 +120,71 @@ export async function POST(request: Request) {
           { status: 403 }
         )
       }
+    }
+
+    // ── Undo-Send branch ───────────────────────────────────────────────
+    // When the UI passes `delay_ms > 0`, we don't actually call the
+    // channel sender here. Instead we write a `pending_sends` row that
+    // the dispatch-scheduled cron will pick up after `send_at` passes.
+    // Until then the user can DELETE /api/send/cancel to flip it to
+    // 'cancelled' and prevent the send entirely.
+    const delayMs = Number.isFinite(body.delay_ms) ? Math.max(0, Math.floor(body.delay_ms as number)) : 0
+    if (delayMs > 0) {
+      if (delayMs > MAX_DELAY_MS) {
+        return NextResponse.json(
+          { error: `delay_ms exceeds max of ${MAX_DELAY_MS}`, request_id: requestId },
+          { status: 400 }
+        )
+      }
+      const sendAtIso = new Date(Date.now() + delayMs).toISOString()
+      const { data: pendingRow, error: pendingErr } = await admin
+        .from('pending_sends')
+        .insert({
+          conversation_id,
+          account_id,
+          channel,
+          reply_text,
+          to_address: body.to ?? null,
+          subject: body.subject ?? null,
+          teams_chat_id: body.teams_chat_id ?? null,
+          attachments: attachments.length > 0 ? { attachments } : null,
+          created_by: user.id,
+          send_at: sendAtIso,
+          status: 'pending',
+        })
+        .select('id, send_at')
+        .single()
+
+      if (pendingErr || !pendingRow) {
+        logError('system', 'send_pending_insert_failed', pendingErr?.message || 'insert returned no row', {
+          request_id: requestId,
+          account_id,
+          user_id: user.id,
+          channel,
+          conversation_id,
+        })
+        return NextResponse.json(
+          { error: pendingErr?.message || 'Failed to enqueue pending send', request_id: requestId },
+          { status: 500 }
+        )
+      }
+
+      logInfo('system', 'send_pending_enqueued', `Enqueued ${channel} reply with ${delayMs}ms undo window`, {
+        request_id: requestId,
+        account_id,
+        user_id: user.id,
+        conversation_id,
+        pending_id: pendingRow.id,
+      })
+
+      return NextResponse.json({
+        success: true,
+        pending: true,
+        pending_id: pendingRow.id,
+        send_at: pendingRow.send_at,
+        attachments: channel === 'email' ? attachments : [],
+        request_id: requestId,
+      })
     }
 
     let result

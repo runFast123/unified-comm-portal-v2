@@ -3,11 +3,21 @@
 import { Bot, Check, CheckCheck, Mail, Paperclip, Clock, Sparkles, FileText, FileSpreadsheet, FileImage, File, Download } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Message, ChannelType } from '@/types/database'
+import { ThreadSummary } from '@/components/dashboard/thread-summary'
 
 export interface ConversationThreadProps {
   messages: Message[]
   channel: ChannelType
+  /**
+   * When supplied AND there are at least 5 messages, an auto-fetched AI
+   * thread summary pill renders above the message list. Optional so existing
+   * call sites that pass only `messages`/`channel` keep working.
+   */
+  conversationId?: string
 }
+
+/** Minimum thread length at which the auto-summary pill becomes visible. */
+const SUMMARY_MIN_MESSAGES = 5
 
 function formatTime(timestamp: string): string {
   return new Date(timestamp).toLocaleTimeString('en-US', {
@@ -491,13 +501,25 @@ function WhatsAppBubble({ message, isOutbound }: { message: Message; isOutbound:
   )
 }
 
-export function ConversationThread({ messages, channel }: ConversationThreadProps) {
+export function ConversationThread({ messages, channel, conversationId }: ConversationThreadProps) {
   let lastDate = ''
   let prevDirection: string | null = null
   let prevTimestamp: string | null = null
 
+  const showSummary =
+    !!conversationId && messages.length >= SUMMARY_MIN_MESSAGES
+
   return (
     <div className="space-y-5 py-6">
+      {showSummary && (
+        <div className="sticky top-0 z-10 -mx-1 px-1 pb-1">
+          <ThreadSummary
+            conversationId={conversationId!}
+            autoFetch
+            defaultCollapsed
+          />
+        </div>
+      )}
       {messages.map((message, idx) => {
         const isOutbound = message.direction === 'outbound'
         const msgDate = formatDate(message.timestamp)

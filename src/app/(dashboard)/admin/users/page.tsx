@@ -463,12 +463,12 @@ export default function UsersPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Email</TableHead>
-                <TableHead>Full Name</TableHead>
+                <TableHead className="hidden lg:table-cell">Full Name</TableHead>
                 <TableHead>Role</TableHead>
-                <TableHead>Account</TableHead>
-                <TableHead>Active</TableHead>
-                <TableHead>Last Login</TableHead>
-                <TableHead>Created</TableHead>
+                <TableHead className="hidden md:table-cell">Account</TableHead>
+                <TableHead className="hidden sm:table-cell">Active</TableHead>
+                <TableHead className="hidden xl:table-cell">Last Login</TableHead>
+                <TableHead className="hidden xl:table-cell">Created</TableHead>
                 <TableHead className="text-right">Save</TableHead>
               </TableRow>
             </TableHeader>
@@ -510,7 +510,7 @@ export default function UsersPage() {
                       </div>
                       <div className="mt-1">{getRoleBadge(user.role)}</div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="hidden lg:table-cell">
                       <span className="text-sm text-gray-700">
                         {user.full_name || <span className="text-gray-400 italic">—</span>}
                       </span>
@@ -526,7 +526,7 @@ export default function UsersPage() {
                         disabled={saving}
                       />
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="hidden md:table-cell">
                       <Select
                         className="min-w-[180px]"
                         options={selectOptions}
@@ -542,21 +542,21 @@ export default function UsersPage() {
                         </p>
                       )}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="hidden sm:table-cell">
                       <Toggle
                         checked={draft.is_active}
                         onChange={(val) => updateDraft(user.id, { is_active: val })}
                         disabled={saving}
                       />
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="hidden xl:table-cell">
                       <span className="text-sm text-gray-500">
                         {user.last_login_at ? timeAgo(user.last_login_at) : (
                           <span className="text-gray-400 italic">Never</span>
                         )}
                       </span>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="hidden xl:table-cell">
                       <span className="text-sm text-gray-500">
                         {timeAgo(user.created_at)}
                       </span>

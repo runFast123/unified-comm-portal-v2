@@ -252,14 +252,34 @@ export function CompanyStatsTable({ stats, companyAccountIds }: Props) {
       <TableHeader>
         <TableRow>
           <SortableHead col="name">Company</SortableHead>
-          <TableHead>Channels</TableHead>
+          <TableHead className="hidden md:table-cell">Channels</TableHead>
           <SortableHead col="totalMessages">Messages</SortableHead>
           <SortableHead col="pendingReplies">Pending</SortableHead>
-          <SortableHead col="aiDraftsReady">AI Drafts</SortableHead>
-          <SortableHead col="aiRepliesSent">AI Sent</SortableHead>
-          <SortableHead col="responseRate">Response Rate</SortableHead>
-          <TableHead>Top Category</TableHead>
-          <SortableHead col="lastActivity">Last Active</SortableHead>
+          <TableHead className="hidden lg:table-cell">
+            <button onClick={() => toggleSort('aiDraftsReady')} className="inline-flex items-center gap-1 hover:text-teal-700 transition-colors">
+              AI Drafts
+              <SortIcon col="aiDraftsReady" />
+            </button>
+          </TableHead>
+          <TableHead className="hidden lg:table-cell">
+            <button onClick={() => toggleSort('aiRepliesSent')} className="inline-flex items-center gap-1 hover:text-teal-700 transition-colors">
+              AI Sent
+              <SortIcon col="aiRepliesSent" />
+            </button>
+          </TableHead>
+          <TableHead className="hidden md:table-cell">
+            <button onClick={() => toggleSort('responseRate')} className="inline-flex items-center gap-1 hover:text-teal-700 transition-colors">
+              Response Rate
+              <SortIcon col="responseRate" />
+            </button>
+          </TableHead>
+          <TableHead className="hidden xl:table-cell">Top Category</TableHead>
+          <TableHead className="hidden sm:table-cell">
+            <button onClick={() => toggleSort('lastActivity')} className="inline-flex items-center gap-1 hover:text-teal-700 transition-colors">
+              Last Active
+              <SortIcon col="lastActivity" />
+            </button>
+          </TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -284,7 +304,7 @@ export function CompanyStatsTable({ stats, companyAccountIds }: Props) {
                     </div>
                   </div>
                 </TableCell>
-                <TableCell>
+                <TableCell className="hidden md:table-cell">
                   <div className="flex items-center gap-1.5">
                     {(s as any)._hasEmail && (
                       <span className="flex items-center gap-1 rounded bg-red-50 px-1.5 py-0.5 text-[10px] text-red-600">
@@ -306,25 +326,25 @@ export function CompanyStatsTable({ stats, companyAccountIds }: Props) {
                     {s.pendingReplies}
                   </span>
                 </TableCell>
-                <TableCell>
+                <TableCell className="hidden lg:table-cell">
                   <span className={`font-semibold ${s.aiDraftsReady > 0 ? 'text-purple-600' : 'text-gray-400'}`}>{s.aiDraftsReady}</span>
                 </TableCell>
-                <TableCell>
+                <TableCell className="hidden lg:table-cell">
                   <span className="font-semibold text-teal-700">{s.aiRepliesSent}</span>
                 </TableCell>
-                <TableCell>
+                <TableCell className="hidden md:table-cell">
                   <span className={`font-semibold ${getRateColor(s.responseRate)}`}>
                     {s.responseRate}%
                   </span>
                 </TableCell>
-                <TableCell>
+                <TableCell className="hidden xl:table-cell">
                   {s.topCategory ? (
                     <Badge variant="default" size="sm">{s.topCategory}</Badge>
                   ) : (
                     <span className="text-xs text-gray-300">--</span>
                   )}
                 </TableCell>
-                <TableCell>
+                <TableCell className="hidden sm:table-cell">
                   <span className="text-sm text-gray-500">
                     {s.lastActivity ? timeAgo(s.lastActivity) : '--'}
                   </span>

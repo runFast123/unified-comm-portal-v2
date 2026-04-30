@@ -408,7 +408,7 @@ export default async function ConversationPage({
           <div className="flex-1 overflow-y-auto px-4 sm:px-6">
             {messages && messages.length > 0 ? (
               <>
-              <ConversationThread messages={messages} channel={channel} />
+              <ConversationThread messages={messages} channel={channel} conversationId={id} />
               <ScrollToBottom messageCount={messages.length} />
               </>
             ) : (

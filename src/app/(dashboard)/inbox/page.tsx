@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { CheckSquare, CheckCheck, Archive, UserPlus, Loader2, Inbox, List, Columns, LayoutGrid, X, Sparkles, User, ShieldAlert, ShieldCheck, Mail, CircleCheck, RefreshCw, Bookmark, BookmarkPlus, Clock } from 'lucide-react'
+import { CheckSquare, CheckCheck, Archive, UserPlus, Loader2, Inbox, List, Columns, LayoutGrid, X, Sparkles, User, ShieldAlert, ShieldCheck, Mail, CircleCheck, RefreshCw, Bookmark, BookmarkPlus, Clock, ChevronLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
 import { InboxRowSkeleton } from '@/components/ui/skeleton'
@@ -1525,11 +1525,12 @@ export default function InboxPage() {
         />
       )}
 
-      {/* Split view */}
+      {/* Split view — on mobile (<md) collapses to single-pane: list shown
+          until a row is tapped, then preview swaps in with a Back button */}
       {!loading && !error && inboxView === 'inbox' && filteredItems.length > 0 && viewMode === 'split' && (
-        <div className="flex rounded-lg border border-gray-200 bg-white overflow-hidden" style={{ height: 'calc(100vh - 320px)' }}>
-          {/* Left: message list (narrower) */}
-          <div className="w-[45%] shrink-0 overflow-y-auto border-r border-gray-200">
+        <div className="flex flex-col md:flex-row rounded-lg border border-gray-200 bg-white overflow-hidden" style={{ height: 'calc(100vh - 320px)' }}>
+          {/* Left: message list — hidden on mobile when an item is selected */}
+          <div className={`md:w-[45%] md:shrink-0 overflow-y-auto md:border-r md:border-gray-200 ${selectedItem ? 'hidden md:block' : 'block'} flex-1 md:flex-initial`}>
             <InboxList
               items={filteredItems}
               onItemClick={handleItemClick}
@@ -1539,10 +1540,24 @@ export default function InboxPage() {
             />
           </div>
 
-          {/* Right: conversation preview */}
-          <div className="flex-1 overflow-hidden bg-gray-50">
+          {/* Right: conversation preview — hidden on mobile when no selection */}
+          <div className={`flex-1 overflow-hidden bg-gray-50 ${selectedItem ? 'flex flex-col' : 'hidden md:flex md:flex-col'}`}>
             {selectedItem ? (
-              <InboxPreview item={selectedItem} />
+              <>
+                {/* Mobile back button */}
+                <button
+                  type="button"
+                  onClick={() => setSelectedItem(null)}
+                  className="md:hidden flex items-center gap-2 border-b border-gray-200 bg-white px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 min-h-[44px]"
+                  aria-label="Back to list"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Back to list
+                </button>
+                <div className="flex-1 overflow-hidden">
+                  <InboxPreview item={selectedItem} />
+                </div>
+              </>
             ) : (
               <div className="flex h-full items-center justify-center">
                 <div className="text-center">

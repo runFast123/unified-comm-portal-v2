@@ -69,10 +69,10 @@ export function AccountsTable({ accounts, filter }: AccountsTableProps) {
         <TableRow>
           <TableHead className="w-8" />
           <TableHead>Company</TableHead>
-          <TableHead>Channels</TableHead>
-          <TableHead>Phase Status</TableHead>
+          <TableHead className="hidden md:table-cell">Channels</TableHead>
+          <TableHead className="hidden lg:table-cell">Phase Status</TableHead>
           <TableHead className="text-center">Pending</TableHead>
-          <TableHead>Last Message</TableHead>
+          <TableHead className="hidden sm:table-cell">Last Message</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -94,7 +94,7 @@ export function AccountsTable({ accounts, filter }: AccountsTableProps) {
                 <TableCell>
                   <span className="font-medium text-gray-900">{group.baseName}</span>
                 </TableCell>
-                <TableCell>
+                <TableCell className="hidden md:table-cell">
                   <div className="flex items-center gap-1.5">
                     {group.email && (
                       <span className="flex items-center gap-1 rounded-md bg-red-50 px-2 py-0.5 text-xs text-red-700" title="Email">
@@ -108,7 +108,7 @@ export function AccountsTable({ accounts, filter }: AccountsTableProps) {
                     )}
                   </div>
                 </TableCell>
-                <TableCell>
+                <TableCell className="hidden lg:table-cell">
                   <PhaseIndicator
                     phase1_enabled={primary.phase1_enabled}
                     phase2_enabled={primary.phase2_enabled}
@@ -123,7 +123,7 @@ export function AccountsTable({ accounts, filter }: AccountsTableProps) {
                     <span className="text-gray-400">0</span>
                   )}
                 </TableCell>
-                <TableCell>
+                <TableCell className="hidden sm:table-cell">
                   <span className="text-sm text-gray-500">
                     {group.lastMessageTime
                       ? `${timeAgo(group.lastMessageTime)} ago`
@@ -136,6 +136,7 @@ export function AccountsTable({ accounts, filter }: AccountsTableProps) {
               {isExpanded && (
                 <TableRow key={`${group.baseName}-detail`} className="bg-gray-50/50">
                   <TableCell />
+                  {/* Span all remaining columns at every breakpoint */}
                   <TableCell colSpan={5}>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 py-1">
                       {group.email && (

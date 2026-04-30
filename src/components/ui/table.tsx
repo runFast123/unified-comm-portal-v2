@@ -6,9 +6,9 @@ export interface TableProps extends React.HTMLAttributes<HTMLTableElement> {
 
 export function Table({ className, children, ...props }: TableProps) {
   return (
-    <div className="w-full overflow-x-auto">
+    <div className="w-full overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
       <table
-        className={cn('w-full text-left text-sm', className)}
+        className={cn('w-full min-w-[640px] text-left text-sm', className)}
         {...props}
       >
         {children}

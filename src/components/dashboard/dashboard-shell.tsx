@@ -200,10 +200,10 @@ export function DashboardShell({ user, pendingCount, companyAccountIds, children
       {/* Main content area */}
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Mobile header with hamburger */}
-        <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border bg-card/95 backdrop-blur-sm px-4 shadow-sm lg:hidden">
+        <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border bg-card/95 backdrop-blur-sm px-4 shadow-sm md:hidden">
           <button
             onClick={() => setSidebarOpen(true)}
-            className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-all duration-200"
+            className="flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-all duration-200"
             aria-label="Open sidebar"
           >
             <svg
@@ -228,7 +228,7 @@ export function DashboardShell({ user, pendingCount, companyAccountIds, children
           <GlobalSearch variant="mobile" />
           <button
             onClick={() => window.location.reload()}
-            className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+            className="flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
             aria-label="Refresh"
           >
             <RefreshCw className="h-4 w-4" />
@@ -236,7 +236,7 @@ export function DashboardShell({ user, pendingCount, companyAccountIds, children
         </header>
 
         {/* Desktop breadcrumb bar */}
-        <div className="hidden lg:flex items-center justify-between border-b border-border bg-card/80 backdrop-blur-sm px-8 py-2.5">
+        <div className="hidden md:flex items-center justify-between border-b border-border bg-card/80 backdrop-blur-sm px-4 lg:px-8 py-2.5">
           <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-sm">
             <Link
               href="/dashboard"
@@ -270,7 +270,7 @@ export function DashboardShell({ user, pendingCount, companyAccountIds, children
           </div>
         </div>
 
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 pb-24 lg:pb-8 bg-background text-foreground" data-page-transition>
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 pb-24 md:pb-8 bg-background text-foreground" data-page-transition>
           {children}
         </main>
       </div>
@@ -288,7 +288,7 @@ export function DashboardShell({ user, pendingCount, companyAccountIds, children
       />
 
       {/* Mobile Bottom Navigation - visible only on small screens */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 flex items-center justify-around border-t border-border bg-card px-2 py-1.5 shadow-[0_-2px_10px_rgba(0,0,0,0.05)] lg:hidden">
+      <nav className="fixed bottom-0 left-0 right-0 z-40 flex items-center justify-around border-t border-border bg-card px-2 py-1.5 shadow-[0_-2px_10px_rgba(0,0,0,0.05)] md:hidden">
         {mobileNavItems.map((item) => {
           const active = isMobileNavActive(item.href)
           return (
@@ -319,10 +319,10 @@ export function DashboardShell({ user, pendingCount, companyAccountIds, children
       {moreSheetOpen && (
         <>
           <div
-            className="fixed inset-0 z-50 bg-black/50 lg:hidden"
+            className="fixed inset-0 z-50 bg-black/50 md:hidden"
             onClick={() => setMoreSheetOpen(false)}
           />
-          <div className="fixed bottom-0 left-0 right-0 z-50 rounded-t-2xl bg-card shadow-xl lg:hidden animate-slide-up">
+          <div className="fixed bottom-0 left-0 right-0 z-50 rounded-t-2xl bg-card shadow-xl md:hidden animate-slide-up">
             <div className="flex items-center justify-between border-b border-border px-5 py-3">
               <h3 className="text-sm font-semibold text-foreground">More</h3>
               <button

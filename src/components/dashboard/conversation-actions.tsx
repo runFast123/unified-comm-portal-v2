@@ -25,7 +25,10 @@ import { Badge } from '@/components/ui/badge'
 import { createClient } from '@/lib/supabase-client'
 import { useToast } from '@/components/ui/toast'
 import { useConversationPresence } from '@/hooks/useConversationPresence'
+import { useSmartCompose } from '@/hooks/useSmartCompose'
 import type { ReplyTemplate } from '@/types/database'
+
+const SMART_COMPOSE_STORAGE_KEY = 'smart-compose-enabled'
 
 interface ConversationActionsProps {
   conversationId: string
@@ -263,6 +266,43 @@ export function ConversationActions({
   const [allShortcutTemplates, setAllShortcutTemplates] = useState<ReplyTemplate[]>([])
   const manualTextareaRef = useRef<HTMLTextAreaElement>(null)
 
+  // ── Smart Compose (AI ghost-text suggestions) ─────────────────────────
+  // Cursor position is tracked separately so the hook knows whether the
+  // user is at the end of the textarea (the only spot we suggest).
+  // `isSending` (set inside `serverUndoableSend`) gates AI calls so we
+  // don't burn tokens on a message that's about to leave.
+  const [smartComposeEnabled, setSmartComposeEnabled] = useState<boolean>(true)
+  const [cursorPos, setCursorPos] = useState<number>(0)
+  const [isSending, setIsSending] = useState<boolean>(false)
+
+  // Hydrate the toggle from localStorage. Default is on; an explicit "false"
+  // string means the user disabled it last session.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const stored = localStorage.getItem(SMART_COMPOSE_STORAGE_KEY)
+    if (stored === 'false') setSmartComposeEnabled(false)
+  }, [])
+
+  const persistSmartComposeEnabled = useCallback((next: boolean) => {
+    setSmartComposeEnabled(next)
+    try {
+      localStorage.setItem(SMART_COMPOSE_STORAGE_KEY, next ? 'true' : 'false')
+    } catch { /* localStorage may be unavailable in private mode */ }
+  }, [])
+
+  const {
+    suggestion: smartSuggestion,
+    accept: acceptSmartSuggestion,
+    dismiss: dismissSmartSuggestion,
+  } = useSmartCompose({
+    conversationId,
+    text: manualText,
+    cursorPos,
+    enabled: smartComposeEnabled && showManualReply,
+    isSendInFlight: isSending,
+    textareaRef: manualTextareaRef,
+  })
+
   // Fetch templates from Supabase
   const fetchTemplates = useCallback(async () => {
     setTemplatesLoading(true)
@@ -359,6 +399,7 @@ export function ConversationActions({
 
     // Detect "/" shortcut pattern
     const cursorPos = e.target.selectionStart
+    setCursorPos(cursorPos)
     const textBeforeCursor = value.substring(0, cursorPos)
 
     // Find the last "/" that starts a potential shortcut (preceded by start-of-text or whitespace)
@@ -425,6 +466,38 @@ export function ConversationActions({
 
   // Handle keyboard navigation in shortcut popup + Ctrl+Enter to send
   const handleManualTextKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // ── Smart Compose: Tab to accept ───────────────────────────────────
+    // Takes precedence over the default Tab focus jump only when there's
+    // a live ghost suggestion AND the shortcut palette isn't open.
+    if (
+      e.key === 'Tab' &&
+      !e.shiftKey &&
+      smartSuggestion &&
+      shortcutQuery === null
+    ) {
+      e.preventDefault()
+      const merged = acceptSmartSuggestion()
+      if (merged != null) {
+        setManualText(merged)
+        // Move the cursor to the end of the merged text on the next tick.
+        requestAnimationFrame(() => {
+          const ta = manualTextareaRef.current
+          if (!ta) return
+          ta.focus()
+          ta.selectionStart = merged.length
+          ta.selectionEnd = merged.length
+          setCursorPos(merged.length)
+        })
+      }
+      return
+    }
+
+    // Smart Compose: Escape clears any active ghost text.
+    if (e.key === 'Escape' && smartSuggestion) {
+      // Don't return — let other Escape handlers (shortcut popup) run too.
+      dismissSmartSuggestion()
+    }
+
     // Ctrl+Enter or Cmd+Enter to send reply
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !shortcutQuery) {
       e.preventDefault()
@@ -447,7 +520,7 @@ export function ConversationActions({
       e.preventDefault()
       setShortcutQuery(null)
     }
-  }, [shortcutQuery, shortcutTemplates, shortcutIndex, handleShortcutSelect, manualText])
+  }, [shortcutQuery, shortcutTemplates, shortcutIndex, handleShortcutSelect, manualText, smartSuggestion, acceptSmartSuggestion, dismissSmartSuggestion])
 
   // Clear draft from localStorage on successful send
   const clearDraft = useCallback(() => {
@@ -500,36 +573,110 @@ export function ConversationActions({
     }
   }, [interpolateVars])
 
-  // ── Undo-send helper ────────────────────────────────────────────────
-  // Schedules `sendFn` to run after a 10s grace window, showing an Undo
-  // toast. If the user clicks Undo during that window, nothing is sent
-  // and no DB changes happen.
-  const UNDO_WINDOW_MS = 10_000
-  const scheduleUndoableSend = useCallback(
-    (label: string, sendFn: () => Promise<void>) => {
-      let cancelled = false
-      const timer = setTimeout(async () => {
-        if (cancelled) return
-        try {
-          await sendFn()
-        } catch (err) {
-          toast.error(`Send failed: ${(err as Error).message}`)
+  // ── Server-side Undo-Send helper ────────────────────────────────────
+  // Posts the send payload with `delay_ms: 5000` so the server enqueues a
+  // `pending_sends` row instead of dispatching immediately. We then show
+  // an Undo toast for the same window; clicking Undo calls
+  // /api/send/cancel which flips the row to 'cancelled' (no email goes
+  // out). After the window expires, the dispatch-scheduled cron picks
+  // the row up within ~60s and actually sends it.
+  //
+  // `onConfirmed` runs only if the user did NOT undo — it's where each
+  // handler does its own post-send bookkeeping (e.g. clearing AI reply
+  // status, refreshing the route). We intentionally do NOT insert the
+  // outbound `messages` row here: the cron does that on dispatch so the
+  // timeline reflects what was actually sent (cancelled rows leave no
+  // ghost message).
+  //
+  // `onUndone` runs when the user hits Undo successfully (used to
+  // re-populate the textarea so they can edit + resend).
+  const UNDO_WINDOW_MS = 5_000
+  const serverUndoableSend = useCallback(
+    async (
+      label: string,
+      sendBody: Record<string, unknown>,
+      opts: { onConfirmed?: () => void | Promise<void>; onUndone?: () => void } = {}
+    ) => {
+      // Flip the in-flight flag so Smart Compose stops asking for
+      // suggestions on a draft that's about to be sent.
+      setIsSending(true)
+      try {
+        const res = await fetch('/api/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...sendBody, delay_ms: UNDO_WINDOW_MS }),
+        })
+        if (!res.ok) {
+          let errMsg = ''
+          try {
+            const j = await res.json()
+            errMsg = j?.error ? ` (${j.error})` : ''
+          } catch { /* non-JSON */ }
+          toast.error(`Failed to queue send${errMsg}.`)
+          return
         }
-      }, UNDO_WINDOW_MS)
+        const data = (await res.json()) as { pending_id?: string }
+        const pendingId = data.pending_id
+        if (!pendingId) {
+          // Server didn't honor delay (older callers / bug). Surface it.
+          toast.warning('Send queued but no undo available.')
+          if (opts.onConfirmed) await opts.onConfirmed()
+          return
+        }
 
-      toast.withAction(`${label} — sending in 10s`, {
-        type: 'info',
-        duration: UNDO_WINDOW_MS,
-        action: {
-          label: 'Undo',
-          onClick: (id) => {
-            cancelled = true
-            clearTimeout(timer)
-            toast.dismiss(id)
-            toast.warning('Send cancelled')
+        let undone = false
+        toast.withAction(`${label} — Undo (5s)`, {
+          type: 'info',
+          duration: UNDO_WINDOW_MS,
+          action: {
+            label: 'Undo',
+            onClick: async (id) => {
+              if (undone) return
+              undone = true
+              toast.dismiss(id)
+              try {
+                const cancelRes = await fetch('/api/send/cancel', {
+                  method: 'DELETE',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ pending_id: pendingId }),
+                })
+                if (cancelRes.ok) {
+                  toast.warning('Send cancelled')
+                  opts.onUndone?.()
+                } else if (cancelRes.status === 410) {
+                  toast.error('Too late — message was already sent')
+                } else {
+                  let errMsg = ''
+                  try {
+                    const j = await cancelRes.json()
+                    errMsg = j?.error ? ` (${j.error})` : ''
+                  } catch { /* non-JSON */ }
+                  toast.error(`Undo failed${errMsg}`)
+                }
+              } catch (err) {
+                toast.error(`Undo failed: ${(err as Error).message}`)
+              }
+            },
           },
-        },
-      })
+        })
+
+        // Run post-send bookkeeping immediately. If the user undoes,
+        // `onUndone` re-populates the draft. The cron will pick up the
+        // row within ~60s if not cancelled.
+        if (opts.onConfirmed) {
+          // Wait until just past the undo window so we don't trigger
+          // any UI side-effects (e.g. router.refresh) that would jank
+          // the toast. setTimeout(0) is fine but a small delay keeps
+          // the success path tidy.
+          setTimeout(() => { void opts.onConfirmed?.() }, UNDO_WINDOW_MS + 50)
+        }
+      } catch (err) {
+        toast.error(`Send failed: ${(err as Error).message}`)
+      } finally {
+        // Release the in-flight gate so Smart Compose resumes for the
+        // NEXT draft. The undo toast handles its own lifecycle independently.
+        setIsSending(false)
+      }
     },
     [toast]
   )
@@ -545,67 +692,53 @@ export function ConversationActions({
       return
     }
 
-    // Snapshot attachments so they survive the 10s undo window. If the user
+    // Snapshot attachments so they survive the undo window. If the user
     // picks more during that window we ignore them for this send.
     const attachmentsSnapshot = isEmailChannel ? attachmentsForSend() : []
 
-    scheduleUndoableSend('AI reply', async () => {
-      const supabase = createClient()
-      const { error } = await supabase
-        .from('ai_replies')
-        .update({ status: 'approved', reviewed_at: new Date().toISOString() })
-        .eq('id', aiReplyId)
-      if (error) throw error
+    // Optimistically flip the AI reply to 'approved' so the UI gets out of
+    // pending_approval. If the user undoes, we revert below.
+    const supabase = createClient()
+    const reviewedAt = new Date().toISOString()
+    await supabase
+      .from('ai_replies')
+      .update({ status: 'approved', reviewed_at: reviewedAt })
+      .eq('id', aiReplyId)
 
-      const res = await fetch('/api/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          channel,
-          account_id: accountId,
-          conversation_id: conversationId,
-          reply_text: aiDraftText,
-          to: participantEmail,
-          subject: emailSubject ? `Re: ${emailSubject}` : 'Re: Your communication',
-          teams_chat_id: teamsChatId || undefined,
-          attachments: attachmentsSnapshot.length > 0
-            ? attachmentsSnapshot.map((a) => ({ path: a.path, filename: a.filename, contentType: a.contentType }))
-            : undefined,
-        }),
-      })
-
-      if (res.ok) {
-        const now = new Date().toISOString()
-        await supabase
-          .from('ai_replies')
-          .update({ status: 'sent', sent_at: now })
-          .eq('id', aiReplyId)
-
-        await supabase.from('messages').insert({
-          conversation_id: conversationId,
-          account_id: accountId,
-          channel: channel,
-          sender_name: accountName.replace(/\s+Teams$/i, ''),
-          sender_type: 'ai',
-          message_text: aiDraftText,
-          direction: 'outbound',
-          email_subject: emailSubject ? `Re: ${emailSubject}` : null,
-          attachments: attachmentsSnapshot.length > 0 ? { attachments: attachmentsSnapshot } : null,
-          replied: true,
-          reply_required: false,
-          timestamp: now,
-          received_at: now,
-        })
-
-        setPendingAttachments([])
-        toast.success('AI reply approved and sent!')
-        await markWaitingOnCustomer()
-      } else {
-        toast.warning('Reply approved but sending failed. You can retry from the inbox.')
+    await serverUndoableSend(
+      'AI reply queued',
+      {
+        channel,
+        account_id: accountId,
+        conversation_id: conversationId,
+        reply_text: aiDraftText,
+        to: participantEmail,
+        subject: emailSubject ? `Re: ${emailSubject}` : 'Re: Your communication',
+        teams_chat_id: teamsChatId || undefined,
+        attachments: attachmentsSnapshot.length > 0
+          ? attachmentsSnapshot.map((a) => ({ path: a.path, filename: a.filename, contentType: a.contentType }))
+          : undefined,
+      },
+      {
+        onConfirmed: async () => {
+          await supabase
+            .from('ai_replies')
+            .update({ status: 'sent', sent_at: new Date().toISOString() })
+            .eq('id', aiReplyId)
+          setPendingAttachments([])
+          await markWaitingOnCustomer()
+          router.refresh()
+        },
+        onUndone: () => {
+          // Roll the AI reply state back so the user can re-approve / edit.
+          void supabase
+            .from('ai_replies')
+            .update({ status: 'pending_approval', reviewed_at: null })
+            .eq('id', aiReplyId)
+        },
       }
-      router.refresh()
-    })
-  }, [aiReplyId, accountId, accountName, aiDraftText, conversationId, participantEmail, router, toast, channel, emailSubject, teamsChatId, markWaitingOnCustomer, scheduleUndoableSend, isEmailChannel, attachmentsForSend])
+    )
+  }, [aiReplyId, accountId, aiDraftText, conversationId, participantEmail, router, toast, channel, emailSubject, teamsChatId, markWaitingOnCustomer, serverUndoableSend, isEmailChannel, attachmentsForSend])
 
   const handleEditSend = useCallback(async () => {
     if (!participantEmail && channel !== 'teams') {
@@ -620,66 +753,46 @@ export function ConversationActions({
     const attachmentsSnapshot = isEmailChannel ? attachmentsForSend() : []
     setShowEditReply(false)
 
-    scheduleUndoableSend('Edited reply', async () => {
-      const supabase = createClient()
-
-      if (aiReplyId) {
-        const { error: updateError } = await supabase
-          .from('ai_replies')
-          .update({
-            edited_text: textSnapshot,
-            final_text: textSnapshot,
-            status: 'sent',
-            sent_at: new Date().toISOString(),
-          })
-          .eq('id', aiReplyId)
-        if (updateError) console.warn('Failed to update AI reply before sending:', updateError.message)
+    await serverUndoableSend(
+      'Edited reply queued',
+      {
+        channel,
+        account_id: accountId,
+        conversation_id: conversationId,
+        reply_text: textSnapshot,
+        to: participantEmail,
+        subject: emailSubject ? `Re: ${emailSubject}` : 'Re: Your communication',
+        teams_chat_id: teamsChatId || undefined,
+        attachments: attachmentsSnapshot.length > 0
+          ? attachmentsSnapshot.map((a) => ({ path: a.path, filename: a.filename, contentType: a.contentType }))
+          : undefined,
+      },
+      {
+        onConfirmed: async () => {
+          if (aiReplyId) {
+            const supabase = createClient()
+            await supabase
+              .from('ai_replies')
+              .update({
+                edited_text: textSnapshot,
+                final_text: textSnapshot,
+                status: 'sent',
+                sent_at: new Date().toISOString(),
+              })
+              .eq('id', aiReplyId)
+          }
+          setPendingAttachments([])
+          await markWaitingOnCustomer()
+          router.refresh()
+        },
+        onUndone: () => {
+          // Re-open the edit panel with the unsent text.
+          setEditText(textSnapshot)
+          setShowEditReply(true)
+        },
       }
-
-      const res = await fetch('/api/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          channel,
-          account_id: accountId,
-          conversation_id: conversationId,
-          reply_text: textSnapshot,
-          to: participantEmail,
-          subject: emailSubject ? `Re: ${emailSubject}` : 'Re: Your communication',
-          teams_chat_id: teamsChatId || undefined,
-          attachments: attachmentsSnapshot.length > 0
-            ? attachmentsSnapshot.map((a) => ({ path: a.path, filename: a.filename, contentType: a.contentType }))
-            : undefined,
-        }),
-      })
-
-      if (res.ok) {
-        const now = new Date().toISOString()
-        await supabase.from('messages').insert({
-          conversation_id: conversationId,
-          account_id: accountId,
-          channel: channel,
-          sender_name: accountName.replace(/\s+Teams$/i, ''),
-          sender_type: 'agent',
-          message_text: textSnapshot,
-          direction: 'outbound',
-          email_subject: emailSubject ? `Re: ${emailSubject}` : null,
-          attachments: attachmentsSnapshot.length > 0 ? { attachments: attachmentsSnapshot } : null,
-          replied: true,
-          reply_required: false,
-          timestamp: now,
-          received_at: now,
-        })
-
-        setPendingAttachments([])
-        toast.success('Reply sent successfully!')
-        await markWaitingOnCustomer()
-      } else {
-        toast.error('Failed to send reply.')
-      }
-      router.refresh()
-    })
-  }, [editText, aiReplyId, accountId, accountName, participantEmail, conversationId, router, toast, channel, emailSubject, teamsChatId, markWaitingOnCustomer, scheduleUndoableSend, isEmailChannel, attachmentsForSend])
+    )
+  }, [editText, aiReplyId, accountId, participantEmail, conversationId, router, toast, channel, emailSubject, teamsChatId, markWaitingOnCustomer, serverUndoableSend, isEmailChannel, attachmentsForSend])
 
   const handleManualReply = useCallback(async () => {
     if (!participantEmail && channel !== 'teams') {
@@ -702,61 +815,37 @@ export function ConversationActions({
     setShowManualReply(false)
     clearDraft()
 
-    scheduleUndoableSend('Manual reply', async () => {
-      const supabase = createClient()
-
-      // Call /api/send FIRST. If we insert the outbound row before the send,
-      // /api/send's 15s dedup guard would match our own fresh insert and
-      // short-circuit, so no email actually goes out.
-      const res = await fetch('/api/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          channel,
-          account_id: accountId,
-          conversation_id: conversationId,
-          reply_text: textSnapshot,
-          to: participantEmail,
-          subject: emailSubject ? `Re: ${emailSubject}` : 'Re: Your communication',
-          teams_chat_id: teamsChatId || undefined,
-          attachments: attachmentsSnapshot.length > 0
-            ? attachmentsSnapshot.map((a) => ({ path: a.path, filename: a.filename, contentType: a.contentType }))
-            : undefined,
-        }),
-      })
-
-      if (res.ok) {
-        // Only record the outbound message after the provider accepted it.
-        const now = new Date().toISOString()
-        await supabase.from('messages').insert({
-          conversation_id: conversationId,
-          account_id: accountId,
-          channel: channel,
-          sender_name: accountName.replace(/\s+Teams$/i, ''),
-          sender_type: 'agent',
-          message_text: textSnapshot,
-          email_subject: emailSubject || null,
-          direction: 'outbound',
-          attachments: attachmentsSnapshot.length > 0 ? { attachments: attachmentsSnapshot } : null,
-          replied: true,
-          reply_required: false,
-          timestamp: now,
-          received_at: now,
-        })
-        setPendingAttachments([])
-        toast.success('Manual reply sent!')
-        await markWaitingOnCustomer()
-      } else {
-        let errMsg = ''
-        try {
-          const data = await res.json()
-          errMsg = data?.error ? ` (${data.error})` : ''
-        } catch { /* non-JSON response */ }
-        toast.error(`Delivery failed${errMsg}. Your message was NOT sent.`)
+    await serverUndoableSend(
+      'Manual reply queued',
+      {
+        channel,
+        account_id: accountId,
+        conversation_id: conversationId,
+        reply_text: textSnapshot,
+        to: participantEmail,
+        subject: emailSubject ? `Re: ${emailSubject}` : 'Re: Your communication',
+        teams_chat_id: teamsChatId || undefined,
+        attachments: attachmentsSnapshot.length > 0
+          ? attachmentsSnapshot.map((a) => ({ path: a.path, filename: a.filename, contentType: a.contentType }))
+          : undefined,
+      },
+      {
+        onConfirmed: async () => {
+          // Cron has been notified — the message row will appear in the
+          // timeline once dispatch fires. Drop the local attachment chips
+          // and refresh so the inbox status updates.
+          setPendingAttachments([])
+          await markWaitingOnCustomer()
+          router.refresh()
+        },
+        onUndone: () => {
+          // Re-open the composer with the unsent text so the user can edit.
+          setManualText(textSnapshot)
+          setShowManualReply(true)
+        },
       }
-      router.refresh()
-    })
-  }, [manualText, conversationId, accountId, channel, accountName, participantEmail, router, toast, emailSubject, teamsChatId, markWaitingOnCustomer, clearDraft, scheduleUndoableSend, isEmailChannel, attachmentsForSend, pendingAttachments.length])
+    )
+  }, [manualText, conversationId, accountId, channel, participantEmail, router, toast, emailSubject, teamsChatId, markWaitingOnCustomer, clearDraft, serverUndoableSend, isEmailChannel, attachmentsForSend, pendingAttachments.length])
 
   // ── Collision guard ─────────────────────────────────────────────────
   // If another agent is actively typing in this conversation, ask for a
@@ -1073,6 +1162,14 @@ export function ConversationActions({
   // Global keyboard shortcuts for conversation actions
   useEffect(() => {
     function handleGlobalKey(e: KeyboardEvent) {
+      // Ctrl+. (or Cmd+.) toggles Smart Compose. We allow this from inside
+      // INPUT/TEXTAREA so the agent can flip it without losing focus on
+      // the composer.
+      if (e.key === '.' && (e.ctrlKey || e.metaKey) && !e.shiftKey) {
+        e.preventDefault()
+        persistSmartComposeEnabled(!smartComposeEnabled)
+        return
+      }
       const tag = (e.target as HTMLElement)?.tagName
       if (tag === 'INPUT' || tag === 'SELECT') return
       if (e.key === 'E' && (e.ctrlKey || e.metaKey) && e.shiftKey) {
@@ -1086,7 +1183,7 @@ export function ConversationActions({
     }
     document.addEventListener('keydown', handleGlobalKey)
     return () => document.removeEventListener('keydown', handleGlobalKey)
-  }, [handleEscalate, handleResolve])
+  }, [handleEscalate, handleResolve, persistSmartComposeEnabled, smartComposeEnabled])
 
   return (
     <div className="sticky bottom-0 bg-white border-t border-gray-200 py-3 px-4 z-10 space-y-3">
@@ -1240,13 +1337,34 @@ export function ConversationActions({
             </div>
           )}
           <div className="relative">
+            {/* Smart Compose ghost-text overlay.
+                Sits in the same position/font as the textarea so the suggestion
+                appears to flow directly after the user's typed text. The
+                textarea sits ON TOP (z-10) so it stays interactive. The ghost
+                layer is non-interactive (pointer-events-none) and renders the
+                user's own text invisibly so the suggestion offsets correctly.
+                Only shown when there's a live suggestion. */}
+            {smartSuggestion && smartComposeEnabled && (
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 z-0 overflow-hidden whitespace-pre-wrap break-words rounded-lg px-3.5 py-3 text-sm leading-relaxed"
+                style={{ fontFamily: 'inherit' }}
+              >
+                <span className="invisible">{manualText}</span>
+                <span className="italic text-gray-400">{smartSuggestion}</span>
+              </div>
+            )}
             <textarea
               ref={manualTextareaRef}
               value={manualText}
               onChange={handleManualTextChange}
               onKeyDown={handleManualTextKeyDown}
+              onKeyUp={(e) => setCursorPos(e.currentTarget.selectionStart)}
+              onClick={(e) => setCursorPos(e.currentTarget.selectionStart)}
+              onSelect={(e) => setCursorPos(e.currentTarget.selectionStart)}
+              onBlur={dismissSmartSuggestion}
               placeholder="Type your reply... (use /shortcut for quick templates)"
-              className="w-full rounded-lg border border-gray-300 px-3.5 py-3 text-sm leading-relaxed focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500 min-h-[140px] resize-y"
+              className="relative z-10 w-full rounded-lg border border-gray-300 bg-transparent px-3.5 py-3 text-sm leading-relaxed focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500 min-h-[140px] resize-y"
               rows={6}
             />
             {/* Shortcut autocomplete popup */}
@@ -1335,6 +1453,23 @@ export function ConversationActions({
             </Button>
             <span className="text-[10px] text-gray-400 flex items-center gap-2 ml-auto">
               {draftSaved && <span className="text-green-500">Draft saved</span>}
+              {smartSuggestion && smartComposeEnabled && (
+                <span className="text-teal-600">
+                  <kbd className="px-1 py-0.5 bg-teal-50 rounded text-[9px] font-mono ring-1 ring-teal-200">Tab</kbd> to accept
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={() => persistSmartComposeEnabled(!smartComposeEnabled)}
+                title={`Smart Compose is ${smartComposeEnabled ? 'on' : 'off'} — Ctrl+. to toggle`}
+                className={`px-1.5 py-0.5 rounded text-[9px] font-mono ring-1 transition-colors ${
+                  smartComposeEnabled
+                    ? 'bg-teal-50 text-teal-700 ring-teal-200 hover:bg-teal-100'
+                    : 'bg-gray-100 text-gray-500 ring-gray-200 hover:bg-gray-200'
+                }`}
+              >
+                AI {smartComposeEnabled ? 'On' : 'Off'}
+              </button>
               <kbd className="px-1 py-0.5 bg-gray-100 rounded text-[9px] font-mono">Ctrl+Enter</kbd> to send
             </span>
           </div>

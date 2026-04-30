@@ -26,6 +26,7 @@ export type AIEndpoint =
   | 'ai-reply'
   | 'ai-summarize'
   | 'suggest-replies'
+  | 'ai-compose'
   | 'test-ai'
 
 export interface UsageRecord {

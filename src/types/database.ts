@@ -86,7 +86,7 @@ export interface AIUsage {
   id: string
   account_id: string
   ts: string
-  endpoint: 'classify' | 'ai-reply' | 'ai-summarize' | 'suggest-replies' | 'test-ai'
+  endpoint: 'classify' | 'ai-reply' | 'ai-summarize' | 'suggest-replies' | 'ai-compose' | 'test-ai'
   model: string
   input_tokens: number | null
   output_tokens: number | null

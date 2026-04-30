@@ -159,14 +159,14 @@ export function Sidebar({ user, pendingCount, open, onClose }: SidebarProps) {
       {/* Mobile overlay */}
       {open && (
         <div
-          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+          className="fixed inset-0 z-40 bg-black/50 md:hidden"
           onClick={onClose}
         />
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex flex-col bg-sidebar border-r border-sidebar-border transition-all duration-200 ease-in-out lg:translate-x-0 lg:static lg:z-auto ${
-          collapsed ? 'lg:w-[68px] overflow-hidden' : 'lg:w-64'
+        className={`fixed inset-y-0 left-0 z-50 flex flex-col bg-sidebar border-r border-sidebar-border transition-all duration-200 ease-in-out md:translate-x-0 md:static md:z-auto ${
+          collapsed ? 'md:w-[68px] overflow-hidden' : 'md:w-64'
         } w-64 ${
           open ? 'translate-x-0' : '-translate-x-full'
         }`}
@@ -185,7 +185,8 @@ export function Sidebar({ user, pendingCount, open, onClose }: SidebarProps) {
           </Link>
           <button
             onClick={onClose}
-            className="lg:hidden text-muted-foreground hover:text-sidebar-foreground"
+            className="md:hidden flex h-11 w-11 items-center justify-center text-muted-foreground hover:text-sidebar-foreground"
+            aria-label="Close sidebar"
           >
             <X className="h-5 w-5" />
           </button>
@@ -362,7 +363,7 @@ export function Sidebar({ user, pendingCount, open, onClose }: SidebarProps) {
         )}
 
         {/* Collapse toggle — desktop only */}
-        <div className="hidden lg:flex border-t border-sidebar-border p-2">
+        <div className="hidden md:flex border-t border-sidebar-border p-2">
           <button
             onClick={toggleCollapsed}
             className="flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
