@@ -4,7 +4,8 @@ import { simpleParser } from 'mailparser'
 import { getChannelConfig, type EmailConfig } from '@/lib/channel-config'
 import { getGmailAccessToken, GmailOAuthExpiredError } from '@/lib/gmail-oauth'
 import { createServiceRoleClient } from '@/lib/supabase-server'
-import { mintRequestId, REQUEST_ID_HEADER } from '@/lib/request-id'
+import { mintRequestId } from '@/lib/request-id'
+import { ingestInboundEmail } from '@/lib/email-ingest'
 
 // ─── Sharding + circuit breaker shared across the email/teams pollers ──
 // Shard math: stable hash of account id → 32-bit int → modulo total. Same
@@ -46,27 +47,32 @@ const BACKFILL_DAYS = 7
 // Per-run cap so a huge mailbox doesn't exhaust the request timeout
 const MAX_MESSAGES_PER_RUN = 100
 
-async function postToEmailWebhook(
+/**
+ * Hand a parsed inbound email to the ingest pipeline.
+ *
+ * Originally this was an HTTP POST to `/api/webhooks/email` against the
+ * deployment's own origin. That broke whenever Vercel Deployment Protection
+ * was enabled — the protection layer intercepts the internal request with
+ * an HTML auth wall, the poller sees a 401, and every polled message is
+ * silently dropped while the IMAP cursor still advances.
+ *
+ * Now we call `ingestInboundEmail()` directly. Same behavior (auth was the
+ * only thing skipped, and the poller's cron-route caller already
+ * authenticated against `WEBHOOK_SECRET` upstream), one fewer network hop,
+ * cursor advance + message store happen in the same lambda.
+ */
+async function ingestPolledEmail(
   origin: string,
   payload: WebhookPayload,
   requestId: string
 ): Promise<void> {
-  // One request id per individual ingestion (caller mints it). The webhook
-  // honours x-request-id and propagates it onward to /api/classify and
-  // /api/ai-reply, so each polled email shows up as a single correlated
-  // thread in stdout / Sentry / audit_log.
-  const res = await fetch(`${origin}/api/webhooks/email`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Webhook-Secret': process.env.WEBHOOK_SECRET || '',
-      [REQUEST_ID_HEADER]: requestId,
-    },
-    body: JSON.stringify(payload),
-  })
-  if (!res.ok) {
-    const text = await res.text().catch(() => '')
-    throw new Error(`webhook responded ${res.status}: ${text.slice(0, 200)}`)
+  const supabase = await createServiceRoleClient()
+  const result = await ingestInboundEmail(supabase, payload, { origin, request_id: requestId })
+  if (!result.ok) {
+    // Surface failures to the caller exactly the way the old fetch-based
+    // helper did — they bubble up into the per-message try/catch in
+    // pollEmailAccount and end up in `result.errors`.
+    throw new Error(`ingest failed (${result.status}): ${result.error}`)
   }
 }
 
@@ -211,7 +217,7 @@ export async function pollEmailAccount(
               // the webhook propagates this to classify + ai-reply, so a
               // single polled email = a single correlation thread.
               const messageRequestId = mintRequestId()
-              await postToEmailWebhook(
+              await ingestPolledEmail(
                 origin,
                 {
                   account_id: accountId,
