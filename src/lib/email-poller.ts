@@ -6,6 +6,7 @@ import { getGmailAccessToken, GmailOAuthExpiredError } from '@/lib/gmail-oauth'
 import { createServiceRoleClient } from '@/lib/supabase-server'
 import { mintRequestId } from '@/lib/request-id'
 import { ingestInboundEmail } from '@/lib/email-ingest'
+import { logError } from '@/lib/logger'
 
 // ─── Sharding + circuit breaker shared across the email/teams pollers ──
 // Shard math: stable hash of account id → 32-bit int → modulo total. Same
@@ -235,7 +236,16 @@ export async function pollEmailAccount(
               result.forwarded++
               if (msg.uid && msg.uid > highestUid) highestUid = msg.uid
             } catch (innerErr) {
-              result.errors.push(innerErr instanceof Error ? innerErr.message : 'parse/forward failed')
+              const errMsg = innerErr instanceof Error ? innerErr.message : 'parse/forward failed'
+              result.errors.push(errMsg)
+              // M3 fix: surface per-message failures to logs/Sentry. Previously
+              // these only landed in the in-memory `result.errors` array and
+              // never reached observability — silent ingest gaps were invisible.
+              // `messageRequestId` may not exist if we threw before mintRequestId().
+              void logError('system', 'email_poller_message_failed', errMsg, {
+                account_id: accountId,
+                uid: msg.uid ?? null,
+              }).catch(() => { /* never break the poll loop */ })
             }
           }
         }

@@ -90,6 +90,23 @@ export async function POST(
       return NextResponse.json({ error: 'Forbidden: account scope mismatch' }, { status: 403 })
     }
 
+    // M4 fix: validate secondary_status_color shape. Without this anyone
+    // with conversation access could stuff a 1MB blob or HTML/JS into the
+    // column — UI components that render the color verbatim would break
+    // (or worse, render attacker-controlled markup if a future component
+    // inlined it as an attribute). Accept `#rgb`, `#rgba`, `#rrggbb`,
+    // `#rrggbbaa`. Null/undefined are allowed (clears the color).
+    if (
+      body.secondary_status_color !== undefined &&
+      body.secondary_status_color !== null &&
+      !/^#(?:[0-9a-fA-F]{3,8})$/.test(body.secondary_status_color)
+    ) {
+      return NextResponse.json(
+        { error: 'secondary_status_color must be a hex string like #rrggbb' },
+        { status: 400 }
+      )
+    }
+
     const update: Record<string, unknown> = {}
     if (hasStatus) update.status = body.status
     if (hasSecondary) {

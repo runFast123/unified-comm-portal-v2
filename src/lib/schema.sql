@@ -422,48 +422,13 @@ RETURNS boolean AS $$
   );
 $$ LANGUAGE sql SECURITY DEFINER STABLE;
 
--- ---- SELECT policies: authenticated users can read everything ----
--- TODO [SECURITY]: The SELECT policies below use USING(true) which allows any
--- authenticated user to read ALL rows in every table. This is overly permissive.
--- A separate Supabase migration should tighten these policies as follows:
---
--- accounts: Keep USING(true) — account names are not sensitive and admins need to see all.
---
--- conversations: Should be scoped to user's account:
---   USING (auth.uid() IN (
---     SELECT id FROM users WHERE role = 'admin' OR account_id = conversations.account_id
---   ))
---
--- messages: Should be scoped through conversation's account_id:
---   USING (auth.uid() IN (
---     SELECT id FROM users WHERE role = 'admin' OR account_id = messages.account_id
---   ))
---
--- message_classifications: Should be scoped through message -> account_id:
---   USING (auth.uid() IN (
---     SELECT u.id FROM users u
---     JOIN messages m ON m.id = message_classifications.message_id
---     WHERE u.role = 'admin' OR u.account_id = m.account_id
---   ))
---
--- ai_replies: Should be scoped to user's account:
---   USING (auth.uid() IN (
---     SELECT id FROM users WHERE role = 'admin' OR account_id = ai_replies.account_id
---   ))
---
--- channel_configs: Should be admin-only or scoped to account:
---   USING (is_admin() OR auth.uid() IN (
---     SELECT id FROM users WHERE account_id = channel_configs.account_id
---   ))
---
--- audit_log: Should be admin-only:
---   USING (is_admin())
---
--- The remaining tables (kb_articles, kb_hits, google_sheets_sync, imported_records,
--- notification_rules) can stay USING(true) or be scoped similarly depending on requirements.
---
--- IMPORTANT: Apply these changes as a separate migration to avoid breaking production.
--- Test thoroughly with both admin and non-admin users before deploying.
+-- ---- SELECT policies: BASELINE definitions follow ----
+-- Historical: tightened in migration 20260501170000_tighten_rls_company_scoping.sql.
+-- Per-table policies are now scoped via is_super_admin() / current_user_company_id()
+-- and helpers added in 20260430150100_multi_tenancy_helpers_and_rls.sql.
+-- The CREATE POLICY statements that follow are the original USING(true)
+-- baselines kept here so a fresh `psql < schema.sql` bootstrap works; the
+-- subsequent Supabase migrations replace them with the tightened versions.
 
 CREATE POLICY "Authenticated users can read users"
   ON users FOR SELECT TO authenticated USING (true);

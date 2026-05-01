@@ -295,9 +295,15 @@ export async function recordAIUsage(record: UsageRecord): Promise<RecordResult> 
 /**
  * Convenience for routes: throws AIBudgetExceededError when over budget.
  * Routes catch this and return a graceful 200 "skipped" response.
+ *
+ * M1 fix: bypasses the 30s cache. Under concurrency the cache let N parallel
+ * AI calls all see the same "under budget" snapshot and overrun by N×
+ * per-call cost. The display path (`getMonthlyUsage`) keeps the cache for
+ * cheap reads from the dashboard; the GATE path always reads fresh from DB.
  */
 export async function assertWithinBudget(accountId: string): Promise<UsageStatus> {
-  const status = await getMonthlyUsage(accountId)
+  if (!accountId) return deriveStatus(0, 0, 90)
+  const status = await loadUsageFromDb(accountId)
   if (status.over_budget) {
     throw new AIBudgetExceededError(
       accountId,

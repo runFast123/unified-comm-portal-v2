@@ -158,8 +158,13 @@ export async function PATCH(
   }
 
   if (body.settings !== undefined) {
+    // M5 fix: previously `body.settings === null` silently wiped the JSONB
+    // blob to {}, which let a typo in a frontend save blow away CSAT
+    // template, OOO defaults, etc. Treat null as "no change"; require an
+    // explicit object to update. Callers that genuinely want to clear can
+    // pass `{}`.
     if (body.settings === null) {
-      patch.settings = {}
+      // intentionally leave patch.settings unset → no change
     } else if (typeof body.settings !== 'object' || Array.isArray(body.settings)) {
       return NextResponse.json({ error: 'settings must be an object' }, { status: 400 })
     } else {

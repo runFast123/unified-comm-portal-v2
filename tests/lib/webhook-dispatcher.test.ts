@@ -29,6 +29,20 @@ const fixture = {
 
 vi.mock('@/lib/supabase-server', () => ({
   createServiceRoleClient: vi.fn(async () => ({
+    // M2: dispatcher now uses an atomic RPC for failure increment instead
+    // of read-then-write. Mock it by mutating the in-memory fixture so the
+    // existing assertions on `sub.consecutive_failures` keep working.
+    rpc: async (fn: string, args: { sub_id?: string }) => {
+      if (fn === 'increment_webhook_failures' && args?.sub_id) {
+        const sub = fixture.subs.get(args.sub_id)
+        if (sub) {
+          sub.consecutive_failures = (sub.consecutive_failures ?? 0) + 1
+          if (sub.consecutive_failures >= 5) sub.is_active = false
+          return { data: sub.consecutive_failures, error: null }
+        }
+      }
+      return { data: null, error: null }
+    },
     from: (table: string) => {
       const filters: Array<{ col: string; value: unknown }> = []
       let mode: 'select' | 'insert' | 'update' = 'select'

@@ -232,22 +232,31 @@ async function dispatchToSubscription(
         attempts: attemptIndex + 1,
       })
     } else {
-      const nextFailures = (sub.consecutive_failures ?? 0) + 1
-      const updates: Record<string, unknown> = {
-        consecutive_failures: nextFailures,
-        last_delivery_at: new Date().toISOString(),
-      }
-      if (nextFailures >= DEACTIVATE_AFTER_FAILURES) {
-        updates.is_active = false
-      }
-      await admin.from('webhook_subscriptions').update(updates).eq('id', sub.id)
+      // M2 fix: atomic increment via the increment_webhook_failures RPC
+      // (added in migration 20260501180000_unique_indexes_conversations_dedup).
+      // The previous read-then-write pattern under-counted failures when
+      // two firings raced — the second read used the same stale value as
+      // the first, both wrote `stale + 1`, and auto-disable could be
+      // delayed indefinitely under sustained failure.
+      const { data: nextFailures, error: rpcErr } = await admin.rpc(
+        'increment_webhook_failures',
+        { sub_id: sub.id }
+      )
+      // Always update last_delivery_at so the dashboard timestamp moves.
+      await admin
+        .from('webhook_subscriptions')
+        .update({ last_delivery_at: new Date().toISOString() })
+        .eq('id', sub.id)
+      const finalCount = (typeof nextFailures === 'number' ? nextFailures : (sub.consecutive_failures ?? 0) + 1)
+      const deactivated = finalCount >= DEACTIVATE_AFTER_FAILURES
       logError('webhook', 'delivery_failed', lastError ?? 'unknown', {
         subscription_id: sub.id,
         company_id: sub.company_id,
         event_type: eventType,
         attempts: attemptIndex + 1,
-        consecutive_failures: nextFailures,
-        deactivated: nextFailures >= DEACTIVATE_AFTER_FAILURES,
+        consecutive_failures: finalCount,
+        deactivated,
+        rpc_error: rpcErr?.message,
       })
     }
   } catch (err) {

@@ -34,7 +34,7 @@ Update the `CONFIG` object at the top:
 ```javascript
 const CONFIG = {
   PORTAL_URL: 'https://unified-comm-portal.vercel.app',
-  WEBHOOK_SECRET: 'my-webhook-secret-123',  // Must match your N8N_WEBHOOK_SECRET
+  WEBHOOK_SECRET: 'my-webhook-secret-123',  // Must match your WEBHOOK_SECRET
   CHECK_INTERVAL_MINUTES: 2,
   LOOKBACK_MINUTES: 3,
 };
@@ -84,7 +84,7 @@ const CONFIG = {
 - Check Execution Log for errors
 
 **401 Unauthorized:**
-- Verify `WEBHOOK_SECRET` matches your portal's `N8N_WEBHOOK_SECRET` environment variable
+- Verify `WEBHOOK_SECRET` matches your portal's `WEBHOOK_SECRET` environment variable
 
 **Portal not showing the reply:**
 - Check the portal's conversation - the reply should appear as an outbound message

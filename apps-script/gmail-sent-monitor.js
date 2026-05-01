@@ -30,7 +30,7 @@ const CONFIG = {
   // Your portal URL (no trailing slash)
   PORTAL_URL: 'https://unified-comm-portal.vercel.app',
 
-  // Webhook secret (must match N8N_WEBHOOK_SECRET in your portal's .env)
+  // Webhook secret (must match WEBHOOK_SECRET in your portal's .env)
   WEBHOOK_SECRET: 'my-webhook-secret-123',
 
   // How often to check (in minutes) - Google allows: 1, 5, 10, 15, or 30

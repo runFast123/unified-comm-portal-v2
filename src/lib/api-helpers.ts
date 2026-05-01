@@ -49,7 +49,15 @@ export function validateWebhookSecret(request: Request): boolean {
   const secret = request.headers.get('x-webhook-secret')
   const expectedSecret = process.env.WEBHOOK_SECRET
   if (!expectedSecret) {
-    console.error('WEBHOOK_SECRET is not configured')
+    // M7 fix: surface this to structured logging + Sentry so a misconfigured
+    // deployment is alertable. Previously the silent `console.error` meant
+    // every cron 401'd indefinitely with no operator-visible signal.
+    void logError(
+      'system',
+      'webhook_secret_missing',
+      'WEBHOOK_SECRET env var is unset — every cron will 401 until this is fixed',
+      {}
+    ).catch(() => { /* never throw from a logger */ })
     return false
   }
   if (!secret) return false
