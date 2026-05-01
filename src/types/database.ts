@@ -475,6 +475,153 @@ export interface SavedView {
   created_at: string
 }
 
+// ─── Out-of-office auto-reply dedup ─────────────────────────────────
+// One row per (conversation, OOO window) so we never auto-reply twice for
+// the same window even as the customer keeps emailing. See
+// `supabase/migrations/20260501000000_account_out_of_office.sql` and
+// `src/lib/ooo.ts`.
+export interface OOOReplySent {
+  id: string
+  account_id: string
+  conversation_id: string
+  /** ISO timestamp marking the start of the OOO window the auto-reply was
+   *  attributed to. Used as the dedup key alongside conversation_id. */
+  ooo_window_start: string
+  sent_at: string
+}
+
+// ─── Conversation merging (soft merge audit) ────────────────────────
+// Captures the exact set of message IDs that were moved during a merge so
+// unmerge can reverse it deterministically. See
+// `supabase/migrations/20260501120000_conversation_merging.sql`.
+export interface ConversationMerge {
+  id: string
+  primary_conversation_id: string
+  secondary_conversation_id: string
+  /** Message IDs moved from secondary → primary at merge time. */
+  message_ids: string[]
+  merged_by: string | null
+  merged_at: string
+  unmerged_at: string | null
+  unmerged_by: string | null
+}
+
+// ─── API tokens (per-company outbound integrations) ─────────────────
+// Plaintext is shown to the user once; we persist only the SHA-256 hash.
+// See `supabase/migrations/20260501150000_api_tokens_and_webhooks.sql`.
+export interface ApiToken {
+  id: string
+  company_id: string
+  name: string
+  /** First 8 chars of the plaintext — for UI display ("ucp_abc1…"). */
+  prefix: string
+  /** SHA-256 hash; the plaintext is never persisted. */
+  token_hash: string
+  scopes: string[]
+  created_by: string | null
+  created_at: string
+  last_used_at: string | null
+  revoked_at: string | null
+  expires_at: string | null
+}
+
+// ─── Outgoing webhook subscriptions + delivery audit trail ──────────
+export interface WebhookSubscription {
+  id: string
+  company_id: string
+  url: string
+  /** Event types this URL receives, e.g. ['conversation.created']. */
+  events: string[]
+  /** Shared HMAC secret used to sign outgoing payloads. */
+  signing_secret: string
+  is_active: boolean
+  created_by: string | null
+  created_at: string
+  last_delivery_at: string | null
+  consecutive_failures: number
+}
+
+export interface WebhookDelivery {
+  id: string
+  subscription_id: string
+  event_type: string
+  /** First 500 chars of the JSON payload — full body is not persisted. */
+  payload_excerpt: string | null
+  http_status: number | null
+  attempted_at: string
+  duration_ms: number | null
+  error: string | null
+  retry_count: number
+}
+
+// ─── Per-company status / tag catalogs ──────────────────────────────
+// Powers the secondary_status field on conversations + tag autocomplete.
+// See `supabase/migrations/20260430160000_company_taxonomy.sql`.
+export interface CompanyStatus {
+  id: string
+  company_id: string
+  name: string
+  /** Hex color used in the inbox chip. */
+  color: string
+  description: string | null
+  sort_order: number
+  is_active: boolean
+  created_at: string
+}
+
+export interface CompanyTag {
+  id: string
+  company_id: string
+  name: string
+  color: string
+  description: string | null
+  created_by: string | null
+  created_at: string
+}
+
+// ─── @-mentions inside internal conversation notes ──────────────────
+// Created by `POST /api/notes` when a note body contains `@[Name](uuid)`.
+// Powers the mentions bell + email notification flow.
+export interface NoteMention {
+  id: string
+  note_id: string
+  conversation_id: string
+  mentioned_user_id: string
+  /** ISO; used for the unread chip on the bell icon. */
+  read_at: string | null
+  created_at: string
+}
+
+// ─── Structured operational metrics ─────────────────────────────────
+// Counter / gauge / histogram events written by `recordMetric()` in
+// `src/lib/metrics.ts`. Read by the /admin/observability dashboard.
+export interface MetricsEvent {
+  id: number
+  ts: string
+  metric_name: string
+  value: number
+  /** Optional dimensions, e.g. { cron: 'email_poller', shard: 0 }. */
+  labels: Record<string, unknown> | null
+  request_id: string | null
+}
+
+// ─── Per-conversation time tracking (best-effort — added by parallel agent) ─
+// Optional; exported so callers can rely on a single shape if/when the
+// parallel agent's migration lands. Renders the row only when the table
+// exists — code paths that don't import this won't break.
+export interface ConversationTimeEntry {
+  id: string
+  conversation_id: string
+  user_id: string
+  /** ISO timestamps demarcating the tracked interval. */
+  started_at: string
+  ended_at: string | null
+  /** Duration in seconds — denormalized for quick summing in reports. */
+  duration_seconds: number | null
+  notes: string | null
+  created_at: string
+}
+
 // Inbox item (joined from multiple tables)
 export interface InboxItem {
   id: string

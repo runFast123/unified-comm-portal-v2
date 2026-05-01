@@ -1562,14 +1562,21 @@ export default function InboxPage() {
             <EmptyState
               icon={Inbox}
               title="All caught up!"
-              description="Messages will appear here once your channels start receiving them."
+              description="Connect a Gmail or Teams account to start receiving messages, or click Sync to pull new mail from your existing channels."
               action={
-                <Button variant="primary" onClick={handleSync} loading={syncing}>
-                  <RefreshCw className="h-4 w-4" />
-                  Sync
-                </Button>
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  <Button variant="primary" onClick={handleSync} loading={syncing}>
+                    <RefreshCw className="h-4 w-4" />
+                    Sync now
+                  </Button>
+                  <Link href="/admin/channels">
+                    <Button variant="secondary">
+                      Connect a channel
+                    </Button>
+                  </Link>
+                </div>
               }
-              hint="Tip: click Sync to pull new mail from your connected accounts."
+              hint="Tip: connected channels poll every 2 minutes automatically while this tab is open."
             />
           )}
         </div>

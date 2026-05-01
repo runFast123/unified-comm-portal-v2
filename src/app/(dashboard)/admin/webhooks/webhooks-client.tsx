@@ -253,9 +253,22 @@ export function WebhooksClient({ initialWebhooks, knownEvents, canCreate }: Prop
       <Card>
         {webhooks.length === 0 ? (
           <EmptyState
-            icon={<Webhook className="h-12 w-12" />}
+            icon={Webhook}
             title="No webhooks configured"
-            description="Add a webhook to push conversation and message events to an external system in real time."
+            description="Wire up your CRM, helpdesk, or any HTTP endpoint to receive conversation events in real time."
+            action={
+              canCreate ? (
+                <Button variant="primary" onClick={() => setCreateOpen(true)}>
+                  <Plus className="h-4 w-4" />
+                  Add your first webhook
+                </Button>
+              ) : undefined
+            }
+            hint={
+              canCreate
+                ? 'Every delivery is signed with HMAC-SHA256 — verify the X-Webhook-Signature header on your end.'
+                : 'Ask a company admin to add webhook subscriptions for this workspace.'
+            }
           />
         ) : (
           <Table>

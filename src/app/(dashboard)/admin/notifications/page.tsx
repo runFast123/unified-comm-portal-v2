@@ -65,6 +65,7 @@ export default function NotificationsPage() {
   const [formData, setFormData] = useState(emptyFormData)
   const [slackWebhook, setSlackWebhook] = useState('')
   const [savingWebhook, setSavingWebhook] = useState(false)
+  const [testingSlack, setTestingSlack] = useState(false)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
   const [validationError, setValidationError] = useState<string | null>(null)
 
@@ -257,6 +258,31 @@ export default function NotificationsPage() {
     }
   }
 
+  const handleTestSlack = async () => {
+    const url = slackWebhook.trim()
+    if (!url) {
+      toast.warning('Please enter a Slack webhook URL first.')
+      return
+    }
+    setTestingSlack(true)
+    try {
+      const res = await fetch('/api/admin/notifications/test-slack', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ webhook_url: url }),
+      })
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string }
+      if (res.ok && data.ok) {
+        toast.success('Test message sent to Slack.')
+      } else {
+        toast.error(data.error || `Slack test failed (${res.status}).`)
+      }
+    } catch (err) {
+      toast.error(`Slack test failed: ${err instanceof Error ? err.message : String(err)}`)
+    }
+    setTestingSlack(false)
+  }
+
   const handleSaveWebhook = async () => {
     setSavingWebhook(true)
     setStatusMessage(null)
@@ -320,7 +346,7 @@ export default function NotificationsPage() {
       )}
 
       {/* Slack Webhook Configuration */}
-      <Card title="Slack Integration" description="Configure the Slack webhook for notifications">
+      <Card title="Slack Integration" description="Configure the Slack Incoming Webhook for notifications">
         <div className="flex items-end gap-4">
           <div className="flex-1">
             <Input
@@ -330,15 +356,26 @@ export default function NotificationsPage() {
               icon={<Link className="h-4 w-4" />}
               placeholder="https://hooks.slack.com/services/..."
             />
+            <p className="mt-1 text-xs text-gray-500">
+              Need one? See{' '}
+              <a
+                href="https://api.slack.com/messaging/webhooks"
+                target="_blank"
+                rel="noreferrer"
+                className="text-teal-600 hover:underline"
+              >
+                Slack Incoming Webhooks docs
+              </a>{' '}
+              to create a webhook for your workspace.
+            </p>
           </div>
-          <Button variant="secondary" size="md" onClick={() => {
-            if (!slackWebhook) {
-              toast.warning('Please enter a Slack webhook URL first.')
-              return
-            }
-            toast.info('Slack webhook test: A test message would be sent to the configured webhook URL.')
-          }}>
-            Test Webhook
+          <Button
+            variant="secondary"
+            size="md"
+            onClick={handleTestSlack}
+            loading={testingSlack}
+          >
+            Send test
           </Button>
           <Button size="md" onClick={handleSaveWebhook} loading={savingWebhook}>
             <Save className="h-4 w-4" /> Save

@@ -4,6 +4,7 @@ import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supab
 import { DashboardShell } from '@/components/dashboard/dashboard-shell'
 import { BackgroundPoller } from '@/components/dashboard/background-poller'
 import { KeyboardShortcutProvider } from '@/components/dashboard/keyboard-shortcuts'
+import { AdminOnboardingBanner } from '@/components/dashboard/admin-onboarding-banner'
 import { isSuperAdmin } from '@/lib/auth'
 import type { User } from '@/types/database'
 import type { CompanyOption } from '@/components/dashboard/company-switcher'
@@ -133,6 +134,20 @@ export default async function DashboardLayout({
       : userCompanyId
   const activeCompany = accessibleCompanies.find((c) => c.id === activeCompanyId) ?? null
 
+  // ── Onboarding banner gate ───────────────────────────────────────────
+  // Show the one-time hint to fresh super_admins on a clean install
+  // (single company in the system). Counts via head:true to avoid
+  // pulling rows. Non-fatal — banner just stays hidden if this fails.
+  let showOnboardingBanner = false
+  if (isSuperAdmin(user.role as string)) {
+    try {
+      const { count: companyCount } = await service
+        .from('companies')
+        .select('id', { count: 'exact', head: true })
+      if ((companyCount ?? 0) <= 1) showOnboardingBanner = true
+    } catch { /* non-fatal */ }
+  }
+
   return (
     <DashboardShell
       user={user}
@@ -144,6 +159,9 @@ export default async function DashboardLayout({
       brandAccentColor={activeCompany?.accent_color ?? null}
       brandCompanyName={activeCompany?.name ?? null}
     >
+      {/* One-time onboarding hint for fresh super_admins. Self-hides via
+          localStorage once dismissed; renders nothing for non-admins. */}
+      <AdminOnboardingBanner show={showOnboardingBanner} />
       {/* Silent timer that fires /api/inbox-sync every 2 min while the tab is visible
           so new mail flows in without the user clicking Sync. */}
       <BackgroundPoller />

@@ -223,6 +223,7 @@ export function DashboardShell({
         onClose={() => setSidebarOpen(false)}
         brandLogoUrl={brandLogoUrl}
         brandCompanyName={brandCompanyName}
+        enabledAdminPages={{ timeReports: true }}
       />
 
       {/* Main content area */}

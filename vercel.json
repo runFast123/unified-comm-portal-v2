@@ -10,6 +10,7 @@
     { "path": "/api/cron/teams-poll?shard=2&total=4", "schedule": "*/2 * * * *" },
     { "path": "/api/cron/teams-poll?shard=3&total=4", "schedule": "*/2 * * * *" },
     { "path": "/api/cron/dispatch-scheduled", "schedule": "*/1 * * * *" },
-    { "path": "/api/cron/wake-snoozed", "schedule": "*/1 * * * *" }
+    { "path": "/api/cron/wake-snoozed", "schedule": "*/1 * * * *" },
+    { "path": "/api/cron/garbage-collect", "schedule": "*/5 * * * *" }
   ]
 }

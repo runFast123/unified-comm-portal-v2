@@ -6,6 +6,26 @@ A production-grade, AI-powered multi-channel customer communication platform tha
 
 ---
 
+## Features
+- Multi-tenant architecture (companies, super_admin / company_admin / company_member roles)
+- Channels: Gmail (OAuth), Microsoft Teams (delegated OAuth), WhatsApp Business
+- AI: classify, auto-reply (with budget cap + provider circuit breaker), summarize, smart compose
+- Inbox: routing rules, round-robin assignment, snooze + remind, presence detection,
+  custom statuses + tags per company, smart facet sidebar, conversation merging,
+  activity timeline
+- Compose: undo send (5s), AI smart-compose ghost text, templates with variables,
+  per-user + per-company email signatures
+- Customer ops: out-of-office auto-replies, CSAT surveys
+- Integrations: API tokens (per company), outgoing webhooks (HMAC-signed),
+  Slack notifications
+- Observability: structured metrics, /admin/observability dashboard,
+  per-cron SLI tracking
+- Mobile responsive throughout
+
+For a per-round breakdown of what shipped, see [`CHANGELOG.md`](./CHANGELOG.md).
+
+---
+
 ## Tech Stack
 
 | Layer | Technology | Version |

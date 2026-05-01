@@ -377,12 +377,25 @@ export default function TemplatesPage() {
       <Card>
         {filteredTemplates.length === 0 ? (
           <EmptyState
-            icon={<FileQuestion className="h-12 w-12" />}
-            title="No templates found"
+            icon={FileQuestion}
+            title={templates.length === 0 ? 'No templates yet' : 'No templates found'}
             description={
               templates.length === 0
-                ? 'No reply templates have been created yet. Add your first template to get started.'
+                ? 'Reply templates let your team answer common questions in one click. Create your first template to get started.'
                 : 'Try adjusting your search or filter criteria.'
+            }
+            action={
+              templates.length === 0 ? (
+                <Button variant="primary" onClick={handleOpenAdd}>
+                  <Plus className="h-4 w-4" />
+                  Create your first template
+                </Button>
+              ) : undefined
+            }
+            hint={
+              templates.length === 0
+                ? 'Tip: assign a /shortcut to expand templates inline in the reply composer.'
+                : undefined
             }
           />
         ) : (

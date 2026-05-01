@@ -321,8 +321,31 @@ export default function ContactsPage() {
             title={contacts.length === 0 ? 'No contacts yet' : 'No matching contacts'}
             description={
               contacts.length === 0
-                ? 'Contacts will appear here automatically as customers reach out across email, Teams, or WhatsApp.'
+                ? 'Contacts auto-create as customers reach out across email, Teams, or WhatsApp. Want to import a list instead?'
                 : 'Try clearing your search or filter criteria.'
+            }
+            action={
+              contacts.length === 0 ? (
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  <Link href="/admin/channels">
+                    <Button variant="primary">
+                      <MessageSquare className="h-4 w-4" />
+                      Connect a channel
+                    </Button>
+                  </Link>
+                  <Link href="/admin/integrations">
+                    <Button variant="secondary">
+                      <UserPlus className="h-4 w-4" />
+                      Import contacts
+                    </Button>
+                  </Link>
+                </div>
+              ) : undefined
+            }
+            hint={
+              contacts.length === 0
+                ? 'Contacts populate from inbound conversations — connect a channel to get started.'
+                : undefined
             }
           />
         ) : (

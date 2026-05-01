@@ -177,9 +177,22 @@ export function ApiTokensClient({ initialTokens, knownScopes, canCreate }: Props
       <Card>
         {tokens.length === 0 ? (
           <EmptyState
-            icon={<KeyRound className="h-12 w-12" />}
+            icon={KeyRound}
             title="No API tokens yet"
-            description="Create your first token to wire the portal into an external integration."
+            description="Create your first token to wire the portal into Zapier, n8n, your CRM, or any custom integration."
+            action={
+              canCreate ? (
+                <Button variant="primary" onClick={() => setCreateOpen(true)}>
+                  <Plus className="h-4 w-4" />
+                  Create your first token
+                </Button>
+              ) : undefined
+            }
+            hint={
+              canCreate
+                ? 'The plaintext token is shown ONCE at creation — copy it immediately.'
+                : 'Ask a company admin to mint API tokens for this workspace.'
+            }
           />
         ) : (
           <Table>

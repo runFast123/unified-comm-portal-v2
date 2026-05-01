@@ -97,9 +97,16 @@ export function CompaniesAdminClient({ initialCompanies }: { initialCompanies: C
       <Card>
         {companies.length === 0 ? (
           <EmptyState
-            icon={<Building2 className="h-12 w-12" />}
+            icon={Building2}
             title="No companies yet"
-            description="Create your first company to start onboarding tenants."
+            description="Create your first company to start onboarding tenants. Each company gets its own users, channels, branding, and AI budget."
+            action={
+              <Button variant="primary" onClick={() => setCreateOpen(true)}>
+                <Plus className="h-4 w-4" />
+                Create your first company
+              </Button>
+            }
+            hint="After creating, attach existing channels under the company detail page."
           />
         ) : (
           <Table>

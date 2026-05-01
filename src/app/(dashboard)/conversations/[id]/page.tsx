@@ -21,6 +21,8 @@ import { PresenceBar } from '@/components/dashboard/presence-bar'
 import { MergeButton } from '@/components/dashboard/merge-button'
 import { MergeBanner, type MergedSecondary } from '@/components/dashboard/merge-banner'
 import { CSATSendButton } from '@/components/dashboard/csat-send-button'
+import { TimeTrackingActive } from '@/components/dashboard/time-tracking-active'
+import { ConversationTimeDisplay } from '@/components/dashboard/conversation-time-display'
 import {
   cn,
   getChannelLabel,
@@ -491,6 +493,7 @@ export default async function ConversationPage({
 
       <MarkRead conversationId={id} />
       <ConversationRealtime conversationId={id} />
+      <TimeTrackingActive conversationId={id} />
 
       {/* Merge banner: either "this is a secondary, go to primary" OR
           "this primary has merged-in secondaries (with Unmerge buttons)" */}
@@ -582,6 +585,7 @@ export default async function ConversationPage({
             conversationId={id}
             initialTags={(conversation.tags as string[] | null) ?? []}
           />
+          <ConversationTimeDisplay conversationId={id} />
           <InternalNotes conversationId={id} authorName={currentUserName || undefined} />
           <ActivityTimeline conversationId={id} />
         </div>

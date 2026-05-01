@@ -13,7 +13,8 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@
 import { Modal } from '@/components/ui/modal'
 import { Input } from '@/components/ui/input'
 import { getChannelLabel, timeAgo } from '@/lib/utils'
-import { Search, Filter, ChevronRight, Loader2, Check, AlertCircle, X } from 'lucide-react'
+import { Search, Filter, ChevronRight, Loader2, Check, AlertCircle, X, Plug } from 'lucide-react'
+import { EmptyState } from '@/components/ui/empty-state'
 
 const SPAM_ALLOWLIST_MAX = 50
 
@@ -731,14 +732,30 @@ export default function AccountsPage() {
       {/* Accounts table */}
       <Card>
         {filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 text-gray-500">
-            <p className="font-medium text-gray-700">No accounts found</p>
-            <p className="text-sm mt-1">
-              {accounts.length === 0
-                ? 'No accounts have been configured yet.'
-                : 'Try adjusting your search or filter criteria.'}
-            </p>
-          </div>
+          <EmptyState
+            icon={Plug}
+            title={accounts.length === 0 ? 'No accounts configured' : 'No accounts found'}
+            description={
+              accounts.length === 0
+                ? 'Connect a Gmail, Microsoft Teams, or WhatsApp Business account to start ingesting customer messages.'
+                : 'Try adjusting your search or filter criteria.'
+            }
+            action={
+              accounts.length === 0 ? (
+                <a href="/admin/channels">
+                  <Button variant="primary">
+                    <Plug className="h-4 w-4" />
+                    Connect a channel
+                  </Button>
+                </a>
+              ) : undefined
+            }
+            hint={
+              accounts.length === 0
+                ? 'You can also import existing accounts via the Companies admin page.'
+                : undefined
+            }
+          />
         ) : (
           <div className="space-y-3">
             {(() => {
