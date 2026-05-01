@@ -103,7 +103,10 @@ export async function middleware(request: NextRequest) {
     pathname !== '/login' &&
     pathname !== '/signup' &&
     !pathname.startsWith('/api/') &&
-    !pathname.startsWith('/_next/')
+    !pathname.startsWith('/_next/') &&
+    // Public CSAT survey landing — customers click these from email and
+    // never authenticate. The token in the URL is the auth.
+    !pathname.startsWith('/csat/')
   ) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'

@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { CheckSquare, CheckCheck, Archive, UserPlus, Loader2, Inbox, List, Columns, LayoutGrid, X, Sparkles, User, ShieldAlert, ShieldCheck, Mail, CircleCheck, RefreshCw, Bookmark, BookmarkPlus, Clock, ChevronLeft } from 'lucide-react'
+import { CheckSquare, CheckCheck, Archive, UserPlus, Loader2, Inbox, List, Columns, LayoutGrid, X, Sparkles, User, ShieldAlert, ShieldCheck, Mail, CircleCheck, RefreshCw, Bookmark, BookmarkPlus, Clock, ChevronLeft, Filter } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
 import { InboxRowSkeleton } from '@/components/ui/skeleton'
@@ -12,6 +12,14 @@ import { InboxFiltersBar, type InboxFilters } from '@/components/inbox/inbox-fil
 import { InboxPreview } from '@/components/inbox/inbox-preview'
 import { InboxKanban } from '@/components/inbox/inbox-kanban'
 import { SavedViewModal, getSavedViewIcon } from '@/components/inbox/saved-view-modal'
+import {
+  InboxFacetsSidebar,
+  readFacetFiltersFromSearch,
+  writeFacetFiltersToSearch,
+  type FacetActiveFilters,
+  type FacetFilterKey,
+} from '@/components/dashboard/inbox-facets-sidebar'
+import type { InboxFacets } from '@/app/api/inbox/facets/route'
 import { createClient } from '@/lib/supabase-client'
 import { useToast } from '@/components/ui/toast'
 import { useRealtimeMessages } from '@/hooks/useRealtimeMessages'
@@ -98,6 +106,18 @@ export default function InboxPage() {
       search: '',
     }
   })
+  // ── Smart-inbox sidebar facets ────────────────────────────────────────
+  // Stores extra filter dimensions (urgency, status, assignment) that the
+  // existing top filters bar doesn't expose. URL-backed so refresh survives.
+  const [facetFilters, setFacetFilters] = useState<FacetActiveFilters>(() => {
+    if (typeof window === 'undefined') return {}
+    return readFacetFiltersFromSearch(new URLSearchParams(window.location.search))
+  })
+  const [facets, setFacets] = useState<InboxFacets | null>(null)
+  const [facetsLoading, setFacetsLoading] = useState(false)
+  const [sidebarOpenMobile, setSidebarOpenMobile] = useState(false)
+  const [collapsedSections, setCollapsedSections] = useState<Set<FacetFilterKey>>(new Set())
+
   const INBOX_PAGE_SIZE = 50
   const [items, setItems] = useState<InboxItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -229,6 +249,59 @@ export default function InboxPage() {
       setCurrentUserId(user?.id ?? null)
     }
     getCurrentUser()
+  }, [])
+
+  // ── Smart-inbox sidebar: fetch facets whenever the active filters change.
+  // Counts are scoped server-side; the response also drives chip enable/disable.
+  useEffect(() => {
+    let cancelled = false
+    setFacetsLoading(true)
+    const params = new URLSearchParams()
+    for (const [key, value] of Object.entries(facetFilters)) {
+      if (value) params.set(key, value)
+    }
+    fetch(`/api/inbox/facets?${params.toString()}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: InboxFacets | null) => {
+        if (!cancelled && data) setFacets(data)
+      })
+      .catch(() => { /* network error — keep stale facets */ })
+      .finally(() => { if (!cancelled) setFacetsLoading(false) })
+    return () => { cancelled = true }
+  }, [facetFilters])
+
+  /**
+   * Update facet filters from the sidebar — also writes them to the URL
+   * (so refresh / back-button work) and mirrors the channel/category/
+   * sentiment fields into the existing `filters` state so the inbox query
+   * picks them up server-side too. Multiple filters AND together.
+   */
+  const handleFacetFiltersChange = useCallback((next: FacetActiveFilters) => {
+    setFacetFilters(next)
+    if (typeof window !== 'undefined') {
+      const current = new URLSearchParams(window.location.search)
+      const updated = writeFacetFiltersToSearch(current, next)
+      const qs = updated.toString()
+      window.history.replaceState({}, '', qs ? `/inbox?${qs}` : '/inbox')
+    }
+    // Mirror channel/category/sentiment back to the existing filters state
+    // so the messages query picks them up server-side. Other facets (urgency,
+    // status, assignment) are applied client-side in `filteredItems`.
+    setFilters((prev) => ({
+      ...prev,
+      channel: (next.channel as InboxFilters['channel']) || 'all',
+      category: (next.category as InboxFilters['category']) || 'all',
+      sentiment: (next.sentiment as InboxFilters['sentiment']) || 'all',
+    }))
+  }, [])
+
+  const handleToggleFacetSection = useCallback((key: FacetFilterKey) => {
+    setCollapsedSections((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
   }, [])
 
   // Listen for the global `/` keyboard shortcut and focus the search input.
@@ -665,9 +738,21 @@ export default function InboxPage() {
         const ageHours = (nowMs - new Date(item.timestamp).getTime()) / 36e5
         if (ageHours < viewFilters.age_hours_gt) return false
       }
+      // ── Smart-inbox sidebar filters ───────────────────────────────
+      // Channel/category/sentiment are mirrored into `filters` (above) so
+      // they're already applied. Urgency/status/assignment are sidebar-only.
+      if (facetFilters.urgency && (item.urgency ?? null) !== facetFilters.urgency) return false
+      if (facetFilters.status && (item.conversation_status ?? null) !== facetFilters.status) return false
+      if (facetFilters.assignment) {
+        if (facetFilters.assignment === 'me') {
+          if (!currentUserId || item.assigned_to !== currentUserId) return false
+        } else if (facetFilters.assignment === 'unassigned') {
+          if (item.assigned_to) return false
+        }
+      }
       return true
     })
-  }, [items, filters, myConversationsOnly, currentUserId, activeView, showSnoozed])
+  }, [items, filters, myConversationsOnly, currentUserId, activeView, showSnoozed, facetFilters])
 
   // ─── Bulk-action handlers ────────────────────────────────────────────
   // Each handler runs one bulk operation. Where applicable we use .select()
@@ -920,7 +1005,34 @@ export default function InboxPage() {
   }, [filteredItems, selectedIds, toast, clearSelection, inboxView])
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="flex flex-col md:flex-row md:gap-6 animate-fade-in">
+      {/* Smart inbox facets sidebar — only on the main inbox view (not
+          spam/newsletter). On mobile it lives off-canvas with a "Filters"
+          button to toggle it in. */}
+      {inboxView === 'inbox' && (
+        <>
+          {/* Mobile backdrop */}
+          {sidebarOpenMobile && (
+            <div
+              className="fixed inset-0 z-30 bg-black/30 md:hidden"
+              onClick={() => setSidebarOpenMobile(false)}
+              aria-hidden="true"
+            />
+          )}
+          <InboxFacetsSidebar
+            facets={facets}
+            activeFilters={facetFilters}
+            onChange={handleFacetFiltersChange}
+            open={sidebarOpenMobile ? true : false}
+            onClose={() => setSidebarOpenMobile(false)}
+            collapsedSections={collapsedSections}
+            onToggleSection={handleToggleFacetSection}
+            loading={facetsLoading}
+          />
+        </>
+      )}
+
+      <div className="flex-1 space-y-6 min-w-0">
       {/* New messages banner (Feature 3) */}
       {newMessageCount > 0 && (
         <div
@@ -943,17 +1055,34 @@ export default function InboxPage() {
       <div ref={listTopRef} />
 
       {/* Page header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">
-          {inboxView === 'spam' ? 'Spam / Junk' : inboxView === 'newsletter' ? 'Newsletters' : 'Unified Inbox'}
-        </h1>
-        <p className="mt-1 text-sm text-gray-500">
-          {inboxView === 'spam'
-            ? 'Messages automatically filtered as spam or junk'
-            : inboxView === 'newsletter'
-            ? 'Newsletters, marketing emails, and automated notifications'
-            : 'All pending messages across channels in one place'}
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">
+            {inboxView === 'spam' ? 'Spam / Junk' : inboxView === 'newsletter' ? 'Newsletters' : 'Unified Inbox'}
+          </h1>
+          <p className="mt-1 text-sm text-gray-500">
+            {inboxView === 'spam'
+              ? 'Messages automatically filtered as spam or junk'
+              : inboxView === 'newsletter'
+              ? 'Newsletters, marketing emails, and automated notifications'
+              : 'All pending messages across channels in one place'}
+          </p>
+        </div>
+        {inboxView === 'inbox' && (
+          <button
+            type="button"
+            onClick={() => setSidebarOpenMobile(true)}
+            className="md:hidden inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            aria-label="Open filters"
+          >
+            <Filter size={14} />
+            Filters
+            {(() => {
+              const n = Object.values(facetFilters).filter(Boolean).length
+              return n > 0 ? <span className="rounded-full bg-teal-600 text-white px-2 py-0.5 text-xs">{n}</span> : null
+            })()}
+          </button>
+        )}
       </div>
 
       {/* Dashboard filter banner */}
@@ -1624,6 +1753,7 @@ export default function InboxPage() {
           }
         }}
       />
+      </div>
     </div>
   )
 }

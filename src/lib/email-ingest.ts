@@ -21,6 +21,7 @@ import { evaluateRouting, applyRoutingResult } from '@/lib/routing-engine'
 import { REQUEST_ID_HEADER } from '@/lib/request-id'
 import { isAccountOOO, shouldSendOOOReply, recordOOOReply, substituteOOOVariables } from '@/lib/ooo'
 import { sendEmail } from '@/lib/channel-sender'
+import { fireWebhook } from '@/lib/webhook-dispatcher'
 
 export interface InboundEmailPayload {
   account_id: string
@@ -138,12 +139,29 @@ export async function ingestInboundEmail(
   })
 
   // ── Conversation + message ──────────────────────────────────────
+  // Detect whether this ingest is the FIRST inbound message on its
+  // conversation. We check the message count BEFORE findOrCreateConversation
+  // so the (likely-just-created) conversation either has 0 messages (we
+  // created it) or 1+ (we reactivated an existing one). The downstream
+  // `conversation.created` webhook fires only in the former case.
   const conversationId = await findOrCreateConversation(supabase, {
     account_id,
     channel: 'email',
     participant_name: senderName,
     participant_email: senderEmail,
   })
+  let isNewConversation = false
+  try {
+    const { count: existingMsgCount } = await supabase
+      .from('messages')
+      .select('id', { count: 'exact', head: true })
+      .eq('conversation_id', conversationId)
+    isNewConversation = (existingMsgCount ?? 0) === 0
+  } catch {
+    // If the count check fails we assume it's not a new conversation —
+    // we'd rather miss a `conversation.created` event than fire it twice.
+    isNewConversation = false
+  }
 
   const { data: message, error: msgError } = await supabase
     .from('messages')
@@ -365,6 +383,45 @@ export async function ingestInboundEmail(
     message_id: message.id,
     is_spam: spamResult.isSpam,
   })
+
+  // ── Outgoing webhook fan-out (non-blocking) ─────────────────────
+  // Fire `conversation.created` and `message.received` to any company-
+  // scoped subscribers. Wrapped in try/catch + after() so a slow customer
+  // endpoint or a webhook lookup blip can never block ingest. Spam is
+  // intentionally excluded — customers should not get notified about spam.
+  if (!spamResult.isSpam && accountRow.company_id) {
+    const companyId = accountRow.company_id
+    const eventBase = {
+      account_id,
+      conversation_id: conversationId,
+      channel: 'email' as const,
+      participant: { name: senderName, email: senderEmail },
+    }
+    after(async () => {
+      try {
+        if (isNewConversation) {
+          await fireWebhook('conversation.created', { ...eventBase }, companyId)
+        }
+        await fireWebhook(
+          'message.received',
+          {
+            ...eventBase,
+            message_id: message.id,
+            subject: subject ?? null,
+            body: plainTextBody,
+            received_at: new Date().toISOString(),
+          },
+          companyId,
+        )
+      } catch (whErr) {
+        logError('webhook', 'outgoing_dispatch_failed', whErr instanceof Error ? whErr.message : 'unknown', {
+          request_id: requestId,
+          account_id,
+          conversation_id: conversationId,
+        })
+      }
+    })
+  }
 
   return {
     ok: true,

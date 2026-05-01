@@ -20,6 +20,7 @@ import { SnoozeButton } from '@/components/dashboard/snooze-button'
 import { PresenceBar } from '@/components/dashboard/presence-bar'
 import { MergeButton } from '@/components/dashboard/merge-button'
 import { MergeBanner, type MergedSecondary } from '@/components/dashboard/merge-banner'
+import { CSATSendButton } from '@/components/dashboard/csat-send-button'
 import {
   cn,
   getChannelLabel,
@@ -349,6 +350,30 @@ export default async function ConversationPage({
   const messageCount = (messages || []).length
   const inboundCount = (messages || []).filter((m: any) => m.direction === 'inbound').length
 
+  // ─── CSAT eligibility — used to gate the "Send CSAT" button ────────
+  // Pulls the conversation's account → company → csat_enabled flag.
+  // Best-effort; failure leaves the button hidden (which is the safe default).
+  let csatEnabled = false
+  try {
+    const adminForCsat = await createServiceRoleClient()
+    const { data: csatAccount } = await adminForCsat
+      .from('accounts')
+      .select('company_id')
+      .eq('id', conversation.account_id)
+      .maybeSingle()
+    const csatCompanyId = (csatAccount as { company_id: string | null } | null)?.company_id
+    if (csatCompanyId) {
+      const { data: csatCompany } = await adminForCsat
+        .from('companies')
+        .select('csat_enabled')
+        .eq('id', csatCompanyId)
+        .maybeSingle()
+      csatEnabled = !!(csatCompany as { csat_enabled: boolean | null } | null)?.csat_enabled
+    }
+  } catch {
+    /* keep csatEnabled=false on error */
+  }
+
   return (
     <div className="flex h-[calc(100vh-4rem)] flex-col">
       {/* Conversation header */}
@@ -424,6 +449,12 @@ export default async function ConversationPage({
               conversationId={id}
               currentAssignedTo={conversation.assigned_to || null}
               currentAssignedName={assignedUser?.full_name || assignedUser?.email || null}
+            />
+            <CSATSendButton
+              conversationId={id}
+              csatEnabled={csatEnabled}
+              status={status}
+              hasParticipantEmail={!!conversation.participant_email}
             />
           </div>
         </div>

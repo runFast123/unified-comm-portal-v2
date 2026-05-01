@@ -18,10 +18,12 @@
  * (verifyAccountAccess — same gate /snooze uses).
  */
 
-import { NextResponse } from 'next/server'
+import { NextResponse, after } from 'next/server'
 
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase-server'
 import { verifyAccountAccess } from '@/lib/api-helpers'
+import { fireWebhook } from '@/lib/webhook-dispatcher'
+import { maybeAutoSendCSAT } from './csat-hook'
 import type { ConversationStatus } from '@/types/database'
 
 const VALID_STATUSES: readonly ConversationStatus[] = [
@@ -139,6 +141,49 @@ export async function POST(
       }
     } catch {
       /* non-critical */
+    }
+
+    // ── CSAT auto-send (best-effort) ─────────────────────────────────
+    // When the status flips TO `resolved`, optionally email the customer
+    // a one-click rating link. Wrapped in try/catch — must NEVER block
+    // the status update from succeeding. Skips when the company hasn't
+    // opted in, when there's no customer email, or when a CSAT was sent
+    // for this conversation in the last 30 days.
+    if (hasStatus && body.status === 'resolved' && conv.status !== 'resolved') {
+      try {
+        await maybeAutoSendCSAT(admin, conversationId, conv.account_id)
+      } catch (err) {
+        console.error('CSAT auto-send failed (non-blocking):', err)
+      }
+
+      // ── Outgoing webhook: conversation.resolved ───────────────────
+      // Fan out to any company-scoped subscribers. after() so a slow
+      // customer endpoint can't add latency to the click. Wrapped in
+      // try/catch — webhook failures must never block the status update.
+      try {
+        const { data: account } = await admin
+          .from('accounts')
+          .select('company_id')
+          .eq('id', conv.account_id)
+          .maybeSingle()
+        const companyId = (account as { company_id: string | null } | null)?.company_id
+        if (companyId) {
+          after(() =>
+            fireWebhook(
+              'conversation.resolved',
+              {
+                conversation_id: conversationId,
+                account_id: conv.account_id,
+                resolved_by: user.id,
+                resolved_at: new Date().toISOString(),
+              },
+              companyId,
+            ).catch(() => {/* dispatcher logs internally */}),
+          )
+        }
+      } catch (err) {
+        console.error('conversation.resolved webhook fire failed (non-blocking):', err)
+      }
     }
 
     return NextResponse.json({ success: true })

@@ -31,6 +31,8 @@ import {
   Bookmark,
   Tags,
   Building2,
+  Smile,
+  Webhook,
 } from 'lucide-react'
 import { signOut } from '@/lib/auth-actions'
 import { useRealtimeMessages } from '@/hooks/useRealtimeMessages'
@@ -66,7 +68,10 @@ const adminNavItems = [
   { label: 'AI Settings', href: '/admin/ai-settings', icon: Brain },
   { label: 'Notifications', href: '/admin/notifications', icon: Bell },
   { label: 'Statuses & Tags', href: '/admin/taxonomy', icon: Tags },
+  { label: 'CSAT', href: '/admin/csat', icon: Smile },
   { label: 'Company Signatures', href: '/admin/company-signatures', icon: FileText },
+  { label: 'API Tokens', href: '/admin/api-tokens', icon: KeyRound },
+  { label: 'Webhooks', href: '/admin/webhooks', icon: Webhook },
   { label: 'System Health', href: '/admin/health', icon: Activity },
   { label: 'System Logs', href: '/admin/logs', icon: FileText },
   { label: 'Users', href: '/admin/users', icon: UserCog },

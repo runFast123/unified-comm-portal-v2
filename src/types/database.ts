@@ -66,6 +66,40 @@ export interface Company {
    *  null when the admin hasn't configured one. Used as the second-tier
    *  source for `resolveSignature()` when a user has no override. */
   default_email_signature?: string | null
+  /** Whether to auto-send a CSAT survey when a conversation is marked
+   *  resolved. Off by default — opt-in per company. */
+  csat_enabled?: boolean | null
+  /** Subject line of the auto-sent CSAT email. */
+  csat_email_subject?: string | null
+  /** Body of the auto-sent CSAT email. Use `{{survey_url}}` placeholder
+   *  for the public rating link. NULL falls back to a default template. */
+  csat_email_body?: string | null
+}
+
+/**
+ * One row per CSAT (customer satisfaction) survey link emailed to a
+ * customer. Lifecycle:
+ *   1) `createSurvey()` mints a row + signed token. `responded_at`/`rating`
+ *      stay NULL until the customer clicks the link.
+ *   2) `recordResponse()` fills `responded_at`, `rating`, optional `feedback`.
+ *      Second submit returns 409 (one-time only).
+ *   3) Surveys past `expires_at` are read-only — landing page shows
+ *      "expired".
+ */
+export interface CSATSurvey {
+  id: string
+  conversation_id: string
+  account_id: string
+  agent_user_id: string | null
+  customer_email: string | null
+  /** HMAC-signed; embedded in the public URL. */
+  token: string
+  sent_at: string
+  responded_at: string | null
+  /** 1..5; NULL until the customer responds. */
+  rating: number | null
+  feedback: string | null
+  expires_at: string
 }
 
 export interface Account {
