@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase-server'
 import { sendEmail, sendTeams, sendWhatsApp } from '@/lib/channel-sender'
-import { checkRateLimit } from '@/lib/api-helpers'
+import { checkRateLimit, verifyAccountAccess } from '@/lib/api-helpers'
 import { getRequestId } from '@/lib/request-id'
 import { logError, logInfo } from '@/lib/logger'
 import { resolveSignature, appendSignatureToBody } from '@/lib/email-signature'
@@ -69,15 +69,18 @@ export async function POST(request: Request) {
 
     const admin = await createServiceRoleClient()
 
-    // Account scope: admins can send for any account; others must match account_id.
+    // Account scope: super_admin bypasses scoping; everyone else (including
+    // company admins / company members) must have access to the target account
+    // via verifyAccountAccess() — which checks both legacy single-account users
+    // and company-scoped users.
     const { data: profile } = await admin
       .from('users')
       .select('role, account_id')
       .eq('id', user.id)
       .maybeSingle()
     if (!profile) return NextResponse.json({ error: 'User profile not found', request_id: requestId }, { status: 403 })
-    const isAdmin = profile.role === 'admin'
-    if (!isAdmin && profile.account_id !== account_id) {
+    const hasAccountAccess = await verifyAccountAccess(user.id, account_id)
+    if (!hasAccountAccess) {
       return NextResponse.json({ error: 'Forbidden: account scope mismatch', request_id: requestId }, { status: 403 })
     }
 

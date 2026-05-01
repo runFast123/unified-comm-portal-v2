@@ -20,6 +20,7 @@ import { NextResponse } from 'next/server'
 
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase-server'
 import { getCurrentUser, isCompanyAdmin, isSuperAdmin } from '@/lib/auth'
+import { validatePublicHttpsUrl } from '@/lib/url-validator'
 
 interface CreateBody {
   url?: unknown
@@ -33,24 +34,11 @@ const KNOWN_EVENTS = [
   'message.received',
 ] as const
 
-const MAX_URL_LEN = 2048
 const MAX_EVENTS = 16
 
 function isValidEventName(s: unknown): s is string {
   if (typeof s !== 'string') return false
   return /^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$/.test(s) && s.length <= 64
-}
-
-function isValidHttpsUrl(s: unknown): s is string {
-  if (typeof s !== 'string') return false
-  if (s.length > MAX_URL_LEN) return false
-  try {
-    const u = new URL(s)
-    // Webhook targets must be HTTP(S) — no file://, ftp://, etc.
-    return u.protocol === 'https:' || u.protocol === 'http:'
-  } catch {
-    return false
-  }
 }
 
 async function getSession(): Promise<
@@ -113,8 +101,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
 
-  if (!isValidHttpsUrl(body.url)) {
-    return NextResponse.json({ error: 'url must be a valid http(s) URL' }, { status: 400 })
+  // FIX: SSRF-resistant validation — requires https://, rejects private IP
+  // ranges, internal hostnames, and unresolvable hosts. See url-validator.ts.
+  // TODO(dns-rebinding): re-validate the resolved IP at dispatch time.
+  if (typeof body.url !== 'string') {
+    return NextResponse.json({ error: 'url must be a string' }, { status: 400 })
+  }
+  const urlCheck = await validatePublicHttpsUrl(body.url)
+  if (!urlCheck.ok) {
+    return NextResponse.json({ error: urlCheck.error }, { status: 400 })
   }
 
   if (!Array.isArray(body.events) || body.events.length === 0) {

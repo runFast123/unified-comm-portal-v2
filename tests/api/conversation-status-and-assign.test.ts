@@ -36,7 +36,15 @@ const fixture = {
   accessAllowed: true,
   inserts: [] as Array<{ table: string; payload: Record<string, unknown> }>,
   updates: [] as Array<{ table: string; payload: Record<string, unknown> }>,
-  userLookup: null as { full_name: string | null; email: string } | null,
+  // The H6 fix in /assign now does THREE separate users/accounts lookups:
+  //   1. assignee (full_name, email, company_id, role)
+  //   2. account → company_id (so we can compare against assignee.company_id)
+  //   3. caller's role (super_admin bypasses the company match check)
+  // The mock returns these via three separate fixture slots so each test can
+  // shape the auth scenario it cares about.
+  userLookup: null as { full_name: string | null; email: string; company_id?: string | null; role?: string } | null,
+  accountLookup: { company_id: 'co-1' } as { company_id: string | null } | null,
+  callerProfile: { role: 'super_admin' } as { role: string } | null,
   updateError: null as { message: string } | null,
 }
 
@@ -51,10 +59,14 @@ function makeServerClient() {
 function makeServiceClient() {
   return {
     from: (table: string) => {
+      let lastEqId: string | null = null
       const chain: any = {
         _table: table,
         select: () => chain,
-        eq: () => chain,
+        eq: (col: string, val: unknown) => {
+          if (col === 'id' && typeof val === 'string') lastEqId = val
+          return chain
+        },
         insert: (payload: Record<string, unknown>) => {
           fixture.inserts.push({ table, payload })
           return Promise.resolve({ data: null, error: null })
@@ -69,7 +81,17 @@ function makeServiceClient() {
           if (table === 'conversations') {
             return { data: fixture.conversation, error: null }
           }
+          if (table === 'accounts') {
+            return { data: fixture.accountLookup, error: null }
+          }
           if (table === 'users') {
+            // The route does two distinct user lookups: assignee (by user_id
+            // from body) and caller (by auth.uid). When the .eq filter
+            // matches the calling user, return the caller fixture; otherwise
+            // return the assignee fixture (legacy behavior).
+            if (lastEqId && fixture.user && lastEqId === fixture.user.id) {
+              return { data: fixture.callerProfile, error: null }
+            }
             return { data: fixture.userLookup, error: null }
           }
           return { data: null, error: null }
@@ -118,6 +140,8 @@ beforeEach(() => {
   fixture.inserts = []
   fixture.updates = []
   fixture.userLookup = null
+  fixture.accountLookup = { company_id: 'co-1' }
+  fixture.callerProfile = { role: 'super_admin' }
   fixture.updateError = null
 })
 
@@ -253,7 +277,10 @@ describe('POST /api/conversations/[id]/assign', () => {
   })
 
   it('200 happy path: assigns + writes a conversation.assigned audit row', async () => {
-    fixture.userLookup = { full_name: 'Aman', email: 'aman@x.example' }
+    // H6 fix: assignee must include company_id matching the conversation's
+    // account.company_id (or caller is super_admin, which the default
+    // callerProfile fixture sets).
+    fixture.userLookup = { full_name: 'Aman', email: 'aman@x.example', company_id: 'co-1', role: 'company_member' }
     const res = await POST_ASSIGN(
       jsonReq('http://localhost/api/conversations/conv-1/assign', { user_id: 'user-2' }),
       ctx('conv-1'),
@@ -294,6 +321,7 @@ describe('POST /api/conversations/[id]/assign', () => {
       account_id: 'acct-1',
       assigned_to: 'user-2',
     }
+    fixture.userLookup = { full_name: 'Aman', email: 'aman@x.example', company_id: 'co-1', role: 'company_member' }
     const res = await POST_ASSIGN(
       jsonReq('http://localhost/api/conversations/conv-1/assign', { user_id: 'user-2' }),
       ctx('conv-1'),

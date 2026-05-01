@@ -11,18 +11,23 @@
 
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase-server'
+import { isCompanyAdmin, isSuperAdmin } from '@/lib/auth'
 
 interface UpdateBody {
   default_email_signature?: string | null
 }
 
-// Allowed roles for editing the company default signature. We accept the
-// modern role names (`super_admin`, `company_admin`) introduced by the
-// multi-tenancy migration AND the legacy `admin` role so the route works
-// on either side of that rollout.
-const SIG_EDIT_ROLES = new Set(['super_admin', 'admin', 'company_admin'])
-
-async function requireAdmin() {
+/**
+ * Auth gate for the company-default signature endpoints.
+ *
+ * Required: caller must be (a) super_admin (cross-tenant) OR
+ * (b) a company_admin/admin whose `company_id` matches the URL `:id`.
+ *
+ * FIX: previously this only checked the role; a company_admin of company A
+ * could overwrite company B's signature. We now require the caller's
+ * `company_id` to equal the target `:id` for non-super_admin roles.
+ */
+async function requireAdminFor(companyId: string) {
   const supabase = await createServerSupabaseClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { ok: false as const, status: 401, error: 'Unauthorized' }
@@ -30,11 +35,22 @@ async function requireAdmin() {
   const admin = await createServiceRoleClient()
   const { data: profile } = await admin
     .from('users')
-    .select('role')
+    .select('role, company_id')
     .eq('id', user.id)
     .maybeSingle()
-  if (!profile?.role || !SIG_EDIT_ROLES.has(profile.role as string)) {
+  if (!profile?.role) {
     return { ok: false as const, status: 403, error: 'Admin only' }
+  }
+  const role = profile.role as string
+  if (isSuperAdmin(role)) {
+    return { ok: true as const, admin, userId: user.id }
+  }
+  if (!isCompanyAdmin(role)) {
+    return { ok: false as const, status: 403, error: 'Admin only' }
+  }
+  // Non-super_admin must belong to the target company.
+  if ((profile as { company_id?: string | null }).company_id !== companyId) {
+    return { ok: false as const, status: 403, error: 'Forbidden: cross-company access denied' }
   }
   return { ok: true as const, admin, userId: user.id }
 }
@@ -43,9 +59,9 @@ export async function GET(
   _request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  const gate = await requireAdmin()
-  if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: gate.status })
   const { id } = await context.params
+  const gate = await requireAdminFor(id)
+  if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: gate.status })
 
   const { data, error } = await gate.admin
     .from('companies')
@@ -61,9 +77,9 @@ export async function POST(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  const gate = await requireAdmin()
-  if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: gate.status })
   const { id } = await context.params
+  const gate = await requireAdminFor(id)
+  if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: gate.status })
 
   let body: UpdateBody
   try {

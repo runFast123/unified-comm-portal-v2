@@ -2,6 +2,12 @@ import { NextResponse } from 'next/server'
 
 import { logAudit } from '@/lib/audit'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase-server'
+import {
+  getCurrentUser,
+  isCompanyAdmin,
+  isSuperAdmin,
+  getAllowedAccountIds,
+} from '@/lib/auth'
 
 interface ContactPatchBody {
   display_name?: unknown
@@ -73,8 +79,61 @@ function validatePatch(body: ContactPatchBody): { ok: true; patch: ValidatedPatc
 }
 
 /**
+ * Authorise a caller to act on `contactId`.
+ *
+ * Rules:
+ *   - super_admin → always allowed (cross-tenant).
+ *   - other roles → must be (a) company-admin/admin/company-member AND
+ *     (b) have at least one conversation referencing this contact whose
+ *     `account_id` is in the caller's allowed account set.
+ *
+ * For the bare PATCH path we accept any company-scoped role that can see
+ * the contact (the route used to require zero auth). DELETE additionally
+ * requires `isCompanyAdmin` privilege.
+ */
+async function authorizeContactAccess(
+  userId: string,
+  contactId: string,
+  opts: { requireAdmin: boolean },
+): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+  const profile = await getCurrentUser(userId)
+  if (!profile) return { ok: false, status: 403, error: 'Forbidden' }
+
+  // super_admin bypass
+  if (isSuperAdmin(profile.role)) return { ok: true }
+
+  // For DELETE we additionally require company-admin.
+  if (opts.requireAdmin && !isCompanyAdmin(profile.role)) {
+    return { ok: false, status: 403, error: 'Forbidden: admin only' }
+  }
+
+  // Caller must have access to at least one conversation that references
+  // this contact, and that conversation's account must be in their scope.
+  const allowed = await getAllowedAccountIds(userId)
+  // null sentinel = super_admin (already handled). Empty set = deny.
+  if (!allowed || allowed.size === 0) return { ok: false, status: 403, error: 'Forbidden' }
+
+  const admin = await createServiceRoleClient()
+  const { data: hits } = await admin
+    .from('conversations')
+    .select('id, account_id')
+    .eq('contact_id', contactId)
+    .in('account_id', Array.from(allowed))
+    .limit(1)
+
+  if (!hits || hits.length === 0) {
+    return { ok: false, status: 403, error: 'Forbidden' }
+  }
+  return { ok: true }
+}
+
+/**
  * PATCH /api/contacts/:id — partial update for display_name, notes, tags, is_vip.
- * Session-auth (any signed-in user). Mutations are audit-logged.
+ *
+ * SECURITY: previously anyone signed in could mutate any contact (no role
+ * or scope check). Now requires the caller to share at least one
+ * conversation with this contact within their company-scoped account set,
+ * with super_admin bypass.
  */
 export async function PATCH(
   request: Request,
@@ -111,6 +170,12 @@ export async function PATCH(
       return NextResponse.json({ error: 'Contact not found' }, { status: 404 })
     }
 
+    // FIX: gate on company-scoped conversation membership.
+    const authz = await authorizeContactAccess(user.id, id, { requireAdmin: false })
+    if (!authz.ok) {
+      return NextResponse.json({ error: authz.error }, { status: authz.status })
+    }
+
     const { data: updated, error } = await admin
       .from('contacts')
       .update(validation.patch)
@@ -143,9 +208,12 @@ export async function PATCH(
 
 /**
  * DELETE /api/contacts/:id — admin-only hard delete.
- * The conversations.contact_id FK is set to ON DELETE SET NULL by the
- * migration that added it, so existing conversations are preserved with
- * their `contact_id` cleared.
+ *
+ * SECURITY: previously this used the legacy `role === 'admin'` check, which
+ * left out modern role names AND let a company-admin of company A delete
+ * a contact belonging to company B. Now requires (super_admin) OR
+ * (company-admin AND share at least one conversation with the contact in
+ * the caller's allowed accounts).
  */
 export async function DELETE(
   _request: Request,
@@ -162,14 +230,6 @@ export async function DELETE(
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const admin = await createServiceRoleClient()
-    const { data: profile } = await admin
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .maybeSingle()
-    if (profile?.role !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden: admin only' }, { status: 403 })
-    }
 
     const { data: existing } = await admin
       .from('contacts')
@@ -178,6 +238,12 @@ export async function DELETE(
       .maybeSingle()
     if (!existing) {
       return NextResponse.json({ error: 'Contact not found' }, { status: 404 })
+    }
+
+    // FIX: company-admin role + scoped conversation match (super_admin bypass).
+    const authz = await authorizeContactAccess(user.id, id, { requireAdmin: true })
+    if (!authz.ok) {
+      return NextResponse.json({ error: authz.error }, { status: authz.status })
     }
 
     const { error } = await admin.from('contacts').delete().eq('id', id)

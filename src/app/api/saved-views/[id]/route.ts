@@ -5,6 +5,7 @@ import {
   createServerSupabaseClient,
   createServiceRoleClient,
 } from '@/lib/supabase-server'
+import { isCompanyAdmin } from '@/lib/auth'
 
 export async function DELETE(
   _request: Request,
@@ -36,7 +37,8 @@ export async function DELETE(
       .select('role')
       .eq('id', user.id)
       .maybeSingle()
-    isAdmin = profile?.role === 'admin'
+    // isCompanyAdmin covers super_admin / admin / company_admin.
+    isAdmin = isCompanyAdmin(profile?.role)
     if (!isAdmin) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }

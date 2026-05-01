@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase-server'
+import { verifyAccountAccess } from '@/lib/api-helpers'
 
 /**
  * DELETE /api/scheduled-messages/:id
@@ -28,7 +29,6 @@ export async function DELETE(
       .eq('id', user.id)
       .maybeSingle()
     if (!profile) return NextResponse.json({ error: 'User profile not found' }, { status: 403 })
-    const isAdmin = profile.role === 'admin'
 
     const { data: row } = await admin
       .from('scheduled_messages')
@@ -37,7 +37,11 @@ export async function DELETE(
       .maybeSingle()
     if (!row) return NextResponse.json({ error: 'Scheduled message not found' }, { status: 404 })
 
-    if (!isAdmin && profile.account_id !== row.account_id) {
+    // Account scope: super_admin bypasses; everyone else (company admins,
+    // company members, legacy single-account users) must have access to the
+    // row's account via verifyAccountAccess().
+    const hasAccountAccess = await verifyAccountAccess(user.id, row.account_id)
+    if (!hasAccountAccess) {
       return NextResponse.json({ error: 'Forbidden: account scope mismatch' }, { status: 403 })
     }
     if (row.status !== 'pending') {

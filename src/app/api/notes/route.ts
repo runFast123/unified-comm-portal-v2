@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import nodemailer from 'nodemailer'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase-server'
 import { parseMentions, dedupeMentionUserIds } from '@/lib/mentions'
+import { verifyAccountAccess } from '@/lib/api-helpers'
+import { getAllowedAccountIds } from '@/lib/auth'
 
 interface CreateNoteBody {
   conversation_id?: string
@@ -66,17 +68,25 @@ export async function POST(request: Request) {
 
   const admin = await createServiceRoleClient()
 
-  // Confirm the conversation exists. We don't strictly enforce account scope
-  // here because the notes UI is rendered inside a conversation page that the
-  // user has already accessed via RLS-protected queries — but we do reject
-  // unknown IDs so we never create orphaned notes.
+  // FIX: ALWAYS enforce account scope. Previously we relied on the UI gating
+  // access — that's not enough; the route is reachable directly. Look up
+  // account_id and check via verifyAccountAccess (super_admin / company /
+  // legacy single-account scope all handled).
   const { data: conv } = await admin
     .from('conversations')
-    .select('id')
+    .select('id, account_id')
     .eq('id', conversationId)
     .maybeSingle()
   if (!conv) {
     return NextResponse.json({ error: 'Conversation not found' }, { status: 404 })
+  }
+
+  const hasAccountAccess = await verifyAccountAccess(
+    authUser.id,
+    conv.account_id as string,
+  )
+  if (!hasAccountAccess) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
   // Insert the note
@@ -109,12 +119,26 @@ export async function POST(request: Request) {
     // Validate each mentioned user actually exists — silently drop any that
     // don't (the autocomplete should never produce bogus IDs but defense in
     // depth is cheap).
-    const { data: validUsers } = await admin
+    const { data: validUsersRaw } = await admin
       .from('users')
       .select('id, full_name, email, account_id')
       .in('id', uniqueUserIds)
 
-    const validIds = new Set((validUsers || []).map((u) => u.id as string))
+    // FIX: Restrict mentions to users whose account_id resolves to a company
+    // in the caller's allowed account list. Cross-company mentions are
+    // silently dropped (treated as if the user does not exist) — same
+    // shape as the autocomplete, which already filters by company scope.
+    const callerAllowed = await getAllowedAccountIds(authUser.id)
+    const validUsers = (validUsersRaw || []).filter((u) => {
+      // null sentinel = super_admin → no scope restriction.
+      if (callerAllowed === null) return true
+      const acct = (u as { account_id?: string | null }).account_id
+      // Users with no account_id are out-of-scope for non-super_admin.
+      if (!acct) return false
+      return callerAllowed.has(acct)
+    })
+
+    const validIds = new Set(validUsers.map((u) => u.id as string))
     const rows = uniqueUserIds
       .filter((uid) => validIds.has(uid) && uid !== authUser.id) // don't notify self
       .map((uid) => ({

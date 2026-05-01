@@ -5,6 +5,8 @@ import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supab
 import { GMAIL_OAUTH_SCOPES } from '@/lib/gmail-oauth'
 import { getGoogleOAuth } from '@/lib/integration-settings'
 import { signState } from '@/lib/oauth-state'
+import { isCompanyAdmin, isSuperAdmin } from '@/lib/auth'
+import { verifyAccountAccess } from '@/lib/api-helpers'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,8 +25,12 @@ async function requireAdmin() {
     .select('role')
     .eq('id', user.id)
     .maybeSingle()
-  if (profile?.role !== 'admin') return { ok: false as const, status: 403, error: 'Admin only' }
-  return { ok: true as const }
+  // Allow super_admin (cross-tenant) and company-level admins (company-scoped).
+  // Account-level scoping is enforced via verifyAccountAccess() below.
+  if (!profile || (!isSuperAdmin(profile.role) && !isCompanyAdmin(profile.role))) {
+    return { ok: false as const, status: 403, error: 'Admin only' }
+  }
+  return { ok: true as const, userId: user.id }
 }
 
 export async function GET(request: Request) {
@@ -37,6 +43,13 @@ export async function GET(request: Request) {
   const accountId = url.searchParams.get('account_id')
   if (!accountId) {
     return NextResponse.json({ error: 'account_id required' }, { status: 400 })
+  }
+
+  // Account scope: company admins can only OAuth accounts in their own company.
+  // super_admin bypasses this check inside verifyAccountAccess().
+  const allowed = await verifyAccountAccess(gate.userId, accountId)
+  if (!allowed) {
+    return NextResponse.json({ error: 'Account not found' }, { status: 404 })
   }
 
   // Fail fast if OAuth creds aren't configured (DB or env) — otherwise the

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase-server'
-import { checkRateLimit } from '@/lib/api-helpers'
+import { checkRateLimit, verifyAccountAccess } from '@/lib/api-helpers'
 
 export const runtime = 'nodejs'
 
@@ -92,7 +92,9 @@ export async function POST(request: Request) {
 
     const admin = await createServiceRoleClient()
 
-    // Account scope: admin or matching account_id, same check as /api/send.
+    // Account scope: super_admin bypasses; everyone else (company admins,
+    // company members, legacy single-account users) must have access to the
+    // conversation's account via verifyAccountAccess().
     const { data: profile } = await admin
       .from('users')
       .select('role, account_id')
@@ -107,8 +109,8 @@ export async function POST(request: Request) {
       .maybeSingle()
     if (!conv) return NextResponse.json({ error: 'Conversation not found' }, { status: 404 })
 
-    const isAdmin = profile.role === 'admin'
-    if (!isAdmin && profile.account_id !== conv.account_id) {
+    const hasAccountAccess = await verifyAccountAccess(user.id, conv.account_id)
+    if (!hasAccountAccess) {
       return NextResponse.json({ error: 'Forbidden: account scope mismatch' }, { status: 403 })
     }
 

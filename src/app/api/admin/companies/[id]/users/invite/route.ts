@@ -145,6 +145,26 @@ export async function POST(
   let userRow: Record<string, unknown> | null = null
 
   if (existing) {
+    // FIX: hostile-takeover guard. If the existing user is already attached
+    // to a *different* company, only super_admin can move them. A
+    // company_admin must NOT be able to silently steal a user from another
+    // company by inviting their email address.
+    const existingCompanyId = (existing as { company_id?: string | null }).company_id ?? null
+    const callerProfile = await getCurrentUser(gate.userId)
+    if (
+      existingCompanyId &&
+      existingCompanyId !== id &&
+      !isSuperAdmin(callerProfile?.role ?? null)
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            'User belongs to another company. Ask a super_admin to transfer them.',
+        },
+        { status: 409 },
+      )
+    }
+
     const patch: Record<string, unknown> = {
       role,
       company_id: id,

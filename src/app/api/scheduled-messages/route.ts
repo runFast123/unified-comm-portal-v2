@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase-server'
-import { checkRateLimit } from '@/lib/api-helpers'
+import { checkRateLimit, verifyAccountAccess } from '@/lib/api-helpers'
+import { getAllowedAccountIds, isSuperAdmin } from '@/lib/auth'
 
 // Reject anything scheduled more than a year out. Keeps runaway/malicious
 // payloads from squatting on the scheduled-messages table forever.
@@ -67,14 +68,15 @@ export async function POST(request: Request) {
 
     const admin = await createServiceRoleClient()
 
-    // Account scope: admin or same account_id as the conversation.
+    // Account scope: super_admin bypasses; everyone else (company admins,
+    // company members, legacy single-account users) must have access to the
+    // conversation's account via verifyAccountAccess().
     const { data: profile } = await admin
       .from('users')
       .select('role, account_id')
       .eq('id', user.id)
       .maybeSingle()
     if (!profile) return NextResponse.json({ error: 'User profile not found' }, { status: 403 })
-    const isAdmin = profile.role === 'admin'
 
     const { data: conv } = await admin
       .from('conversations')
@@ -82,7 +84,8 @@ export async function POST(request: Request) {
       .eq('id', conversation_id)
       .maybeSingle()
     if (!conv) return NextResponse.json({ error: 'Conversation not found' }, { status: 404 })
-    if (!isAdmin && profile.account_id !== conv.account_id) {
+    const hasAccountAccess = await verifyAccountAccess(user.id, conv.account_id)
+    if (!hasAccountAccess) {
       return NextResponse.json({ error: 'Forbidden: account scope mismatch' }, { status: 403 })
     }
     if (conv.channel !== channel) {
@@ -150,7 +153,6 @@ export async function GET(request: Request) {
       .eq('id', user.id)
       .maybeSingle()
     if (!profile) return NextResponse.json({ error: 'User profile not found' }, { status: 403 })
-    const isAdmin = profile.role === 'admin'
 
     const url = new URL(request.url)
     const conversationId = url.searchParams.get('conversation_id')
@@ -161,9 +163,14 @@ export async function GET(request: Request) {
       .eq('status', 'pending')
       .order('scheduled_for', { ascending: true })
 
-    if (!isAdmin) {
-      if (!profile.account_id) return NextResponse.json({ items: [] })
-      query = query.eq('account_id', profile.account_id)
+    // super_admin sees everything (allowed === null); everyone else is scoped
+    // to the union of accounts in their company (or their single account_id
+    // for legacy users with no company_id).
+    if (!isSuperAdmin(profile.role)) {
+      const allowed = await getAllowedAccountIds(user.id)
+      const ids = allowed ? Array.from(allowed) : []
+      if (ids.length === 0) return NextResponse.json({ items: [] })
+      query = query.in('account_id', ids)
     }
     if (conversationId) {
       query = query.eq('conversation_id', conversationId)

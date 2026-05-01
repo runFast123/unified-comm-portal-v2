@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase-server'
 import { pollAllEmailAccounts, pollEmailAccountsFor } from '@/lib/email-poller'
 import { pollAllTeamsAccounts, pollTeamsAccountsFor } from '@/lib/teams-poller'
+import { getAllowedAccountIds, isSuperAdmin } from '@/lib/auth'
 
 // In-flight guard to stop users double-firing the pollers from the UI.
 // (Process-level; resets on server restart.)
@@ -45,10 +46,17 @@ export async function POST(request: Request) {
     })
   }
 
-  const isAdmin = profile.role === 'admin'
-  if (!isAdmin && !profile.account_id) {
-    // Non-admin with no account assignment: nothing safe to poll.
-    return NextResponse.json({ started: false, reason: 'no_account' })
+  // super_admin polls everything (cross-tenant). Everyone else (company
+  // admins, company members, legacy single-account users) is scoped to the
+  // accounts in their company / their single account.
+  const isSuper = isSuperAdmin(profile.role)
+  let scopedIds: string[] = []
+  if (!isSuper) {
+    const allowed = await getAllowedAccountIds(user.id)
+    scopedIds = allowed ? Array.from(allowed) : []
+    if (scopedIds.length === 0) {
+      return NextResponse.json({ started: false, reason: 'no_account' })
+    }
   }
 
   running = true
@@ -58,16 +66,15 @@ export async function POST(request: Request) {
   // Kick off both pollers; don't block the response.
   ;(async () => {
     try {
-      if (isAdmin) {
+      if (isSuper) {
         await Promise.allSettled([
           pollAllEmailAccounts(origin),
           pollAllTeamsAccounts(origin),
         ])
       } else {
-        const ids = [profile.account_id as string]
         await Promise.allSettled([
-          pollEmailAccountsFor(ids, origin),
-          pollTeamsAccountsFor(ids, origin),
+          pollEmailAccountsFor(scopedIds, origin),
+          pollTeamsAccountsFor(scopedIds, origin),
         ])
       }
     } catch (err) {

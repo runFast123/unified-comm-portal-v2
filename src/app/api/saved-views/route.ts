@@ -14,6 +14,7 @@ import {
   createServiceRoleClient,
 } from '@/lib/supabase-server'
 import type { SavedViewFilters } from '@/types/database'
+import { isCompanyAdmin, isSuperAdmin } from '@/lib/auth'
 
 interface SavedViewBody {
   id?: string
@@ -65,7 +66,13 @@ function sanitizeFilters(input: unknown): SavedViewFilters {
 }
 
 async function getSession(): Promise<
-  | { ok: true; userId: string; isAdmin: boolean }
+  | {
+      ok: true
+      userId: string
+      isSuper: boolean
+      isAdmin: boolean
+      companyId: string | null
+    }
   | { ok: false; status: number; error: string }
 > {
   const supabase = await createServerSupabaseClient()
@@ -77,10 +84,17 @@ async function getSession(): Promise<
   const admin = await createServiceRoleClient()
   const { data: profile } = await admin
     .from('users')
-    .select('role')
+    .select('role, company_id')
     .eq('id', user.id)
     .maybeSingle()
-  return { ok: true, userId: user.id, isAdmin: profile?.role === 'admin' }
+  return {
+    ok: true,
+    userId: user.id,
+    isSuper: isSuperAdmin(profile?.role),
+    // isCompanyAdmin covers super_admin / admin / company_admin (post-migration).
+    isAdmin: isCompanyAdmin(profile?.role),
+    companyId: (profile?.company_id as string | null) ?? null,
+  }
 }
 
 export async function GET() {
@@ -88,22 +102,55 @@ export async function GET() {
   if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: gate.status })
 
   const admin = await createServiceRoleClient()
-  // Admins see everything, regular users see own + shared. RLS would handle
-  // this on the client too, but we go through service-role for consistency.
-  const query = admin
+  // super_admin sees everything cross-tenant. Everyone else (including
+  // company-level admins) sees own views + views shared by users in the SAME
+  // company. (H4 fix: the previous `.or('is_shared.eq.true')` query leaked
+  // shared views from other companies.)
+  if (gate.isSuper) {
+    const { data, error } = await admin
+      .from('saved_views')
+      .select('id, user_id, name, icon, filters, is_shared, sort_order, created_at')
+      .order('sort_order', { ascending: true })
+      .order('created_at', { ascending: true })
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ views: data || [] })
+  }
+
+  // Resolve the set of user_ids in the caller's company so we can constrain
+  // the "shared" branch of the OR. Without a company_id, "shared" collapses
+  // to just the caller's own views.
+  let companyUserIds: string[] = []
+  if (gate.companyId) {
+    const { data: users } = await admin
+      .from('users')
+      .select('id')
+      .eq('company_id', gate.companyId)
+    companyUserIds = (users ?? []).map((u: { id: string }) => u.id)
+  }
+  if (!companyUserIds.includes(gate.userId)) {
+    companyUserIds.push(gate.userId)
+  }
+
+  // Pull rows where (a) the caller owns it, OR (b) it's shared AND the owner
+  // is in the caller's company.
+  const { data, error } = await admin
     .from('saved_views')
     .select('id, user_id, name, icon, filters, is_shared, sort_order, created_at')
+    .in('user_id', companyUserIds)
     .order('sort_order', { ascending: true })
     .order('created_at', { ascending: true })
-
-  const { data, error } = gate.isAdmin
-    ? await query
-    : await query.or(`user_id.eq.${gate.userId},is_shared.eq.true`)
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
-  return NextResponse.json({ views: data || [] })
+  // In-memory final filter: own OR (shared AND owner in same company).
+  // The .in() above already restricts to same-company users, so any row that
+  // isn't owned by the caller MUST be shared to be returned.
+  const filtered = (data || []).filter(
+    (row: { user_id: string; is_shared: boolean }) =>
+      row.user_id === gate.userId || row.is_shared
+  )
+  return NextResponse.json({ views: filtered })
 }
 
 export async function POST(request: Request) {
@@ -165,8 +212,22 @@ export async function PATCH(request: Request) {
   if (!existing) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
-  if (existing.user_id !== gate.userId && !gate.isAdmin) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  // Owner can always edit. super_admin can edit anything. Company admins
+  // can edit views owned by users in their own company (but not cross-tenant).
+  if (existing.user_id !== gate.userId) {
+    if (!gate.isAdmin) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+    if (!gate.isSuper) {
+      const { data: ownerProfile } = await admin
+        .from('users')
+        .select('company_id')
+        .eq('id', existing.user_id)
+        .maybeSingle()
+      if (!gate.companyId || ownerProfile?.company_id !== gate.companyId) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
+    }
   }
 
   const patch: Record<string, unknown> = {}

@@ -1,6 +1,13 @@
 'use client'
 import { createContext, useContext, useState, useEffect } from 'react'
 
+// Roles considered "admin" for client-side UI gating purposes. Mirrors the
+// server-side `isCompanyAdmin()` helper from `src/lib/auth.ts`. The previous
+// `role === 'admin'` literal silently treated super_admin and company_admin
+// as plain members, hiding admin-only UI from the very people who should
+// see it. This list is the single source of truth on the client.
+const ADMIN_ROLES = new Set(['super_admin', 'admin', 'company_admin'])
+
 interface UserContextType {
   email: string
   full_name: string | null
@@ -32,10 +39,11 @@ export function UserProvider({ user, serverCompanyAccountIds, children }: {
 
   const [companyAccountIds, setCompanyAccountIds] = useState<string[]>(initialIds)
 
-  // For non-admin users: always fetch sibling accounts via API
-  // The server-side layout fetch has proven unreliable (RLS/caching issues)
+  // For non-admin users: always fetch sibling accounts via API.
+  // Admins (any of admin / super_admin / company_admin) can see everything
+  // via RLS so they don't need the sibling-account fetch.
   useEffect(() => {
-    if (user.role === 'admin' || !user.account_id) return
+    if (ADMIN_ROLES.has(user.role) || !user.account_id) return
 
     fetch('/api/user-accounts')
       .then(res => res.json())
@@ -48,7 +56,7 @@ export function UserProvider({ user, serverCompanyAccountIds, children }: {
   }, [user.role, user.account_id])
 
   return (
-    <UserContext.Provider value={{ ...user, isAdmin: user.role === 'admin', companyAccountIds }}>
+    <UserContext.Provider value={{ ...user, isAdmin: ADMIN_ROLES.has(user.role), companyAccountIds }}>
       {children}
     </UserContext.Provider>
   )

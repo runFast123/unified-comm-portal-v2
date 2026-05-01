@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase-server'
 import { verifyAccountAccess } from '@/lib/api-helpers'
+import { isSuperAdmin } from '@/lib/auth'
 
 /**
  * GET /api/export?type=messages&from=2026-01-01&to=2026-12-31&account_id=...
@@ -23,11 +24,14 @@ export async function GET(request: Request) {
     // Get user profile to determine role and account scoping
     const { data: profile } = await supabase
       .from('users')
-      .select('role, account_id')
+      .select('role, account_id, company_id')
       .eq('id', user.id)
       .maybeSingle()
 
-    const isAdmin = profile?.role === 'admin'
+    // super_admin sees everything; all other roles (admin, company_admin,
+    // company_member, viewer, reviewer) are scoped to their company / their
+    // single legacy account.
+    const isSuper = isSuperAdmin(profile?.role)
 
     // Verify user has access to the requested account
     if (accountId) {
@@ -35,20 +39,42 @@ export async function GET(request: Request) {
       if (!hasAccess) {
         return NextResponse.json({ error: 'Access denied to this account' }, { status: 403 })
       }
-    } else if (!isAdmin && profile?.account_id) {
-      // Non-admin users: scope to all sibling accounts (same company, different channels)
+    } else if (!isSuper && profile?.account_id) {
+      // Non-super users: scope to all sibling accounts (same company, different channels)
       accountId = profile.account_id
     }
 
-    // For non-admin users, expand single accountId to include sibling accounts
+    // For non-super users, expand single accountId to include sibling accounts.
+    // H5 fix: filter by company_id so two companies with the same account name
+    // don't cross-leak. We resolve the caller's company first (preferred) and
+    // fall back to the requested account's company_id when the caller has none.
     let accountIds: string[] | null = accountId ? [accountId] : null
-    if (!isAdmin && accountId) {
+    if (!isSuper && accountId) {
       try {
         const adminSupa = await createServiceRoleClient()
-        const { data: myAcc } = await adminSupa.from('accounts').select('name').eq('id', accountId).maybeSingle()
+        const { data: myAcc } = await adminSupa
+          .from('accounts')
+          .select('name, company_id')
+          .eq('id', accountId)
+          .maybeSingle()
         if (myAcc?.name) {
           const base = myAcc.name.replace(/\s+Teams$/i, '').replace(/\s+WhatsApp$/i, '').trim()
-          const { data: all } = await adminSupa.from('accounts').select('id, name').eq('is_active', true)
+          // Restrict the sibling search to the caller's own company. If the
+          // caller has no company_id (legacy), fall back to the target
+          // account's company_id — which still scopes the OR-by-name match.
+          const scopeCompanyId = profile?.company_id ?? myAcc.company_id ?? null
+          let siblingsQuery = adminSupa
+            .from('accounts')
+            .select('id, name, company_id')
+            .eq('is_active', true)
+          if (scopeCompanyId) {
+            siblingsQuery = siblingsQuery.eq('company_id', scopeCompanyId)
+          } else {
+            // Caller has no company AND target account has no company:
+            // restrict to just the requested account_id to avoid cross-leak.
+            siblingsQuery = siblingsQuery.eq('id', accountId)
+          }
+          const { data: all } = await siblingsQuery
           if (all) accountIds = all.filter(a => a.name.replace(/\s+Teams$/i, '').replace(/\s+WhatsApp$/i, '').trim() === base).map(a => a.id)
         }
       } catch { /* fallback to single account */ }
