@@ -1297,7 +1297,7 @@ export function ConversationActions({
   }, [handleEscalate, handleResolve, persistSmartComposeEnabled, smartComposeEnabled])
 
   return (
-    <div className="sticky bottom-0 bg-white border-t border-gray-200 py-3 px-4 z-10 space-y-3">
+    <div className="sticky bottom-0 bg-white border-t border-gray-200 py-4 px-5 z-10 space-y-4">
       {/* Hidden file input shared by every paperclip button in the composer */}
       <input
         ref={attachmentInputRef}
@@ -1420,7 +1420,7 @@ export function ConversationActions({
 
       {/* Reply compose areas */}
       {showManualReply && (
-        <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-2">
+        <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3">
           {/* Teams reply destination indicator */}
           {channel === 'teams' && teamsChatId && (
             <div className="flex items-center gap-2 rounded-lg bg-indigo-50 border border-indigo-100 px-3 py-2 text-xs text-indigo-700">

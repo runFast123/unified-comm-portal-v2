@@ -238,8 +238,8 @@ export function ActivityTimeline({
   const hiddenCount = Math.max(0, ordered.length - visible.length)
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-4">
-      <div className="flex items-center justify-between mb-3">
+    <div className="rounded-xl border border-gray-200 bg-white p-5">
+      <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-semibold text-gray-700 inline-flex items-center gap-1.5">
           <Activity className="h-4 w-4 text-gray-500" />
           Activity
@@ -264,7 +264,7 @@ export function ActivityTimeline({
       )}
 
       {!loading && !error && visible.length > 0 && (
-        <ol className="relative space-y-3">
+        <ol className="relative space-y-4">
           {/* Vertical connector line — sits behind the dots. */}
           <span
             aria-hidden
@@ -292,7 +292,7 @@ export function ActivityTimeline({
                     {formatRelative(ev.ts)}
                   </span>
                 </div>
-                <p className="text-[11px] text-gray-500 mt-0.5">
+                <p className="text-[11px] text-gray-500 mt-1">
                   <span className="font-medium text-gray-600">{ev.actor_label}</span>
                   {ev.summary ? <span className="text-gray-400"> — </span> : null}
                   {ev.summary && (

@@ -414,7 +414,7 @@ export function InternalNotes({ conversationId, authorName }: InternalNotesProps
       </div>
 
       {/* Add note input */}
-      <div className="px-4 py-3 border-b border-amber-100 relative">
+      <div className="px-4 py-4 border-b border-amber-100 relative">
         <div className="flex gap-2">
           <textarea
             ref={inputRef}
@@ -459,7 +459,7 @@ export function InternalNotes({ conversationId, authorName }: InternalNotesProps
             }}
             placeholder="Add an internal note... type @ to mention a teammate"
             rows={2}
-            className="flex-1 resize-none rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm text-gray-800 placeholder:text-amber-300 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+            className="flex-1 resize-none rounded-lg border border-amber-200 bg-white px-3.5 py-2.5 text-sm text-gray-800 placeholder:text-amber-300 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
           />
           <Button
             size="sm"
@@ -523,7 +523,7 @@ export function InternalNotes({ conversationId, authorName }: InternalNotesProps
             {notes.map((note) => (
               <div
                 key={note.id}
-                className={`px-4 py-2.5 group transition-colors ${
+                className={`px-4 py-3.5 group transition-colors ${
                   note.pinned
                     ? 'bg-amber-100/60 border-l-2 border-l-amber-400'
                     : 'hover:bg-amber-50/80'
@@ -554,7 +554,7 @@ export function InternalNotes({ conversationId, authorName }: InternalNotesProps
                     </button>
                   </div>
                 </div>
-                <div className="mt-1 flex items-center gap-3 text-[10px] text-amber-500">
+                <div className="mt-2 flex items-center gap-3 text-[10px] text-amber-500">
                   <span className="flex items-center gap-1">
                     <User size={9} />
                     {note.author}

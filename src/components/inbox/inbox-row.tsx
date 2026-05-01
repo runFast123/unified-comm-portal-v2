@@ -256,7 +256,7 @@ export function InboxRow({ item, selected, onSelect, onItemClick, isActive }: In
     <div
       onClick={handleRowClick}
       className={cn(
-        'group relative flex items-center gap-3 px-4 py-3 border-b border-gray-100',
+        'group relative flex items-center gap-4 px-5 py-4 border-b border-gray-100 min-h-[64px]',
         'hover:bg-gray-50/80 transition-colors cursor-pointer',
         getPriorityBorderClass(item.priority),
         selected && 'bg-teal-50 hover:bg-teal-50',
@@ -279,10 +279,10 @@ export function InboxRow({ item, selected, onSelect, onItemClick, isActive }: In
       </div>
 
       {/* Sender avatar + Name + Company + Channel badge */}
-      <div className="w-48 flex-shrink-0 min-w-0 flex items-center gap-2.5">
+      <div className="w-48 flex-shrink-0 min-w-0 flex items-center gap-3">
         <div
           className={cn(
-            'flex-shrink-0 h-8 w-8 rounded-full flex items-center justify-center text-[11px] font-bold text-white',
+            'flex-shrink-0 h-9 w-9 rounded-full flex items-center justify-center text-[11px] font-bold text-white',
             getAvatarColor(accountName || senderName)
           )}
           title={rawSender}
@@ -290,11 +290,11 @@ export function InboxRow({ item, selected, onSelect, onItemClick, isActive }: In
           {getInitials(senderName)}
         </div>
         <div className="min-w-0">
-          <p className={cn("text-sm truncate leading-tight", unread ? "font-bold text-gray-900" : "font-medium text-gray-700")}>
+          <p className={cn("text-sm truncate leading-snug", unread ? "font-bold text-gray-900" : "font-medium text-gray-700")}>
             {unread && <span className="inline-block h-1.5 w-1.5 rounded-full bg-teal-500 mr-1" />}
             {senderName}
           </p>
-          <div className="flex items-center gap-1 mt-0.5">
+          <div className="flex items-center gap-1.5 mt-1">
             <p className="text-[11px] text-gray-400 truncate leading-tight">
               {accountName.replace(/\s+Teams$/i, '').replace(/\s+WhatsApp$/i, '')}
             </p>

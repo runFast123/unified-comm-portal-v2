@@ -97,7 +97,7 @@ export function InboxList({ items, onItemClick, selectedItemId, selectedIds: ext
   return (
     <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
       {/* List header */}
-      <div className="flex items-center justify-between border-b border-gray-200 bg-gray-50 px-4 py-2">
+      <div className="flex items-center justify-between border-b border-gray-200 bg-gray-50 px-5 py-3">
         <div className="flex items-center gap-3">
           <input
             type="checkbox"
@@ -121,7 +121,7 @@ export function InboxList({ items, onItemClick, selectedItemId, selectedIds: ext
               options={sortOptions}
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as SortKey)}
-              className="py-1 text-xs"
+              className="py-1.5 text-xs"
             />
           </div>
         </div>

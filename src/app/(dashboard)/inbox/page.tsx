@@ -1032,7 +1032,7 @@ export default function InboxPage() {
         </>
       )}
 
-      <div className="flex-1 space-y-6 min-w-0">
+      <div className="flex-1 space-y-7 min-w-0">
       {/* New messages banner (Feature 3) */}
       {newMessageCount > 0 && (
         <div
@@ -1055,12 +1055,12 @@ export default function InboxPage() {
       <div ref={listTopRef} />
 
       {/* Page header */}
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">
             {inboxView === 'spam' ? 'Spam / Junk' : inboxView === 'newsletter' ? 'Newsletters' : 'Unified Inbox'}
           </h1>
-          <p className="mt-1 text-sm text-gray-500">
+          <p className="mt-1.5 text-sm text-gray-500">
             {inboxView === 'spam'
               ? 'Messages automatically filtered as spam or junk'
               : inboxView === 'newsletter'
@@ -1239,10 +1239,10 @@ export default function InboxPage() {
             {items.length === 1 ? 'message' : 'messages'}
           </p>
           {/* View mode toggle - hidden on mobile (split view not usable) */}
-          <div className="hidden sm:flex items-center rounded-lg border border-gray-200 bg-white p-0.5">
+          <div className="hidden sm:flex items-center rounded-lg border border-gray-200 bg-white p-1">
             <button
               onClick={() => handleViewModeChange('list')}
-              className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+              className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                 viewMode === 'list'
                   ? 'bg-teal-600 text-white shadow-sm'
                   : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
@@ -1254,7 +1254,7 @@ export default function InboxPage() {
             </button>
             <button
               onClick={() => handleViewModeChange('split')}
-              className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+              className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                 viewMode === 'split'
                   ? 'bg-teal-600 text-white shadow-sm'
                   : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
@@ -1266,7 +1266,7 @@ export default function InboxPage() {
             </button>
             <button
               onClick={() => handleViewModeChange('kanban')}
-              className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+              className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                 viewMode === 'kanban'
                   ? 'bg-teal-600 text-white shadow-sm'
                   : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'

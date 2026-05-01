@@ -76,7 +76,7 @@ function SidebarSection({
         <h3 className="flex-1 text-left text-sm font-semibold text-gray-900">{title}</h3>
         {open ? <ChevronUp size={14} className="text-gray-400" /> : <ChevronDown size={14} className="text-gray-400" />}
       </button>
-      {open && <div className="border-t border-gray-100 px-4 py-3">{children}</div>}
+      {open && <div className="border-t border-gray-100 px-4 py-4">{children}</div>}
     </div>
   )
 }
@@ -307,13 +307,13 @@ export function AISidebar({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {/* AI-generated thread summary (on-demand) */}
       {conversationId && <ThreadSummary conversationId={conversationId} />}
 
       {/* Teams Context Card */}
       {channel === 'teams' && teamsContext && (
-        <div className="rounded-xl bg-gradient-to-r from-indigo-50 to-violet-50 border border-indigo-200 p-3">
+        <div className="rounded-xl bg-gradient-to-r from-indigo-50 to-violet-50 border border-indigo-200 p-4">
           <div className="flex items-center gap-2 mb-2">
             <svg className="h-4 w-4 text-indigo-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
@@ -345,7 +345,7 @@ export function AISidebar({
 
       {/* Conversation Summary */}
       {classification?.topic_summary && (
-        <div className="rounded-xl bg-gradient-to-r from-teal-50 to-cyan-50 border border-teal-200 p-3">
+        <div className="rounded-xl bg-gradient-to-r from-teal-50 to-cyan-50 border border-teal-200 p-4">
           <div className="flex items-center gap-2 mb-1.5">
             <Sparkles className="h-4 w-4 text-teal-600" />
             <span className="text-xs font-bold text-teal-800 uppercase tracking-wider">Summary</span>

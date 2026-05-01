@@ -379,9 +379,9 @@ export default async function ConversationPage({
   return (
     <div className="flex h-[calc(100vh-4rem)] flex-col">
       {/* Conversation header */}
-      <div className="shrink-0 border-b border-gray-200 bg-white px-4 sm:px-6 py-4">
+      <div className="shrink-0 border-b border-gray-200 bg-white px-4 sm:px-6 py-5">
         {/* Top row: back + name + actions */}
-        <div className="flex items-center gap-3 sm:gap-4">
+        <div className="flex items-center gap-4 sm:gap-5">
           <Link
             href="/inbox"
             className="text-gray-400 hover:text-teal-700 transition-colors shrink-0"
@@ -408,7 +408,7 @@ export default async function ConversationPage({
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-1.5 text-xs text-gray-500 mt-1">
+            <div className="flex items-center gap-2 text-xs text-gray-500 mt-1.5">
               <span>{accountName.replace(/\s+Teams$/i, '').replace(/\s+WhatsApp$/i, '')}</span>
               <span className="text-gray-300">&middot;</span>
               <span>{getChannelLabel(channel)}</span>
@@ -461,7 +461,7 @@ export default async function ConversationPage({
           </div>
         </div>
         {/* Timer row */}
-        <div className="flex items-center gap-3 text-[11px] text-gray-400 mt-2 ml-[52px] sm:ml-[62px] flex-wrap">
+        <div className="flex items-center gap-4 text-[11px] text-gray-400 mt-3 ml-[52px] sm:ml-[62px] flex-wrap">
           {firstMsgAt && <span>Active {formatDuration(activeDurationMs)}</span>}
           {lastMsgAt && <span>&middot; Last reply {formatDuration(lastReplyMs)} ago</span>}
           <span>&middot; {messageCount} msgs ({inboundCount} inbound)</span>
@@ -505,7 +505,7 @@ export default async function ConversationPage({
 
       {/* Follow-up reminder for conversations waiting >48h */}
       {status === 'waiting_on_customer' && lastMsgAt && lastReplyMs > 48 * 60 * 60 * 1000 && (
-        <div className="shrink-0 mx-4 sm:mx-6 mt-2 rounded-lg bg-amber-50 border border-amber-200 px-4 py-2.5 flex items-center gap-3">
+        <div className="shrink-0 mx-4 sm:mx-6 mt-3 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 flex items-center gap-3">
           <span className="text-amber-500 text-lg">⏰</span>
           <div className="flex-1">
             <p className="text-sm font-medium text-amber-800">Customer hasn&apos;t replied in {formatDuration(lastReplyMs)}</p>
@@ -544,7 +544,7 @@ export default async function ConversationPage({
           </div>
 
           {/* Bottom action bar */}
-          <div className="shrink-0 border-t border-gray-200 bg-white px-4 sm:px-6 py-4">
+          <div className="shrink-0 border-t border-gray-200 bg-white px-4 sm:px-6 py-5">
             <ConversationActions
               conversationId={id}
               accountId={conversation.account_id}
@@ -565,7 +565,7 @@ export default async function ConversationPage({
         </div>
 
         {/* Right sidebar - below thread on mobile, side panel on desktop */}
-        <div className="w-full lg:w-96 shrink-0 overflow-y-auto border-t lg:border-t-0 lg:border-l border-gray-200 bg-gray-50 p-5 space-y-5">
+        <div className="w-full lg:w-96 shrink-0 overflow-y-auto border-t lg:border-t-0 lg:border-l border-gray-200 bg-gray-50 p-6 space-y-6">
           <AISidebar
             classification={classification}
             aiReply={mappedAiReply}
