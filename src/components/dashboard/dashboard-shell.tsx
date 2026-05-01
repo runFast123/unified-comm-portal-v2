@@ -26,6 +26,7 @@ import { Sidebar } from '@/components/dashboard/sidebar'
 import { NotificationCenter } from '@/components/dashboard/notification-center'
 import { MentionsBell } from '@/components/dashboard/mentions-bell'
 import { GlobalSearch } from '@/components/dashboard/global-search'
+import { CompanySwitcher, type CompanyOption } from '@/components/dashboard/company-switcher'
 import { CommandPalette } from '@/components/ui/command-palette'
 import { KeyboardShortcuts } from '@/components/ui/keyboard-shortcuts'
 import { UserProvider } from '@/context/user-context'
@@ -35,6 +36,14 @@ interface DashboardShellProps {
   user: Pick<User, 'email' | 'full_name' | 'role' | 'account_id'>
   pendingCount: number
   companyAccountIds?: string[]
+  /** Companies the user can switch into. Hidden when ≤ 1. */
+  accessibleCompanies?: CompanyOption[]
+  /** The user's home company id (from `users.company_id`). */
+  currentCompanyId?: string | null
+  /** Active company branding — applied as CSS var + sidebar logo. */
+  brandLogoUrl?: string | null
+  brandAccentColor?: string | null
+  brandCompanyName?: string | null
   children: React.ReactNode
 }
 
@@ -102,7 +111,17 @@ const NAV_SHORTCUTS: Record<string, string> = {
   k: '/knowledge-base',
 }
 
-export function DashboardShell({ user, pendingCount, companyAccountIds, children }: DashboardShellProps) {
+export function DashboardShell({
+  user,
+  pendingCount,
+  companyAccountIds,
+  accessibleCompanies = [],
+  currentCompanyId = null,
+  brandLogoUrl = null,
+  brandAccentColor = null,
+  brandCompanyName = null,
+  children,
+}: DashboardShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
@@ -188,14 +207,22 @@ export function DashboardShell({ user, pendingCount, companyAccountIds, children
     return () => document.removeEventListener('keydown', handleGlobalKeyDown)
   }, [handleGlobalKeyDown])
 
+  // Apply company branding as a CSS variable (--brand-accent) on the root.
+  // Existing teal accents remain default; explicit overrides apply.
+  const rootStyle = brandAccentColor
+    ? ({ ['--brand-accent' as never]: brandAccentColor } as React.CSSProperties)
+    : undefined
+
   return (
     <UserProvider user={user} serverCompanyAccountIds={companyAccountIds}>
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="flex h-screen overflow-hidden bg-background" style={rootStyle}>
       <Sidebar
         user={user}
         pendingCount={pendingCount}
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
+        brandLogoUrl={brandLogoUrl}
+        brandCompanyName={brandCompanyName}
       />
 
       {/* Main content area */}
@@ -225,6 +252,10 @@ export function DashboardShell({ user, pendingCount, companyAccountIds, children
             {currentPage}
           </span>
           <div className="flex-1" />
+          <CompanySwitcher
+            companies={accessibleCompanies}
+            currentCompanyId={currentCompanyId}
+          />
           <MentionsBell />
           <NotificationCenter />
           <GlobalSearch variant="mobile" />
@@ -263,6 +294,10 @@ export function DashboardShell({ user, pendingCount, companyAccountIds, children
             ))}
           </nav>
           <div className="flex items-center gap-3">
+            <CompanySwitcher
+              companies={accessibleCompanies}
+              currentCompanyId={currentCompanyId}
+            />
             <MentionsBell />
             <NotificationCenter />
             {/* Global Search */}

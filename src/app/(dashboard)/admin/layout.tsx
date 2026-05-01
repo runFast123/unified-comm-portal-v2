@@ -1,10 +1,15 @@
 import { redirect } from 'next/navigation'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { isCompanyAdmin } from '@/lib/auth'
 
 /**
  * Server-side admin layout guard.
- * Checks that the authenticated user has the 'admin' role before
- * rendering any admin pages. Non-admin users are redirected to /dashboard.
+ *
+ * Allows the legacy `admin`, the new `company_admin`, and `super_admin`
+ * roles to enter /admin/*. Non-admin users are redirected to /dashboard.
+ *
+ * Per-page gating (e.g. companies list is super_admin only) lives inside
+ * the individual pages and API routes.
  */
 export default async function AdminLayout({
   children,
@@ -21,14 +26,15 @@ export default async function AdminLayout({
     redirect('/login')
   }
 
-  // Query the users table to verify admin role
+  // Query the users table to verify admin role. Allow legacy admin,
+  // company_admin, and super_admin.
   const { data: profile } = await supabase
     .from('users')
     .select('role')
     .eq('id', authUser.id)
     .maybeSingle()
 
-  if (!profile || profile.role !== 'admin') {
+  if (!profile || !isCompanyAdmin(profile.role as string | null | undefined)) {
     redirect('/dashboard')
   }
 

@@ -29,6 +29,8 @@ import {
   ChevronRight,
   Plus,
   Bookmark,
+  Tags,
+  Building2,
 } from 'lucide-react'
 import { signOut } from '@/lib/auth-actions'
 import { useRealtimeMessages } from '@/hooks/useRealtimeMessages'
@@ -40,6 +42,9 @@ interface SidebarProps {
   pendingCount: number
   open?: boolean
   onClose?: () => void
+  /** Active company logo. When set, replaces the default "Unified Comms" wordmark. */
+  brandLogoUrl?: string | null
+  brandCompanyName?: string | null
 }
 
 const mainNavItems = [
@@ -60,13 +65,21 @@ const adminNavItems = [
   { label: 'Integrations', href: '/admin/integrations', icon: KeyRound },
   { label: 'AI Settings', href: '/admin/ai-settings', icon: Brain },
   { label: 'Notifications', href: '/admin/notifications', icon: Bell },
+  { label: 'Statuses & Tags', href: '/admin/taxonomy', icon: Tags },
   { label: 'Company Signatures', href: '/admin/company-signatures', icon: FileText },
   { label: 'System Health', href: '/admin/health', icon: Activity },
   { label: 'System Logs', href: '/admin/logs', icon: FileText },
   { label: 'Users', href: '/admin/users', icon: UserCog },
 ]
 
-export function Sidebar({ user, pendingCount, open, onClose }: SidebarProps) {
+export function Sidebar({
+  user,
+  pendingCount,
+  open,
+  onClose,
+  brandLogoUrl = null,
+  brandCompanyName = null,
+}: SidebarProps) {
   const pathname = usePathname()
   const [hasNewMessages, setHasNewMessages] = useState(false)
   const [collapsed, setCollapsed] = useState(() => {
@@ -172,15 +185,24 @@ export function Sidebar({ user, pendingCount, open, onClose }: SidebarProps) {
           open ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        {/* Logo / Brand */}
+        {/* Logo / Brand — replaced by company branding when configured. */}
         <div className={`flex h-16 items-center border-b border-sidebar-border ${collapsed ? 'justify-center px-2' : 'justify-between px-4'}`}>
           <Link href="/dashboard" className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3'}`}>
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-sm shrink-0">
-              <MessageSquare className="h-5 w-5" />
-            </div>
+            {brandLogoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={brandLogoUrl}
+                alt={brandCompanyName ?? 'Company logo'}
+                className="h-9 w-9 rounded-lg object-cover bg-white/5 shrink-0"
+              />
+            ) : (
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-sm shrink-0">
+                <MessageSquare className="h-5 w-5" />
+              </div>
+            )}
             {!collapsed && (
-              <span className="text-lg font-semibold text-sidebar-foreground">
-                Unified Comms
+              <span className="text-lg font-semibold text-sidebar-foreground truncate">
+                {brandCompanyName || 'Unified Comms'}
               </span>
             )}
           </Link>
@@ -312,8 +334,8 @@ export function Sidebar({ user, pendingCount, open, onClose }: SidebarProps) {
             </div>
           )}
 
-          {/* Admin Section */}
-          {user.role === 'admin' && (
+          {/* Admin Section — visible to legacy admin, company_admin, and super_admin. */}
+          {(user.role === 'admin' || user.role === 'company_admin' || user.role === 'super_admin') && (
             <>
               <div className={collapsed ? 'pt-4 pb-2 px-2' : 'pt-6 pb-2 px-3'}>
                 {!collapsed ? (
@@ -324,6 +346,21 @@ export function Sidebar({ user, pendingCount, open, onClose }: SidebarProps) {
                   <div className="border-t border-sidebar-border" />
                 )}
               </div>
+              {/* Companies — super_admin only. Sits at the top of the admin
+                  section so it's easy to find. */}
+              {user.role === 'super_admin' && (
+                <Link
+                  key="admin-companies"
+                  href="/admin/companies"
+                  className={linkClasses('/admin/companies')}
+                  aria-current={isActive('/admin/companies') ? 'page' : undefined}
+                  onClick={onClose}
+                  title={collapsed ? 'Companies' : undefined}
+                >
+                  <Building2 className="h-5 w-5 flex-shrink-0" />
+                  {!collapsed && <span>Companies</span>}
+                </Link>
+              )}
               {adminNavItems.map((item) => (
                 <Link
                   key={`admin-${item.href}`}

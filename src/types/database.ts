@@ -315,8 +315,15 @@ export interface ChannelConfig {
 
 export interface ReplyTemplate {
   id: string
+  /** Legacy single-account scope. Newer rows use `company_id` instead and
+   *  may leave this null. Reads still tolerate either field for backward-compat. */
   account_id: string | null
+  /** Company-level scope. Set on every new template; null on legacy rows. */
+  company_id: string | null
   title: string
+  /** Optional pre-filled email subject. Email channel only — other channels
+   *  ignore it. */
+  subject: string | null
   content: string
   category: string | null
   shortcut: string | null

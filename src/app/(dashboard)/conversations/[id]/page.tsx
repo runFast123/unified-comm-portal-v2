@@ -12,6 +12,7 @@ import { ScheduledMessagesList } from '@/components/dashboard/scheduled-messages
 import { SuggestedReplies } from '@/components/dashboard/suggested-replies'
 import { BookmarkButton } from '@/components/dashboard/conversation-bookmarks'
 import { StatusDropdown } from '@/components/dashboard/status-dropdown'
+import { ConversationTagPicker } from '@/components/dashboard/conversation-tag-picker'
 import { AgentAssignment } from '@/components/dashboard/agent-assignment'
 import { InternalNotes } from '@/components/dashboard/internal-notes'
 import { SnoozeButton } from '@/components/dashboard/snooze-button'
@@ -78,6 +79,8 @@ export default async function ConversationPage({
       participant_phone,
       teams_chat_id,
       tags,
+      secondary_status,
+      secondary_status_color,
       first_message_at,
       last_message_at,
       contact_id,
@@ -338,6 +341,8 @@ export default async function ConversationPage({
             <StatusDropdown
               conversationId={id}
               currentStatus={status}
+              secondaryStatus={(conversation as { secondary_status?: string | null }).secondary_status ?? null}
+              secondaryStatusColor={(conversation as { secondary_status_color?: string | null }).secondary_status_color ?? null}
             />
             <span className={cn(
               'rounded-full px-2.5 py-1 text-xs font-medium',
@@ -467,6 +472,10 @@ export default async function ConversationPage({
               participantName,
               messageCount,
             } : null}
+          />
+          <ConversationTagPicker
+            conversationId={id}
+            initialTags={(conversation.tags as string[] | null) ?? []}
           />
           <InternalNotes conversationId={id} authorName={currentUserName || undefined} />
         </div>

@@ -17,6 +17,12 @@ type AuditAction =
   | 'contact_updated'
   | 'contact_deleted'
   | 'ai_budget.threshold_crossed'
+  | 'company_status_created'
+  | 'company_status_updated'
+  | 'company_status_deleted'
+  | 'company_tag_created'
+  | 'company_tag_updated'
+  | 'company_tag_deleted'
 
 /**
  * Writes an entry to the audit_log table.

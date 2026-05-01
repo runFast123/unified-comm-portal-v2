@@ -41,6 +41,11 @@
   --destructive-foreground: #ef4444;
   --sidebar-accent-foreground: #18181b;
   --sidebar-primary-foreground: #fafafa;
+  /* Multi-tenant brand accent. Defaults to teal-700; overridden inline at
+     the dashboard root via `style={{ '--brand-accent': company.accent_color }}`
+     when a company has configured branding. Use as `var(--brand-accent)` in
+     components that should pick up the override. */
+  --brand-accent: #0f766e;
 }
 
 @theme inline {

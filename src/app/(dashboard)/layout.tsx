@@ -1,9 +1,12 @@
 import { redirect } from 'next/navigation'
+import { cookies } from 'next/headers'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase-server'
 import { DashboardShell } from '@/components/dashboard/dashboard-shell'
 import { BackgroundPoller } from '@/components/dashboard/background-poller'
 import { KeyboardShortcutProvider } from '@/components/dashboard/keyboard-shortcuts'
+import { isSuperAdmin } from '@/lib/auth'
 import type { User } from '@/types/database'
+import type { CompanyOption } from '@/components/dashboard/company-switcher'
 
 // Force dynamic rendering — layout must run on every request to compute
 // user-specific companyAccountIds (different per user session)
@@ -38,6 +41,8 @@ export default async function DashboardLayout({
     role: profile?.role ?? 'viewer',
     account_id: profile?.account_id ?? null,
   }
+
+  const userCompanyId = (profile?.company_id as string | null | undefined) ?? null
 
   // Fetch sibling account IDs (same company, different channels) for non-admin
   // users — using the proper `accounts.company_id` FK. Uses service-role
@@ -95,8 +100,50 @@ export default async function DashboardLayout({
   }
   const { count: pendingCount } = await pendingQuery
 
+  // ── Multi-tenancy: accessible companies + branding ──────────────────
+  // super_admin sees all companies; everyone else sees their own (and any
+  // additional ones they may eventually be a member of — modeled but rare
+  // for now). The result feeds the company switcher dropdown in the header.
+  const service = await createServiceRoleClient()
+  let accessibleCompanies: CompanyOption[] = []
+  try {
+    if (isSuperAdmin(user.role as string)) {
+      const { data } = await service
+        .from('companies')
+        .select('id, name, slug, logo_url, accent_color')
+        .order('name', { ascending: true })
+      accessibleCompanies = ((data as CompanyOption[] | null) ?? [])
+    } else if (userCompanyId) {
+      const { data } = await service
+        .from('companies')
+        .select('id, name, slug, logo_url, accent_color')
+        .eq('id', userCompanyId)
+        .maybeSingle()
+      if (data) accessibleCompanies = [data as CompanyOption]
+    }
+  } catch { /* non-fatal */ }
+
+  // Resolve the "active" company for branding — read from cookie if
+  // present and accessible, else fall back to the user's company.
+  const cookieStore = await cookies()
+  const cookieCompanyId = cookieStore.get('selected_company_id')?.value ?? null
+  const activeCompanyId =
+    cookieCompanyId && accessibleCompanies.some((c) => c.id === cookieCompanyId)
+      ? cookieCompanyId
+      : userCompanyId
+  const activeCompany = accessibleCompanies.find((c) => c.id === activeCompanyId) ?? null
+
   return (
-    <DashboardShell user={user} pendingCount={pendingCount ?? 0} companyAccountIds={companyAccountIds}>
+    <DashboardShell
+      user={user}
+      pendingCount={pendingCount ?? 0}
+      companyAccountIds={companyAccountIds}
+      accessibleCompanies={accessibleCompanies}
+      currentCompanyId={userCompanyId}
+      brandLogoUrl={activeCompany?.logo_url ?? null}
+      brandAccentColor={activeCompany?.accent_color ?? null}
+      brandCompanyName={activeCompany?.name ?? null}
+    >
       {/* Silent timer that fires /api/inbox-sync every 2 min while the tab is visible
           so new mail flows in without the user clicking Sync. */}
       <BackgroundPoller />

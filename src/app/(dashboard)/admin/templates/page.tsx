@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import {
   Search,
   Plus,
@@ -17,7 +17,6 @@ import {
   AlertTriangle,
   Hash,
 } from 'lucide-react'
-import { createClient } from '@/lib/supabase-client'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -29,13 +28,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@
 import { EmptyState } from '@/components/ui/empty-state'
 import type { ReplyTemplate } from '@/types/database'
 import { cn, truncate, timeAgo } from '@/lib/utils'
-
-const supabase = createClient()
-
-interface AccountOption {
-  id: string
-  name: string
-}
+import { substituteTemplate, TEMPLATE_VARIABLES } from '@/lib/templates'
 
 const CATEGORIES = ['General', 'Sales', 'Technical', 'Billing', 'Support']
 
@@ -61,6 +54,16 @@ function getCategoryVariant(category: string): 'info' | 'warning' | 'success' | 
   }
 }
 
+// Sample values used by the live preview pane in the create/edit modal.
+// Substituted via `substituteTemplate` so admins can verify formatting
+// before saving.
+const PREVIEW_CONTEXT = {
+  customer: { name: 'Sample Customer', email: 'customer@example.com' },
+  user: { full_name: 'Agent Smith', email: 'agent@yourcompany.com' },
+  company: { name: 'Your Company' },
+  conversation: { subject: 'Question about your service' },
+}
+
 // ---------------------------------------------------------------------------
 // Page component
 // ---------------------------------------------------------------------------
@@ -71,54 +74,44 @@ export default function TemplatesPage() {
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
-  const [accountFilter, setAccountFilter] = useState('')
   const [selectedTemplate, setSelectedTemplate] = useState<ReplyTemplate | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [editForm, setEditForm] = useState({
     title: '',
+    subject: '',
     content: '',
     category: 'General',
     shortcut: '',
-    account_id: '',
   })
   const [editingId, setEditingId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
-  const [accounts, setAccounts] = useState<AccountOption[]>([])
+  const [saveError, setSaveError] = useState<string | null>(null)
 
-  // Fetch accounts for filter/selector
-  async function fetchAccounts() {
-    const { data } = await supabase
-      .from('accounts')
-      .select('id, name')
-      .eq('is_active', true)
-      .order('name')
-    if (data) setAccounts(data)
-  }
-
-  // Fetch templates from Supabase
-  async function fetchTemplates() {
+  // Fetch templates from the API (auto-scoped by RLS on the server)
+  const fetchTemplates = useCallback(async () => {
     setLoading(true)
     setError(null)
-    const { data, error: fetchError } = await supabase
-      .from('reply_templates')
-      .select('*')
-      .order('updated_at', { ascending: false })
-
-    if (fetchError) {
-      setError(fetchError.message)
+    try {
+      const res = await fetch('/api/templates')
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        setError(j.error || `HTTP ${res.status}`)
+        setTemplates([])
+        return
+      }
+      const data = (await res.json()) as { templates?: ReplyTemplate[] }
+      setTemplates(data.templates ?? [])
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load templates')
+    } finally {
       setLoading(false)
-      return
     }
-
-    setTemplates((data as ReplyTemplate[]) ?? [])
-    setLoading(false)
-  }
+  }, [])
 
   useEffect(() => {
     fetchTemplates()
-    fetchAccounts()
-  }, [])
+  }, [fetchTemplates])
 
   // Derived stats
   const totalTemplates = templates.length
@@ -130,13 +123,6 @@ export default function TemplatesPage() {
   const activeCount = templates.filter((t) => t.is_active).length
   const inactiveCount = templates.length - activeCount
 
-  // Helper to get account name from id
-  function getAccountName(accountId: string | null): string {
-    if (!accountId) return 'General'
-    const acc = accounts.find((a) => a.id === accountId)
-    return acc ? acc.name : 'Unknown'
-  }
-
   // Filtered templates
   const filteredTemplates = useMemo(() => {
     return templates.filter((template) => {
@@ -145,20 +131,15 @@ export default function TemplatesPage() {
         template.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         template.content.toLowerCase().includes(searchQuery.toLowerCase())
       const matchesCategory = !categoryFilter || template.category === categoryFilter
-      const matchesAccount =
-        !accountFilter ||
-        (accountFilter === 'general'
-          ? !template.account_id
-          : template.account_id === accountFilter)
-      return matchesSearch && matchesCategory && matchesAccount
+      return matchesSearch && matchesCategory
     })
-  }, [templates, searchQuery, categoryFilter, accountFilter])
+  }, [templates, searchQuery, categoryFilter])
 
-  // Handlers
+  // ── Handlers ──────────────────────────────────────────────────────────
+
   async function handleToggleActive(id: string) {
     const template = templates.find((t) => t.id === id)
     if (!template) return
-
     const newValue = !template.is_active
 
     // Optimistic update
@@ -166,13 +147,12 @@ export default function TemplatesPage() {
       prev.map((t) => (t.id === id ? { ...t, is_active: newValue } : t))
     )
 
-    const { error: updateError } = await supabase
-      .from('reply_templates')
-      .update({ is_active: newValue })
-      .eq('id', id)
-
-    if (updateError) {
-      console.error('Failed to toggle template active:', updateError.message)
+    const res = await fetch(`/api/templates/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ is_active: newValue }),
+    })
+    if (!res.ok) {
       // Revert
       setTemplates((prev) =>
         prev.map((t) => (t.id === id ? { ...t, is_active: !newValue } : t))
@@ -184,19 +164,11 @@ export default function TemplatesPage() {
     if (!window.confirm('Are you sure you want to delete this template? This cannot be undone.')) {
       return
     }
-    // Optimistic update
-    const previousTemplates = templates
+    const previous = templates
     setTemplates((prev) => prev.filter((t) => t.id !== id))
-
-    const { error: deleteError } = await supabase
-      .from('reply_templates')
-      .delete()
-      .eq('id', id)
-
-    if (deleteError) {
-      console.error('Failed to delete template:', deleteError.message)
-      // Revert
-      setTemplates(previousTemplates)
+    const res = await fetch(`/api/templates/${id}`, { method: 'DELETE' })
+    if (!res.ok) {
+      setTemplates(previous)
     }
   }
 
@@ -212,18 +184,20 @@ export default function TemplatesPage() {
 
   function handleOpenAdd() {
     setEditingId(null)
-    setEditForm({ title: '', content: '', category: 'General', shortcut: '', account_id: '' })
+    setSaveError(null)
+    setEditForm({ title: '', subject: '', content: '', category: 'General', shortcut: '' })
     setEditModalOpen(true)
   }
 
   function handleOpenEdit(template: ReplyTemplate) {
     setEditingId(template.id)
+    setSaveError(null)
     setEditForm({
       title: template.title,
+      subject: template.subject || '',
       content: template.content,
       category: template.category || 'General',
       shortcut: template.shortcut || '',
-      account_id: template.account_id || '',
     })
     setEditModalOpen(true)
     setModalOpen(false)
@@ -232,48 +206,45 @@ export default function TemplatesPage() {
   async function handleSaveTemplate() {
     if (!editForm.title.trim() || !editForm.content.trim()) return
     setSaving(true)
+    setSaveError(null)
 
-    const accountId = editForm.account_id || null
+    const payload = {
+      name: editForm.title.trim(),
+      subject: editForm.subject.trim() || null,
+      body: editForm.content,
+      category: editForm.category,
+      shortcut: editForm.shortcut.trim() || null,
+    }
 
+    let res: Response
     if (editingId) {
-      // Update existing template
-      const { error: updateError } = await supabase
-        .from('reply_templates')
-        .update({
-          title: editForm.title.trim(),
-          content: editForm.content.trim(),
-          category: editForm.category,
-          shortcut: editForm.shortcut.trim() || null,
-          account_id: accountId,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', editingId)
-
-      if (updateError) {
-        console.error('Failed to update template:', updateError.message)
-      }
+      res = await fetch(`/api/templates/${editingId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
     } else {
-      // Create new template
-      const { error: insertError } = await supabase
-        .from('reply_templates')
-        .insert({
-          title: editForm.title.trim(),
-          content: editForm.content.trim(),
-          category: editForm.category,
-          shortcut: editForm.shortcut.trim() || null,
-          account_id: accountId,
-          is_active: true,
-        })
-
-      if (insertError) {
-        console.error('Failed to create template:', insertError.message)
-      }
+      res = await fetch('/api/templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
     }
 
     setSaving(false)
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}))
+      setSaveError(j.error || `HTTP ${res.status}`)
+      return
+    }
+
     setEditModalOpen(false)
     fetchTemplates()
   }
+
+  // Live-preview substitution for the create/edit modal.
+  const previewBody = substituteTemplate(editForm.content, PREVIEW_CONTEXT)
+  const previewSubject = substituteTemplate(editForm.subject, PREVIEW_CONTEXT)
 
   if (loading) {
     return (
@@ -309,9 +280,7 @@ export default function TemplatesPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* ----------------------------------------------------------------- */}
-      {/* Page header                                                       */}
-      {/* ----------------------------------------------------------------- */}
+      {/* Page header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <div>
@@ -333,9 +302,7 @@ export default function TemplatesPage() {
         </div>
       </div>
 
-      {/* ----------------------------------------------------------------- */}
-      {/* Stats row                                                         */}
-      {/* ----------------------------------------------------------------- */}
+      {/* Stats row */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="!py-0">
           <div className="flex items-center gap-3">
@@ -387,9 +354,7 @@ export default function TemplatesPage() {
         </Card>
       </div>
 
-      {/* ----------------------------------------------------------------- */}
-      {/* Search and filter bar                                             */}
-      {/* ----------------------------------------------------------------- */}
+      {/* Search and filter bar */}
       <div className="flex flex-col gap-3 sm:flex-row">
         <div className="flex-1">
           <Input
@@ -400,21 +365,6 @@ export default function TemplatesPage() {
           />
         </div>
         <div className="w-full sm:w-48">
-          <select
-            value={accountFilter}
-            onChange={(e) => setAccountFilter(e.target.value)}
-            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
-          >
-            <option value="">All Companies</option>
-            <option value="general">General (Shared)</option>
-            {accounts.map((acc) => (
-              <option key={acc.id} value={acc.id}>
-                {acc.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="w-full sm:w-48">
           <Select
             options={CATEGORY_OPTIONS}
             value={categoryFilter}
@@ -423,9 +373,7 @@ export default function TemplatesPage() {
         </div>
       </div>
 
-      {/* ----------------------------------------------------------------- */}
-      {/* Templates table                                                   */}
-      {/* ----------------------------------------------------------------- */}
+      {/* Templates table */}
       <Card>
         {filteredTemplates.length === 0 ? (
           <EmptyState
@@ -442,11 +390,11 @@ export default function TemplatesPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Title</TableHead>
-                <TableHead>Company</TableHead>
                 <TableHead>Category</TableHead>
                 <TableHead className="hidden lg:table-cell">Preview</TableHead>
                 <TableHead className="hidden md:table-cell">Shortcut</TableHead>
                 <TableHead className="hidden md:table-cell">Usage</TableHead>
+                <TableHead className="hidden lg:table-cell">Updated</TableHead>
                 <TableHead>Active</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
@@ -457,22 +405,12 @@ export default function TemplatesPage() {
                   <TableCell>
                     <button
                       onClick={() => handleOpenTemplate(template)}
-                      className="text-left font-medium text-teal-700 hover:text-teal-900 hover:underline"
+                      className={cn(
+                        'text-left font-medium text-teal-700 hover:text-teal-900 hover:underline'
+                      )}
                     >
                       {template.title}
                     </button>
-                  </TableCell>
-                  <TableCell>
-                    <span
-                      className={cn(
-                        'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
-                        template.account_id
-                          ? 'bg-teal-50 text-teal-700'
-                          : 'bg-gray-100 text-gray-600'
-                      )}
-                    >
-                      {getAccountName(template.account_id)}
-                    </span>
                   </TableCell>
                   <TableCell>
                     <Badge variant={getCategoryVariant(template.category || 'General')} size="sm">
@@ -497,6 +435,11 @@ export default function TemplatesPage() {
                   <TableCell className="hidden whitespace-nowrap md:table-cell">
                     <span className="text-sm text-gray-700 font-medium">
                       {template.usage_count}
+                    </span>
+                  </TableCell>
+                  <TableCell className="hidden whitespace-nowrap lg:table-cell">
+                    <span className="text-sm text-gray-500">
+                      {timeAgo(template.updated_at)} ago
                     </span>
                   </TableCell>
                   <TableCell>
@@ -530,9 +473,7 @@ export default function TemplatesPage() {
         )}
       </Card>
 
-      {/* ----------------------------------------------------------------- */}
-      {/* Template detail modal                                             */}
-      {/* ----------------------------------------------------------------- */}
+      {/* Template detail modal */}
       <Modal
         open={modalOpen}
         onClose={handleCloseModal}
@@ -553,9 +494,6 @@ export default function TemplatesPage() {
         {selectedTemplate && (
           <div className="space-y-4">
             <div className="flex items-center gap-3">
-              <Badge variant="default" size="sm">
-                {getAccountName(selectedTemplate.account_id)}
-              </Badge>
               <Badge variant={getCategoryVariant(selectedTemplate.category || 'General')}>
                 {selectedTemplate.category || 'General'}
               </Badge>
@@ -571,6 +509,13 @@ export default function TemplatesPage() {
                   <Hash className="h-3.5 w-3.5" />
                   {selectedTemplate.shortcut}
                 </span>
+              </div>
+            )}
+
+            {selectedTemplate.subject && (
+              <div>
+                <h4 className="mb-1 text-sm font-medium text-gray-500">Subject</h4>
+                <p className="text-sm text-gray-700">{selectedTemplate.subject}</p>
               </div>
             )}
 
@@ -605,14 +550,12 @@ export default function TemplatesPage() {
         )}
       </Modal>
 
-      {/* ----------------------------------------------------------------- */}
-      {/* Create/Edit Template Modal                                        */}
-      {/* ----------------------------------------------------------------- */}
+      {/* Create/Edit Template Modal */}
       <Modal
         open={editModalOpen}
         onClose={() => setEditModalOpen(false)}
         title={editingId ? 'Edit Template' : 'Add New Template'}
-        className="sm:max-w-2xl"
+        className="sm:max-w-3xl"
         footer={
           <>
             <Button variant="secondary" onClick={() => setEditModalOpen(false)}>
@@ -629,76 +572,108 @@ export default function TemplatesPage() {
           </>
         }
       >
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
-            <input
-              type="text"
-              value={editForm.title}
-              onChange={(e) => setEditForm((prev) => ({ ...prev, title: e.target.value }))}
-              placeholder="e.g., Thank you for contacting us"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
-            />
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {/* Form column */}
+          <div className="space-y-4">
+            {saveError && (
+              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {saveError}
+              </div>
+            )}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
+              <input
+                type="text"
+                value={editForm.title}
+                onChange={(e) => setEditForm((prev) => ({ ...prev, title: e.target.value }))}
+                placeholder="e.g., Thank you for contacting us"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Subject <span className="text-gray-400 font-normal">(email only)</span>
+              </label>
+              <input
+                type="text"
+                value={editForm.subject}
+                onChange={(e) => setEditForm((prev) => ({ ...prev, subject: e.target.value }))}
+                placeholder="Re: {{conversation.subject}}"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
+              <select
+                value={editForm.category}
+                onChange={(e) => setEditForm((prev) => ({ ...prev, category: e.target.value }))}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+              >
+                {CATEGORIES.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Body *</label>
+              <textarea
+                value={editForm.content}
+                onChange={(e) => setEditForm((prev) => ({ ...prev, content: e.target.value }))}
+                placeholder="Hi {{customer.name}},&#10;&#10;Thanks for reaching out..."
+                rows={10}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500 resize-y min-h-[200px] font-mono"
+              />
+              <p className="mt-1 text-xs text-gray-400">
+                {editForm.content.split(/\s+/).filter(Boolean).length} words. Available variables:{' '}
+                {TEMPLATE_VARIABLES.map((v) => `{{${v}}}`).join(', ')}
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Shortcut</label>
+              <input
+                type="text"
+                value={editForm.shortcut}
+                onChange={(e) => setEditForm((prev) => ({ ...prev, shortcut: e.target.value }))}
+                placeholder="e.g., welcome, rates, hours"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+              />
+              <p className="mt-1 text-xs text-gray-400">
+                Optional. Agents type <span className="font-mono">/{editForm.shortcut || 'shortcut'}</span> in
+                the composer to insert this template.
+              </p>
+            </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Company</label>
-            <select
-              value={editForm.account_id}
-              onChange={(e) => setEditForm((prev) => ({ ...prev, account_id: e.target.value }))}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
-            >
-              <option value="">General (Shared across all companies)</option>
-              {accounts.map((acc) => (
-                <option key={acc.id} value={acc.id}>
-                  {acc.name}
-                </option>
-              ))}
-            </select>
-            <p className="mt-1 text-xs text-gray-400">
-              Select which company this template belongs to. &quot;General&quot; templates are shared
-              across all companies.
-            </p>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
-            <select
-              value={editForm.category}
-              onChange={(e) => setEditForm((prev) => ({ ...prev, category: e.target.value }))}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
-            >
-              {CATEGORIES.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Content *</label>
-            <textarea
-              value={editForm.content}
-              onChange={(e) => setEditForm((prev) => ({ ...prev, content: e.target.value }))}
-              placeholder="Write the reply template content..."
-              rows={8}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500 resize-y min-h-[160px]"
-            />
-            <p className="mt-1 text-xs text-gray-400">
-              {editForm.content.split(/\s+/).filter(Boolean).length} words
-            </p>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Shortcut</label>
-            <input
-              type="text"
-              value={editForm.shortcut}
-              onChange={(e) => setEditForm((prev) => ({ ...prev, shortcut: e.target.value }))}
-              placeholder="e.g., /thanks, /rates, /hours"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
-            />
-            <p className="mt-1 text-xs text-gray-400">
-              Optional shortcut for quick access (e.g., /thanks). Agents can type the shortcut to
-              insert this template.
-            </p>
+
+          {/* Live preview column */}
+          <div className="space-y-3">
+            <div>
+              <h4 className="text-sm font-medium text-gray-700">Preview</h4>
+              <p className="text-xs text-gray-400">
+                Sample values: customer.name = &quot;Sample Customer&quot;, user.full_name = &quot;Agent Smith&quot;.
+              </p>
+            </div>
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 min-h-[280px]">
+              {editForm.subject && (
+                <div className="mb-3">
+                  <p className="text-xs uppercase tracking-wide text-gray-400 mb-1">Subject</p>
+                  <p className="text-sm font-medium text-gray-900">{previewSubject}</p>
+                </div>
+              )}
+              <div>
+                {editForm.subject && (
+                  <p className="text-xs uppercase tracking-wide text-gray-400 mb-1">Body</p>
+                )}
+                <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                  {previewBody || (
+                    <span className="text-gray-400 italic">
+                      Type a template body to see the preview.
+                    </span>
+                  )}
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       </Modal>

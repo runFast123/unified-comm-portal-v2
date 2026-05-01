@@ -27,6 +27,7 @@ import { useToast } from '@/components/ui/toast'
 import { useConversationPresence } from '@/hooks/useConversationPresence'
 import { useSmartCompose } from '@/hooks/useSmartCompose'
 import type { ReplyTemplate } from '@/types/database'
+import { substituteTemplate as substituteTemplateVars } from '@/lib/templates'
 
 const SMART_COMPOSE_STORAGE_KEY = 'smart-compose-enabled'
 
@@ -255,11 +256,30 @@ export function ConversationActions({
     if (saved) setManualText(saved)
   }, [conversationId])
 
-  // Template variable interpolation
+  // Template variable interpolation. Supports both legacy single-segment
+  // tokens ({{customer_name}}) and the new dotted form ({{customer.name}}).
+  // We run the dotted-form substitution first so the legacy regex can't
+  // accidentally swallow `{{customer.name}}` as `{{customer}}` etc.
   const interpolateVars = useCallback((text: string): string => {
-    return text
+    const accountClean = accountName
+      .replace(/\s+Teams$/i, '')
+      .replace(/\s+WhatsApp$/i, '')
+      .trim()
+    const withModernVars = substituteTemplateVars(text, {
+      customer: {
+        name: participantName || null,
+        email: participantEmail || null,
+      },
+      // user.full_name / user.email are filled by the server only when a
+      // template comes from the API; client-side composer doesn't have a
+      // profile reference handy, so we fall back to the participant.
+      user: null,
+      company: { name: accountClean },
+      conversation: { subject: emailSubject || null },
+    })
+    return withModernVars
       .replace(/\{\{customer_name\}\}/gi, participantName || participantEmail || 'Customer')
-      .replace(/\{\{account_name\}\}/gi, accountName.replace(/\s+Teams$/i, '').replace(/\s+WhatsApp$/i, '').trim())
+      .replace(/\{\{account_name\}\}/gi, accountClean)
       .replace(/\{\{email_subject\}\}/gi, emailSubject || '')
       .replace(/\{\{channel\}\}/gi, channel)
   }, [participantName, participantEmail, accountName, emailSubject, channel])
@@ -356,28 +376,25 @@ export function ConversationActions({
     textareaRef: manualTextareaRef,
   })
 
-  // Fetch templates from Supabase
+  // Fetch templates via the company-scoped API. RLS handles isolation.
   const fetchTemplates = useCallback(async () => {
     setTemplatesLoading(true)
     try {
-      const supabase = createClient()
-      const { data, error } = await supabase
-        .from('reply_templates')
-        .select('*')
-        .eq('is_active', true)
-        .or(`account_id.is.null,account_id.eq.${accountId}`)
-        .order('usage_count', { ascending: false })
-
-      if (error) throw error
-      setTemplates(data || [])
-    } catch (err: any) {
-      console.error('Failed to fetch templates:', err)
-      // Fallback to empty - templates table might not exist yet
+      const res = await fetch('/api/templates')
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = (await res.json()) as { templates?: ReplyTemplate[] }
+      const list = (data.templates ?? []).filter((t) => t.is_active)
+      // Pre-sort by usage_count so most-used is on top.
+      list.sort((a, b) => (b.usage_count ?? 0) - (a.usage_count ?? 0))
+      setTemplates(list)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'unknown'
+      console.error('Failed to fetch templates:', msg)
       setTemplates([])
     } finally {
       setTemplatesLoading(false)
     }
-  }, [accountId])
+  }, [])
 
   // Fetch templates when dropdown opens
   useEffect(() => {
@@ -386,28 +403,25 @@ export function ConversationActions({
     }
   }, [showTemplates, fetchTemplates])
 
-  // Fetch shortcut templates (templates that have a shortcut defined)
+  // Fetch shortcut templates (templates that have a shortcut defined).
+  // Uses the same company-scoped API and filters client-side.
   const fetchShortcutTemplates = useCallback(async () => {
     if (shortcutLoaded) return
     try {
-      const supabase = createClient()
-      const { data, error } = await supabase
-        .from('reply_templates')
-        .select('*')
-        .eq('is_active', true)
-        .not('shortcut', 'is', null)
-        .or(`account_id.is.null,account_id.eq.${accountId}`)
-        .order('usage_count', { ascending: false })
-
-      if (error) throw error
-      setAllShortcutTemplates(data || [])
+      const res = await fetch('/api/templates')
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = (await res.json()) as { templates?: ReplyTemplate[] }
+      const list = (data.templates ?? [])
+        .filter((t) => t.is_active && t.shortcut)
+        .sort((a, b) => (b.usage_count ?? 0) - (a.usage_count ?? 0))
+      setAllShortcutTemplates(list)
       setShortcutLoaded(true)
     } catch (err) {
       console.error('Failed to fetch shortcut templates:', err)
       setAllShortcutTemplates([])
       setShortcutLoaded(true)
     }
-  }, [accountId, shortcutLoaded])
+  }, [shortcutLoaded])
 
   // Filter shortcut templates based on query
   useEffect(() => {
@@ -455,6 +469,46 @@ export function ConversationActions({
     setCursorPos(cursorPos)
     const textBeforeCursor = value.substring(0, cursorPos)
 
+    // Space-trigger: if the user just typed `/welcome ` (trailing space)
+    // and an exact-match shortcut exists, swap the literal `/welcome ` for
+    // the substituted template body. Lets agents skip the popup entirely
+    // when they remember the shortcut.
+    const justTypedSpace = textBeforeCursor.endsWith(' ')
+    const trailingMatch = textBeforeCursor.match(/(?:^|\s)\/([\w][\w-]*) $/)
+    if (justTypedSpace && trailingMatch && shortcutLoaded && allShortcutTemplates.length > 0) {
+      const wanted = trailingMatch[1].toLowerCase()
+      const exact = allShortcutTemplates.find(
+        (t) => (t.shortcut || '').replace(/^\//, '').toLowerCase() === wanted
+      )
+      if (exact) {
+        // Replace `/wanted ` with the rendered template content.
+        const literal = `/${trailingMatch[1]} `
+        const literalStart = textBeforeCursor.lastIndexOf(literal)
+        const before = value.substring(0, literalStart)
+        const after = value.substring(cursorPos)
+        const inserted = interpolateVars(exact.content)
+        const newText = before + inserted + after
+        setManualText(newText)
+        setShortcutQuery(null)
+        // Move cursor to just after the inserted content.
+        requestAnimationFrame(() => {
+          if (manualTextareaRef.current) {
+            const newPos = literalStart + inserted.length
+            manualTextareaRef.current.selectionStart = newPos
+            manualTextareaRef.current.selectionEnd = newPos
+            manualTextareaRef.current.focus()
+            setCursorPos(newPos)
+          }
+        })
+        // Fire-and-forget: increment usage count.
+        try {
+          const supabase = createClient()
+          void supabase.rpc('increment_template_usage_count', { template_id: exact.id })
+        } catch { /* non-critical */ }
+        return
+      }
+    }
+
     // Find the last "/" that starts a potential shortcut (preceded by start-of-text or whitespace)
     const match = textBeforeCursor.match(/(?:^|\s)\/([\w]*)$/)
     if (match) {
@@ -466,7 +520,7 @@ export function ConversationActions({
     } else {
       setShortcutQuery(null)
     }
-  }, [shortcutLoaded, fetchShortcutTemplates, conversationId, setComposing])
+  }, [shortcutLoaded, fetchShortcutTemplates, conversationId, setComposing, allShortcutTemplates, interpolateVars])
 
   // Handle shortcut selection
   const handleShortcutSelect = useCallback(async (template: ReplyTemplate) => {
