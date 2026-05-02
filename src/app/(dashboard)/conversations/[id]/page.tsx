@@ -542,8 +542,16 @@ export default async function ConversationPage({
 
       {/* Main content area */}
       <div className="flex flex-1 flex-col lg:flex-row overflow-hidden">
-        {/* Message thread */}
-        <div className="flex flex-1 flex-col min-h-0">
+        {/* Message thread.
+            `min-w-0` on this flex item lets it shrink below its
+            intrinsic content width — without this, the right sidebar
+            (lg:w-96 = 384px) would push the total past the viewport
+            edge by ~60px and get clipped behind the parent's
+            overflow-hidden, hiding the Internal Notes "Send" button
+            and other actionable controls. Default flex-item min-width
+            is `auto` which prevents shrink-to-fit; `min-w-0` is the
+            standard fix. */}
+        <div className="flex flex-1 flex-col min-h-0 min-w-0">
           <div className="flex-1 overflow-y-auto px-4 sm:px-6">
             {messages && messages.length > 0 ? (
               <>

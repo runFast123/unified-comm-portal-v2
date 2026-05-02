@@ -183,13 +183,20 @@ export default function ContactsPage() {
 
   const stats = useMemo(() => {
     const vipCount = contacts.filter((c) => c.is_vip).length
-    // "New this week" = contact.first_seen_at within the last 7 rolling days
-    // (NOT the calendar week). On a small / freshly-seeded DB where every
-    // contact was created in the last week, this can legitimately equal the
-    // total contact count — that's not a bug.
+    // "Active this week" = contact.last_seen_at within the last 7 rolling days.
+    //
+    // Previously this tile was "New this week" filtered by `first_seen_at`,
+    // but the contacts.first_seen_at column was backfilled to `now()` for
+    // every contact at the multi-tenancy migration — so on existing
+    // installs every single contact appeared "new this week" indefinitely
+    // (the audit caught Total=35 / NewThisWeek=35 as a "data bug"). The
+    // semantically-correct metric is recent activity, not creation time:
+    // last_seen_at is updated by findOrCreateContact on every inbound
+    // message, so this naturally diverges from total count and surfaces
+    // who's been actively reaching out.
     const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
-    const newThisWeek = contacts.filter(
-      (c) => c.first_seen_at && new Date(c.first_seen_at).getTime() >= oneWeekAgo
+    const activeThisWeek = contacts.filter(
+      (c) => c.last_seen_at && new Date(c.last_seen_at).getTime() >= oneWeekAgo
     ).length
     const totalConversations = contacts.reduce(
       (acc, c) => acc + (c.total_conversations || 0),
@@ -198,7 +205,7 @@ export default function ContactsPage() {
     return {
       total: contacts.length,
       vipCount,
-      newThisWeek,
+      activeThisWeek,
       totalConversations,
     }
   }, [contacts])
@@ -275,8 +282,8 @@ export default function ContactsPage() {
         <KpiTile
           color="green"
           icon={UserPlus}
-          label="New This Week"
-          value={stats.newThisWeek}
+          label="Active This Week"
+          value={stats.activeThisWeek}
         />
         <KpiTile color="amber" icon={Crown} label="VIPs" value={stats.vipCount} />
         <KpiTile

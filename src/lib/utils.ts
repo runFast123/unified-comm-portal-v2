@@ -72,7 +72,13 @@ export function timeAgo(timestamp: string | null | undefined): string {
   if (!timestamp) return 'N/A'
   const date = new Date(timestamp)
   if (isNaN(date.getTime())) return 'N/A'
-  return formatDistanceToNow(date, { addSuffix: false })
+  // date-fns produces verbose forms like "about 18 hours" / "almost 2 years"
+  // / "less than a minute". The "about" / "almost" / "over" prefixes are
+  // pure noise for narrow table columns — strip them so the output fits in
+  // tight cells (e.g. contacts "Last Seen" was clipping "ag" off
+  // "about 18 hours ago" because of the verbose prefix).
+  const raw = formatDistanceToNow(date, { addSuffix: false })
+  return raw.replace(/^(?:about|almost|over)\s+/i, '')
 }
 
 export function formatResponseTime(minutes: number): string {

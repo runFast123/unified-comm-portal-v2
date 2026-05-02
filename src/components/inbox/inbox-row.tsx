@@ -350,12 +350,13 @@ export function InboxRow({ item, selected, onSelect, onItemClick, isActive }: In
       </div>
 
       {/* Sender avatar + Name + Company + Channel badge.
-          Bumped from w-48 (192px) to w-56 (224px) on md and w-72 (288px)
-          on xl so longer sender names ("Dexter via Zammad Helpdesk
-          Support", "Twiching General Trading Pte Ltd") truncate less
-          aggressively on wider viewports while still being predictable
-          on mobile. */}
-      <div className="w-48 md:w-56 xl:w-72 flex-shrink-0 min-w-0 flex items-center gap-3">
+          User measured offsetWidth=240px vs scrollWidth=242px on the
+          previous w-72 (288px container = 240px text after avatar+gap).
+          Bumped one more notch — xl:w-80 (320px container = 272px text
+          area) — so "Dexter via Zammad Helpdesk Support" and
+          "Twiching General Trading Pte Ltd" fit cleanly without those
+          off-by-2-pixel truncations. */}
+      <div className="w-48 md:w-56 xl:w-80 flex-shrink-0 min-w-0 flex items-center gap-3">
         <div
           className={cn(
             'flex-shrink-0 h-9 w-9 rounded-full flex items-center justify-center text-[11px] font-bold text-white',
