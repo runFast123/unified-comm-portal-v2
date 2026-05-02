@@ -413,11 +413,14 @@ export function Sidebar({
           </button>
         </div>
 
-        {/* Navigation — fade masks soften the top/bottom edges so list items
-            don't get sliced abruptly when scrolled past the dividers above
-            and below the nav. */}
+        {/* Navigation. The earlier mask-image fade was reverted because
+            mask-image creates a stacking context that some browsers
+            interact with badly — was correlated with a viewport-rendering
+            regression where the conversation page only painted in the
+            top-left ~60%. Plain padding + the section dividers give the
+            same visual breathing room without the rendering risk. */}
         <nav
-          className="relative flex-1 overflow-y-auto px-3 py-6 space-y-1 [mask-image:linear-gradient(to_bottom,transparent_0,#000_24px,#000_calc(100%-24px),transparent_100%)] [-webkit-mask-image:linear-gradient(to_bottom,transparent_0,#000_24px,#000_calc(100%-24px),transparent_100%)]"
+          className="flex-1 overflow-y-auto px-3 py-4 space-y-1"
           aria-label="Main navigation"
         >
           {sections.map((section, sIdx) => {

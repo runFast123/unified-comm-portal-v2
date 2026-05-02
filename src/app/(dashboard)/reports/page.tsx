@@ -53,16 +53,20 @@ import { SentimentAnalyticsTab } from '@/components/reports/sentiment-analytics'
 
 type ReportTab = 'overview' | 'channels' | 'categories' | 'ai-performance' | 'trends' | 'conversations' | 'sentiment' | 'spam-filters' | 'imported-data'
 
+// Tab labels are kept short on purpose — when "Conversations" / "AI Performance"
+// were full-length, the last 2-3 tabs got cut off at "Co..." on common
+// 1280-1366px viewports even with horizontal scroll enabled. Compact labels
+// + scroll-on-overflow is the cleaner combination.
 const tabs: { id: ReportTab; label: string; icon: React.ElementType }[] = [
   { id: 'overview', label: 'Overview', icon: BarChart3 },
   { id: 'channels', label: 'Channels', icon: Layers },
   { id: 'categories', label: 'Categories', icon: Tag },
-  { id: 'ai-performance', label: 'AI Performance', icon: Bot },
+  { id: 'ai-performance', label: 'AI', icon: Bot },
   { id: 'trends', label: 'Trends', icon: TrendingUp },
-  { id: 'conversations', label: 'Conversations', icon: MessageSquare },
+  { id: 'conversations', label: 'Convos', icon: MessageSquare },
   { id: 'sentiment', label: 'Sentiment', icon: Smile },
-  { id: 'spam-filters', label: 'Spam & Filters', icon: ShieldAlert },
-  { id: 'imported-data', label: 'Imported Data', icon: FileSpreadsheet },
+  { id: 'spam-filters', label: 'Spam', icon: ShieldAlert },
+  { id: 'imported-data', label: 'Imports', icon: FileSpreadsheet },
 ]
 
 function getDateRangeStart(range: DateRange, customFrom?: string): string {

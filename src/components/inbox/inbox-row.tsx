@@ -349,8 +349,13 @@ export function InboxRow({ item, selected, onSelect, onItemClick, isActive }: In
         <ChannelIcon channel={item.channel} size={14} className="text-current" />
       </div>
 
-      {/* Sender avatar + Name + Company + Channel badge */}
-      <div className="w-48 flex-shrink-0 min-w-0 flex items-center gap-3">
+      {/* Sender avatar + Name + Company + Channel badge.
+          Bumped from w-48 (192px) to w-56 (224px) on md and w-72 (288px)
+          on xl so longer sender names ("Dexter via Zammad Helpdesk
+          Support", "Twiching General Trading Pte Ltd") truncate less
+          aggressively on wider viewports while still being predictable
+          on mobile. */}
+      <div className="w-48 md:w-56 xl:w-72 flex-shrink-0 min-w-0 flex items-center gap-3">
         <div
           className={cn(
             'flex-shrink-0 h-9 w-9 rounded-full flex items-center justify-center text-[11px] font-bold text-white',

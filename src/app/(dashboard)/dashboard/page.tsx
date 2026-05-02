@@ -1386,8 +1386,14 @@ export default function DashboardPage() {
         description={`Per-account metrics for the selected period`}
         className="animate-slide-up stagger-5"
       >
+        {/* No min-w forcing horizontal scroll. The CompanyStatsTable
+            internally hides low-priority columns (Channels, AI Drafts/Sent,
+            Response Rate, Top Category, Last Active) at narrower
+            breakpoints — see commit abf514c8. So at narrow viewports the
+            user sees fewer columns instead of a dead horizontal scroll
+            bar with column-name truncation ("Response Rat..."). */}
         <div className="overflow-x-auto">
-          <div className="min-w-[800px]">
+          <div>
             <CompanyStatsTable
               stats={companyStats.filter(s => {
                 if (selectedAccountIds.size > 0 && !selectedAccountIds.has(s.id)) return false

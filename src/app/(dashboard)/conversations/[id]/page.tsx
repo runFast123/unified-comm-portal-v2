@@ -392,7 +392,11 @@ export default async function ConversationPage({
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
               <h1
-                className="font-semibold text-gray-900 text-lg line-clamp-2 break-words max-w-[240px] sm:max-w-[360px]"
+                // No max-w — the parent already has `min-w-0 flex-1` so
+                // this h1 fills the available space and wraps naturally
+                // within the line-clamp constraint. Earlier max-w-[360px]
+                // truncated the title even on wide viewports.
+                className="font-semibold text-gray-900 text-lg line-clamp-2 break-words"
                 title={participantName}
               >
                 {participantName}

@@ -307,19 +307,32 @@ export default function ContactsPage() {
             onChange={(e) => setTagFilter(e.target.value)}
           />
         </div>
+        {/* VIP-only toggle. Visual treatment communicates "this is a
+            toggle, not a navigate-action button":
+              - ON: filled amber bg + ring + check dot before the label
+              - OFF: empty white bg + dashed border + crown icon at low opacity
+            The dashed-vs-solid border switch is the strongest "off vs on"
+            visual cue the user can read at a glance. */}
         <button
           type="button"
           onClick={() => setVipOnly((v) => !v)}
           aria-pressed={vipOnly}
+          title={vipOnly ? 'Showing VIP contacts only — click to clear filter' : 'Filter to VIP contacts only'}
           className={cn(
-            'inline-flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors',
+            'inline-flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-all',
             vipOnly
-              ? 'border-amber-300 bg-amber-100 text-amber-800 hover:bg-amber-200'
-              : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+              ? 'border-amber-400 bg-amber-100 text-amber-900 ring-2 ring-amber-200 shadow-inner hover:bg-amber-200'
+              : 'border-dashed border-gray-300 bg-white text-gray-600 hover:bg-gray-50 hover:border-amber-300 hover:text-amber-700'
           )}
         >
-          <Crown className="h-4 w-4" />
-          VIP only
+          {vipOnly ? (
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-600" aria-hidden="true" />
+          ) : null}
+          <Crown className={cn('h-4 w-4', !vipOnly && 'opacity-60')} />
+          <span>VIP only</span>
+          {vipOnly && (
+            <span className="ml-0.5 text-[10px] font-bold uppercase tracking-wide">on</span>
+          )}
         </button>
       </div>
 

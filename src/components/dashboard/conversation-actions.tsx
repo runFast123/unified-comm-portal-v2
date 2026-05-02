@@ -1614,10 +1614,25 @@ export function ConversationActions({
               <Clock size={14} />
               Schedule
             </Button>
-            <Button size="sm" variant="primary" onClick={guardedManualReply} disabled={loading === 'manual'}>
+            {/* Send button — `whitespace-nowrap` so the label never wraps
+                onto a second line. Tooltip carries the keyboard hint
+                instead of a persistent inline label, removing the cluttered
+                "AI On / Ctrl+Enter / to send" column the audit flagged. */}
+            <Button
+              size="sm"
+              variant="primary"
+              onClick={guardedManualReply}
+              disabled={loading === 'manual'}
+              className="whitespace-nowrap"
+              title="Send (Ctrl+Enter)"
+            >
               {loading === 'manual' ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
               Send Reply
             </Button>
+            {/* Compact status row — only the AI toggle stays persistent;
+                draft-saved + tab-to-accept are inline only when relevant.
+                Removed the always-on "Ctrl+Enter to send" hint that was
+                turning the strip into a wall of micro-text. */}
             <span className="text-[10px] text-gray-400 flex items-center gap-2 ml-auto">
               {draftSaved && <span className="text-green-500">Draft saved</span>}
               {smartSuggestion && smartComposeEnabled && (
@@ -1629,7 +1644,7 @@ export function ConversationActions({
                 type="button"
                 onClick={() => persistSmartComposeEnabled(!smartComposeEnabled)}
                 title={`Smart Compose is ${smartComposeEnabled ? 'on' : 'off'} — Ctrl+. to toggle`}
-                className={`px-1.5 py-0.5 rounded text-[9px] font-mono ring-1 transition-colors ${
+                className={`px-1.5 py-0.5 rounded text-[10px] font-medium ring-1 transition-colors ${
                   smartComposeEnabled
                     ? 'bg-teal-50 text-teal-700 ring-teal-200 hover:bg-teal-100'
                     : 'bg-gray-100 text-gray-500 ring-gray-200 hover:bg-gray-200'
@@ -1637,7 +1652,6 @@ export function ConversationActions({
               >
                 AI {smartComposeEnabled ? 'On' : 'Off'}
               </button>
-              <kbd className="px-1 py-0.5 bg-gray-100 rounded text-[9px] font-mono">Ctrl+Enter</kbd> to send
             </span>
           </div>
         </div>
