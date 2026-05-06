@@ -1725,7 +1725,17 @@ export function ConversationActions({
         </div>
       )}
 
-      {/* Action buttons */}
+      {/* Action buttons.
+          The two visual rows separate concerns the previous single
+          flex-wrap row blurred:
+            Row 1 — Compose / send actions (Approve, Edit, Manual,
+            Templates, Mark as Replied) — what the agent does *with* the
+            current draft.
+            Row 2 — Conversation-state actions (Escalate, Resolve) —
+            what the agent does *to the conversation as a whole*.
+          A hairline border between the rows reads as "different scope"
+          and stops the dual-purpose toolbar from looking like one
+          undifferentiated wall of buttons. */}
       <div className="flex flex-wrap items-center gap-2">
         {aiReplyId && aiReplyStatus === 'pending_approval' && (
           <Button size="sm" variant="success" onClick={handleApprove} disabled={loading === 'approve'}>
@@ -1844,37 +1854,50 @@ export function ConversationActions({
             </div>
           )}
         </div>
-        <Button
-          size="sm"
-          variant="secondary"
-          className="bg-green-50 text-green-700 hover:bg-green-100 border border-green-200"
-          onClick={handleMarkReplied}
-          disabled={loading === 'mark_replied'}
-        >
-          {loading === 'mark_replied' ? <Loader2 size={14} className="animate-spin" /> : <CheckCheck size={14} />}
-          Mark as Replied
-        </Button>
-        <div className="mx-2 h-6 w-px bg-gray-200" />
-        <Button
-          size="sm"
-          variant="danger"
-          className="bg-orange-500 hover:bg-orange-600"
-          onClick={handleEscalate}
-          disabled={loading === 'escalate'}
-        >
-          {loading === 'escalate' ? <Loader2 size={14} className="animate-spin" /> : <AlertTriangle size={14} />}
-          Escalate
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          className="text-green-700 border border-green-300 hover:bg-green-50"
-          onClick={handleResolve}
-          disabled={loading === 'resolve'}
-        >
-          {loading === 'resolve' ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={14} />}
-          Resolve
-        </Button>
+      </div>
+
+      {/* Conversation-state actions — visually separated from the
+          compose/send row above so it's clear these mutate the
+          conversation as a whole, not just the current draft. The
+          tiny "Conversation actions" caption gives the section a
+          name (was a single un-labeled flex row before, which the
+          UI audit called out as ambiguous-scope). */}
+      <div className="border-t border-gray-100 pt-3">
+        <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+          Conversation actions
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            size="sm"
+            variant="secondary"
+            className="bg-green-50 text-green-700 hover:bg-green-100 border border-green-200"
+            onClick={handleMarkReplied}
+            disabled={loading === 'mark_replied'}
+          >
+            {loading === 'mark_replied' ? <Loader2 size={14} className="animate-spin" /> : <CheckCheck size={14} />}
+            Mark as Replied
+          </Button>
+          <Button
+            size="sm"
+            variant="danger"
+            className="bg-orange-500 hover:bg-orange-600"
+            onClick={handleEscalate}
+            disabled={loading === 'escalate'}
+          >
+            {loading === 'escalate' ? <Loader2 size={14} className="animate-spin" /> : <AlertTriangle size={14} />}
+            Escalate
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="text-green-700 border border-green-300 hover:bg-green-50"
+            onClick={handleResolve}
+            disabled={loading === 'resolve'}
+          >
+            {loading === 'resolve' ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={14} />}
+            Resolve
+          </Button>
+        </div>
       </div>
     </div>
   )

@@ -23,6 +23,7 @@ import { MergeBanner, type MergedSecondary } from '@/components/dashboard/merge-
 import { CSATSendButton } from '@/components/dashboard/csat-send-button'
 import { TimeTrackingActive } from '@/components/dashboard/time-tracking-active'
 import { ConversationTimeDisplay } from '@/components/dashboard/conversation-time-display'
+import { ConversationSidePanel } from '@/components/dashboard/conversation-side-panel'
 import {
   cn,
   getChannelLabel,
@@ -392,11 +393,17 @@ export default async function ConversationPage({
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
               <h1
+                // 20px / semibold gives the page a clear primary anchor.
+                // Was text-lg (18px) which sat too close in weight to the
+                // status pills + action buttons in the same row, producing
+                // the "everything competing for attention" feel called out
+                // in the UI audit. tracking-tight cleans up the wider
+                // glyph spacing at this size.
                 // No max-w — the parent already has `min-w-0 flex-1` so
                 // this h1 fills the available space and wraps naturally
                 // within the line-clamp constraint. Earlier max-w-[360px]
                 // truncated the title even on wide viewports.
-                className="font-semibold text-gray-900 text-lg line-clamp-2 break-words"
+                className="font-semibold text-gray-900 text-xl tracking-tight line-clamp-2 break-words"
                 title={participantName}
               >
                 {participantName}
@@ -598,30 +605,44 @@ export default async function ConversationPage({
           </div>
         </div>
 
-        {/* Right sidebar - below thread on mobile, side panel on desktop */}
-        <div className="w-full lg:w-96 shrink-0 overflow-y-auto border-t lg:border-t-0 lg:border-l border-gray-200 bg-gray-50 p-6 space-y-6">
-          <AISidebar
-            classification={classification}
-            aiReply={mappedAiReply}
-            kbArticles={kbArticleTitles}
-            sentimentHistory={sentimentHistory}
-            customerHistory={customerHistory}
-            channel={channel}
-            conversationId={id}
-            teamsContext={channel === 'teams' ? {
-              chatType: conversation.teams_chat_id?.includes('uni01_') ? '1:1' : 'group',
-              accountName: accountName.replace(/\s+Teams$/i, '').replace(/\s+WhatsApp$/i, '').trim(),
-              participantName,
-              messageCount,
-            } : null}
+        {/* Right sidebar — tabbed layout. Replaces the previous "five
+            cards stacked vertically" pattern (Thread Summary / Tags /
+            Time / Notes / Activity), which left empty cards consuming
+            vertical real-estate even when empty. Each tab content is
+            mounted on first render and just toggled via `hidden` so
+            unsent notes / scroll positions / fetched data survive
+            switching between tabs. Below thread on mobile, side panel
+            on desktop. */}
+        <div className="w-full lg:w-96 shrink-0 overflow-hidden border-t lg:border-t-0 lg:border-l border-gray-200 bg-white">
+          <ConversationSidePanel
+            tagsCount={((conversation.tags as string[] | null) ?? []).length}
+            summary={
+              <AISidebar
+                classification={classification}
+                aiReply={mappedAiReply}
+                kbArticles={kbArticleTitles}
+                sentimentHistory={sentimentHistory}
+                customerHistory={customerHistory}
+                channel={channel}
+                conversationId={id}
+                teamsContext={channel === 'teams' ? {
+                  chatType: conversation.teams_chat_id?.includes('uni01_') ? '1:1' : 'group',
+                  accountName: accountName.replace(/\s+Teams$/i, '').replace(/\s+WhatsApp$/i, '').trim(),
+                  participantName,
+                  messageCount,
+                } : null}
+              />
+            }
+            tags={
+              <ConversationTagPicker
+                conversationId={id}
+                initialTags={(conversation.tags as string[] | null) ?? []}
+              />
+            }
+            time={<ConversationTimeDisplay conversationId={id} />}
+            notes={<InternalNotes conversationId={id} authorName={currentUserName || undefined} />}
+            activity={<ActivityTimeline conversationId={id} />}
           />
-          <ConversationTagPicker
-            conversationId={id}
-            initialTags={(conversation.tags as string[] | null) ?? []}
-          />
-          <ConversationTimeDisplay conversationId={id} />
-          <InternalNotes conversationId={id} authorName={currentUserName || undefined} />
-          <ActivityTimeline conversationId={id} />
         </div>
       </div>
     </div>
