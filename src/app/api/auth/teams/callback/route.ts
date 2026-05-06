@@ -107,24 +107,38 @@ export async function GET(request: Request) {
   // OAuth-first create flow leaves accounts.teams_user_id null — fill it
   // in from Graph /me now that we know the signed-in UPN. Never overwrite
   // an admin-entered value (e.g. they may have specified a GUID on purpose).
-  if (userEmail) {
-    try {
-      const admin = await createServiceRoleClient()
-      const { data: existingAcc } = await admin
-        .from('accounts')
-        .select('teams_user_id')
-        .eq('id', accountId)
-        .maybeSingle()
-      if (existingAcc && !existingAcc.teams_user_id) {
-        await admin
-          .from('accounts')
-          .update({ teams_user_id: userEmail })
-          .eq('id', accountId)
-      }
-    } catch (err) {
-      // Non-fatal — the OAuth config itself is saved, UI will still work.
-      console.error('Failed to backfill accounts.teams_user_id:', err)
+  //
+  // Also reset the polling-failure counter so a successful re-auth lets
+  // the circuit breaker close on the next cron tick. Without this the
+  // breaker stays open even with valid credentials, and the cron keeps
+  // skipping the account. Symmetric with the Gmail OAuth callback.
+  try {
+    const admin = await createServiceRoleClient()
+    const { data: existingAcc } = await admin
+      .from('accounts')
+      .select('teams_user_id')
+      .eq('id', accountId)
+      .maybeSingle()
+    const patch: {
+      teams_user_id?: string
+      consecutive_poll_failures: number
+      last_poll_error: null
+      last_poll_error_at: null
+    } = {
+      consecutive_poll_failures: 0,
+      last_poll_error: null,
+      last_poll_error_at: null,
     }
+    if (userEmail && existingAcc && !existingAcc.teams_user_id) {
+      patch.teams_user_id = userEmail
+    }
+    await admin
+      .from('accounts')
+      .update(patch)
+      .eq('id', accountId)
+  } catch (err) {
+    // Non-fatal — the OAuth config itself is saved, UI will still work.
+    console.error('Failed to backfill accounts.teams_user_id / reset breaker:', err)
   }
 
   // Audit log. We don't have a user-id readily available in this callback

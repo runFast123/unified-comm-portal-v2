@@ -142,6 +142,14 @@ export async function GET(request: Request) {
   // OAuth-first create flow leaves accounts.gmail_address null — fill it in
   // from the signed-in Google identity now that we have it. We never
   // overwrite an admin-entered address, only populate when missing.
+  //
+  // Also reset the polling-failure counter and clear last_poll_error: a
+  // successful re-auth almost always means the previous failure cause
+  // (expired refresh token, revoked grant, "Unexpected close" auth churn)
+  // is gone. Without this reset the circuit breaker stays open even
+  // though credentials are now valid, and the cron keeps skipping the
+  // account on every tick — fresh OAuth then looks like it "didn't fix
+  // anything" until ops notices and resets the counter manually.
   try {
     const admin = await createServiceRoleClient()
     const { data: existingAcc } = await admin
@@ -149,15 +157,26 @@ export async function GET(request: Request) {
       .select('gmail_address')
       .eq('id', accountId)
       .maybeSingle()
-    if (existingAcc && !existingAcc.gmail_address) {
-      await admin
-        .from('accounts')
-        .update({ gmail_address: userEmail })
-        .eq('id', accountId)
+    const patch: {
+      gmail_address?: string
+      consecutive_poll_failures: number
+      last_poll_error: null
+      last_poll_error_at: null
+    } = {
+      consecutive_poll_failures: 0,
+      last_poll_error: null,
+      last_poll_error_at: null,
     }
+    if (existingAcc && !existingAcc.gmail_address) {
+      patch.gmail_address = userEmail
+    }
+    await admin
+      .from('accounts')
+      .update(patch)
+      .eq('id', accountId)
   } catch (err) {
     // Non-fatal — the OAuth config itself is saved, UI will still work.
-    console.error('Failed to backfill accounts.gmail_address:', err)
+    console.error('Failed to backfill accounts.gmail_address / reset breaker:', err)
   }
 
   // Audit log (best-effort).
