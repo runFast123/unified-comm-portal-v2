@@ -316,14 +316,21 @@ export function Sidebar({
     return pathname.startsWith(hrefPath)
   }
 
-  const linkClasses = (href: string) =>
-    `relative flex items-center rounded-lg text-sm font-medium transition-colors ${
-      collapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3 py-2'
-    } ${
-      isActive(href)
-        ? 'bg-primary text-primary-foreground'
-        : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-    }`
+  // Active-route styling per UI audit J: left accent bar + bold label
+  // (subtle highlight) instead of a full-pill primary-color background.
+  // The previous full background made it hard to scan the nav at a
+  // glance — every active item looked like a CTA. The 2px-wide left
+  // bar is loud enough to find quickly without dominating the column.
+  const linkClasses = (href: string) => {
+    const active = isActive(href)
+    const baseLayout = collapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3 py-2'
+    if (active) {
+      return collapsed
+        ? `relative flex items-center rounded-lg text-sm font-semibold transition-colors ${baseLayout} bg-primary/10 text-primary`
+        : `relative flex items-center rounded-lg text-sm font-semibold transition-colors ${baseLayout} bg-primary/10 text-primary before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-[3px] before:rounded-r-sm before:bg-primary`
+    }
+    return `relative flex items-center rounded-lg text-sm font-medium transition-colors ${baseLayout} text-muted-foreground hover:bg-accent hover:text-sidebar-foreground`
+  }
 
   const initials = user.full_name
     ? user.full_name
@@ -383,7 +390,11 @@ export function Sidebar({
           open ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        {/* Logo / Brand — replaced by company branding when configured. */}
+        {/* Logo / Brand — replaced by company branding when configured.
+            Per UI audit J: the desktop collapse toggle now lives next to
+            the logo (was a separate strip at the very bottom which felt
+            disconnected from where users expect it). Mobile close [X]
+            keeps its previous spot. */}
         <div className={`flex h-16 items-center border-b border-sidebar-border ${collapsed ? 'justify-center px-2' : 'justify-between px-4'}`}>
           <Link href="/dashboard" className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3'}`}>
             {brandLogoUrl ? (
@@ -404,13 +415,27 @@ export function Sidebar({
               </span>
             )}
           </Link>
-          <button
-            onClick={onClose}
-            className="md:hidden flex h-11 w-11 items-center justify-center text-muted-foreground hover:text-sidebar-foreground"
-            aria-label="Close sidebar"
-          >
-            <X className="h-5 w-5" />
-          </button>
+          <div className="flex items-center gap-1">
+            {/* Desktop collapse toggle — sits next to the logo per UI audit J. */}
+            {!collapsed && (
+              <button
+                onClick={toggleCollapsed}
+                className="hidden md:flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-sidebar-foreground transition-colors"
+                title="Collapse sidebar"
+                aria-label="Collapse sidebar"
+              >
+                <PanelLeftClose className="h-4 w-4" />
+              </button>
+            )}
+            {/* Mobile close button */}
+            <button
+              onClick={onClose}
+              className="md:hidden flex h-11 w-11 items-center justify-center text-muted-foreground hover:text-sidebar-foreground"
+              aria-label="Close sidebar"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
 
         {/* Navigation. The earlier mask-image fade was reverted because
@@ -505,12 +530,14 @@ export function Sidebar({
                               href={href}
                               onClick={onClose}
                               title={collapsed ? sv.name : undefined}
-                              className={`relative flex items-center rounded-lg text-sm font-medium transition-colors ${
+                              className={`relative flex items-center rounded-lg text-sm transition-colors ${
                                 collapsed ? 'justify-center px-2 py-2' : 'gap-3 px-3 py-1.5'
                               } ${
                                 active
-                                  ? 'bg-primary text-primary-foreground'
-                                  : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                                  ? collapsed
+                                    ? 'bg-primary/10 text-primary font-semibold'
+                                    : 'bg-primary/10 text-primary font-semibold before:absolute before:left-0 before:top-1 before:bottom-1 before:w-[3px] before:rounded-r-sm before:bg-primary'
+                                  : 'text-muted-foreground hover:bg-accent hover:text-sidebar-foreground font-medium'
                               }`}
                             >
                               <SVIcon className="h-4 w-4 flex-shrink-0" />
@@ -562,38 +589,20 @@ export function Sidebar({
           })}
         </nav>
 
-        {/* Collapse toggle — desktop only */}
-        <div className="hidden md:flex border-t border-sidebar-border p-2">
-          <button
-            onClick={toggleCollapsed}
-            className="flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          >
-            {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
-            {!collapsed && <span>Collapse</span>}
-          </button>
-        </div>
-
-        {/* Keyboard shortcuts hint — docked at the very bottom of the
-            sidebar (above the user card) so it never overlaps menu items
-            during scroll. Hidden when the rail is collapsed. */}
-        {!collapsed && (
-          <div className="flex justify-end border-t border-sidebar-border px-3 py-2">
+        {/* Expand toggle — only visible when collapsed (the matching
+            collapse button lives in the header next to the logo when
+            expanded). Per UI audit J, this stops the toggle from
+            sitting awkwardly above the user profile when there's
+            already a more obvious place for it. */}
+        {collapsed && (
+          <div className="hidden md:flex border-t border-sidebar-border p-2">
             <button
-              type="button"
-              onClick={() => {
-                if (typeof window !== 'undefined') {
-                  window.dispatchEvent(new CustomEvent('shortcuts:open'))
-                }
-              }}
-              className="inline-flex items-center gap-1.5 rounded-full bg-teal-50 px-2 py-0.5 text-[11px] font-medium text-teal-700 ring-1 ring-teal-200 transition-colors hover:bg-teal-100"
-              title="View keyboard shortcuts"
-              aria-label="View keyboard shortcuts"
+              onClick={toggleCollapsed}
+              className="flex w-full items-center justify-center rounded-lg p-2 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+              title="Expand sidebar"
+              aria-label="Expand sidebar"
             >
-              <kbd className="rounded-md border border-teal-200 bg-white px-1 py-0 text-[10px] font-semibold text-teal-700 shadow-sm">
-                ?
-              </kbd>
-              <span>shortcuts</span>
+              <PanelLeftOpen className="h-4 w-4" />
             </button>
           </div>
         )}
@@ -676,11 +685,31 @@ export function Sidebar({
                 <FileText className="h-4 w-4 shrink-0" />
                 <span>My signature</span>
               </Link>
+              {/* Keyboard shortcuts — moved here from the standalone
+                  bottom strip per UI audit J. The `?` keybind already
+                  works globally; this menu item is the discoverable
+                  affordance. */}
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setUserMenuOpen(false)
+                  if (typeof window !== 'undefined') {
+                    window.dispatchEvent(new CustomEvent('shortcuts:open'))
+                  }
+                }}
+                className="flex w-full items-center gap-2 px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+              >
+                <kbd className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border border-current text-[10px] font-semibold opacity-70">
+                  ?
+                </kbd>
+                <span>Keyboard shortcuts</span>
+              </button>
               <form action={signOut}>
                 <button
                   type="submit"
                   role="menuitem"
-                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                  className="flex w-full items-center gap-2 border-t border-sidebar-border px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
                 >
                   <LogOut className="h-4 w-4 shrink-0" />
                   <span>Sign out</span>

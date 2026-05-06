@@ -379,30 +379,32 @@ export default async function ConversationPage({
 
   return (
     <div className="flex h-[calc(100vh-4rem)] flex-col">
-      {/* Conversation header */}
-      <div className="shrink-0 border-b border-gray-200 bg-white px-4 sm:px-6 py-5">
-        {/* Top row: back + name + actions */}
-        <div className="flex items-center gap-4 sm:gap-5">
+      {/* Conversation header — 3-tier hierarchy per the UI audit:
+            Row 1 (primary): subject + identity badges | primary actions
+            Row 2 (metadata): muted account / channel / email / timestamps
+            Row 3 (status):  status pill + priority + contact profile link
+
+          The previous single-row layout crammed title, badges, dividers,
+          status, snooze, merge, assign and CSAT into one tight band.
+          Splitting into three weight tiers gives the eye an anchor and
+          stops the actions from competing with the subject for focus. */}
+      <div className="shrink-0 border-b border-gray-200 bg-white px-4 sm:px-6 py-4">
+        {/* Row 1: title + primary actions */}
+        <div className="flex items-start gap-4 sm:gap-5">
           <Link
             href="/inbox"
-            className="text-gray-400 hover:text-teal-700 transition-colors shrink-0"
+            className="text-gray-400 hover:text-teal-700 transition-colors shrink-0 mt-0.5"
+            aria-label="Back to inbox"
           >
             <ArrowLeft size={20} />
           </Link>
-          <ChannelIcon channel={channel} size={22} className="shrink-0" />
+          <ChannelIcon channel={channel} size={22} className="shrink-0 mt-0.5" />
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
               <h1
-                // 20px / semibold gives the page a clear primary anchor.
-                // Was text-lg (18px) which sat too close in weight to the
-                // status pills + action buttons in the same row, producing
-                // the "everything competing for attention" feel called out
-                // in the UI audit. tracking-tight cleans up the wider
-                // glyph spacing at this size.
-                // No max-w — the parent already has `min-w-0 flex-1` so
-                // this h1 fills the available space and wraps naturally
-                // within the line-clamp constraint. Earlier max-w-[360px]
-                // truncated the title even on wide viewports.
+                // 20px / semibold + tracking-tight gives the page a clear
+                // primary anchor instead of competing weights with the
+                // action buttons.
                 className="font-semibold text-gray-900 text-xl tracking-tight line-clamp-2 break-words"
                 title={participantName}
               >
@@ -424,97 +426,112 @@ export default async function ConversationPage({
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-2 text-xs text-gray-500 mt-1.5">
-              <span>{accountName.replace(/\s+Teams$/i, '').replace(/\s+WhatsApp$/i, '')}</span>
-              <span className="text-gray-300">&middot;</span>
-              <span>{getChannelLabel(channel)}</span>
-              {channel !== 'teams' && conversation.participant_email && (
-                <span className="hidden sm:inline text-gray-400">&middot; {conversation.participant_email}</span>
-              )}
-            </div>
           </div>
-          {/* Live "who else is here" stack — only renders when others are present */}
-          {currentUserId && (
-            <PresenceBar
+          {/* Primary actions — Snooze / Merge / Assign / CSAT plus the
+              live presence stack. Status + priority moved to Row 3, so
+              this group is purely "what can I do to this conversation". */}
+          <div className="flex items-center gap-2 shrink-0">
+            {currentUserId && (
+              <PresenceBar
+                conversationId={id}
+                currentUser={{
+                  user_id: currentUserId,
+                  display_name: currentUserName || 'You',
+                  avatar_url: null,
+                }}
+              />
+            )}
+            <SnoozeButton
               conversationId={id}
-              currentUser={{
-                user_id: currentUserId,
-                display_name: currentUserName || 'You',
-                avatar_url: null,
-              }}
+              snoozedUntil={(conversation as { snoozed_until?: string | null }).snoozed_until ?? null}
             />
-          )}
-          {/* Status & priority badges + action group.
-              Visual dividers (h-6 w-px bg-gray-200) split the bar into three
-              functional groups: status/priority | snooze/merge | assignment/csat
-              so the header reads as separate concerns instead of one flat row.
-              The pills carry `title` tooltips so hovering reveals what each
-              represents (#4.3). */}
-          <div className="flex items-center gap-3 shrink-0">
-            <div className="flex items-center gap-2" title="Conversation status">
-              <StatusDropdown
-                conversationId={id}
-                currentStatus={status}
-                secondaryStatus={(conversation as { secondary_status?: string | null }).secondary_status ?? null}
-                secondaryStatusColor={(conversation as { secondary_status_color?: string | null }).secondary_status_color ?? null}
-              />
-              <span
-                className={cn(
-                  'rounded-full px-2.5 py-1 text-xs font-medium whitespace-nowrap',
-                  getPriorityColor(priority)
-                )}
-                title={`Priority: ${priority}`}
-                aria-label={`Priority: ${priority}`}
-              >
-                {priority}
-              </span>
-            </div>
-            <span className="h-6 w-px bg-gray-200" aria-hidden="true" />
-            <div className="flex items-center gap-2">
-              <SnoozeButton
-                conversationId={id}
-                snoozedUntil={(conversation as { snoozed_until?: string | null }).snoozed_until ?? null}
-              />
-              {!mergedIntoId && <MergeButton conversationId={id} />}
-            </div>
-            <span className="h-6 w-px bg-gray-200" aria-hidden="true" />
-            <div className="flex items-center gap-2">
-              <AgentAssignment
-                conversationId={id}
-                currentAssignedTo={conversation.assigned_to || null}
-                currentAssignedName={assignedUser?.full_name || assignedUser?.email || null}
-              />
-              <CSATSendButton
-                conversationId={id}
-                csatEnabled={csatEnabled}
-                status={status}
-                hasParticipantEmail={!!conversation.participant_email}
-              />
-            </div>
+            {!mergedIntoId && <MergeButton conversationId={id} />}
+            <AgentAssignment
+              conversationId={id}
+              currentAssignedTo={conversation.assigned_to || null}
+              currentAssignedName={assignedUser?.full_name || assignedUser?.email || null}
+            />
+            <CSATSendButton
+              conversationId={id}
+              csatEnabled={csatEnabled}
+              status={status}
+              hasParticipantEmail={!!conversation.participant_email}
+            />
           </div>
         </div>
-        {/* Timer row */}
-        <div className="flex items-center gap-4 text-[11px] text-gray-400 mt-3 ml-[52px] sm:ml-[62px] flex-wrap">
-          {firstMsgAt && <span>Active {formatDuration(activeDurationMs)}</span>}
-          {lastMsgAt && <span>&middot; Last reply {formatDuration(lastReplyMs)} ago</span>}
-          <span>&middot; {messageCount} msgs ({inboundCount} inbound)</span>
-          {totalConversations > 1 && (
-            <span>&middot; {totalConversations} conversations</span>
+
+        {/* Row 2: muted metadata. All the "who / where / when" facts
+            collapse into one quiet text-xs line so they read as
+            secondary info rather than competing pills. The aligned
+            ml offset keeps the line indented under the title. */}
+        <div className="mt-1.5 ml-[52px] sm:ml-[62px] flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-500">
+          <span className="truncate">{accountName.replace(/\s+Teams$/i, '').replace(/\s+WhatsApp$/i, '')}</span>
+          <span className="text-gray-300">&middot;</span>
+          <span>{getChannelLabel(channel)}</span>
+          {channel !== 'teams' && conversation.participant_email && (
+            <>
+              <span className="hidden sm:inline text-gray-300">&middot;</span>
+              <span className="hidden sm:inline truncate">{conversation.participant_email}</span>
+            </>
           )}
-          {contactProfile && (
+          {firstMsgAt && (
             <>
               <span className="text-gray-300">&middot;</span>
+              <span>Active {formatDuration(activeDurationMs)}</span>
+            </>
+          )}
+          {lastMsgAt && (
+            <>
+              <span className="text-gray-300">&middot;</span>
+              <span>Last reply {formatDuration(lastReplyMs)} ago</span>
+            </>
+          )}
+          <span className="text-gray-300">&middot;</span>
+          <span>{messageCount} msgs ({inboundCount} inbound)</span>
+          {totalConversations > 1 && (
+            <>
+              <span className="text-gray-300">&middot;</span>
+              <span>{totalConversations} conversations</span>
+            </>
+          )}
+        </div>
+
+        {/* Row 3: status strip — status / priority / contact-profile
+            shortcut. These are mode-of-the-conversation indicators that
+            deserve their own band; mixing them with the action buttons
+            in Row 1 (the previous design) made it hard to tell what was
+            informational vs. interactive. */}
+        <div className="mt-3 ml-[52px] sm:ml-[62px] flex flex-wrap items-center gap-2">
+          <StatusDropdown
+            conversationId={id}
+            currentStatus={status}
+            secondaryStatus={(conversation as { secondary_status?: string | null }).secondary_status ?? null}
+            secondaryStatusColor={(conversation as { secondary_status_color?: string | null }).secondary_status_color ?? null}
+          />
+          <span
+            className={cn(
+              'rounded-full px-2.5 py-1 text-xs font-medium whitespace-nowrap',
+              getPriorityColor(priority)
+            )}
+            title={`Priority: ${priority}`}
+            aria-label={`Priority: ${priority}`}
+          >
+            {priority}
+          </span>
+          {contactProfile && (
+            <>
+              <span className="h-4 w-px bg-gray-200 mx-1" aria-hidden="true" />
               <Link
                 href={`/contacts/${contactProfile.id}`}
-                className="inline-flex items-center gap-1 rounded-full bg-teal-50 border border-teal-100 px-2 py-0.5 text-[10px] font-semibold text-teal-700 hover:bg-teal-100 transition-colors"
+                className="inline-flex items-center gap-1 rounded-full bg-teal-50 border border-teal-100 px-2.5 py-1 text-[11px] font-semibold text-teal-700 hover:bg-teal-100 transition-colors"
               >
-                <User className="h-2.5 w-2.5" />
-                View contact profile →
+                <User className="h-3 w-3" />
+                View contact profile
               </Link>
               {otherOpenCount > 0 && (
                 <Link
                   href={`/contacts/${contactProfile.id}`}
-                  className="text-teal-700 hover:underline"
+                  className="text-[11px] text-teal-700 hover:underline"
                 >
                   {otherOpenCount} other open
                 </Link>

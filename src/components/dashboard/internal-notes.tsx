@@ -515,8 +515,21 @@ export function InternalNotes({ conversationId, authorName }: InternalNotesProps
             Loading notes...
           </div>
         ) : notes.length === 0 ? (
-          <div className="px-4 py-6 text-center text-xs text-amber-400">
-            No notes yet. Add one above to keep track of internal context.
+          // Friendlier empty state per UI audit G — replaces the bare
+          // "No notes yet" placeholder with an icon + explanation that
+          // makes the section feel intentional rather than empty.
+          <div className="flex flex-col items-center justify-center gap-2 px-6 py-7 text-center">
+            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-50 ring-1 ring-amber-200">
+              <StickyNote className="h-5 w-5 text-amber-500" strokeWidth={1.75} />
+            </span>
+            <p className="text-xs font-medium text-gray-700">
+              No internal notes yet
+            </p>
+            <p className="text-[11px] text-gray-500 max-w-[220px]">
+              Notes are visible to your teammates only. Use them to track
+              context, mention <span className="font-semibold">@team</span>, or jot a
+              follow-up reminder.
+            </p>
           </div>
         ) : (
           <div className="divide-y divide-amber-100">

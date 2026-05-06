@@ -109,8 +109,20 @@ export function ThreadSummary({
     void generate(false)
   }, [autoFetch, generate])
 
-  // Collapsed pill: a thin one-line teaser that reveals the full summary on click.
+  // Collapsed: show a one-line preview of the actual summary instead of
+  // the previous generic "AI summary available — click to expand". Per
+  // UI audit C, users should be able to skim the gist without expanding.
+  // The 4-px purple left bar marks this as an AI-generated card so the
+  // "purple = AI" semantic stays consistent across the page.
   if (state.kind === 'summary' && collapsed) {
+    // Use the first sentence (or first 90 chars, whichever is shorter)
+    // so the preview never wraps onto a second line at the typical
+    // sidebar width of 384px - 32px padding = ~352px.
+    const firstSentenceMatch = state.text.match(/^[^.!?]*[.!?](?:\s|$)/)
+    const preview = firstSentenceMatch
+      ? firstSentenceMatch[0].trim()
+      : state.text.slice(0, 90) + (state.text.length > 90 ? '…' : '')
+
     return (
       <button
         type="button"
@@ -118,22 +130,35 @@ export function ThreadSummary({
         aria-expanded={false}
         aria-label="Expand AI summary"
         className={cn(
-          'group flex w-full items-center gap-2 rounded-full border border-violet-200 bg-violet-50 px-4 py-2',
-          'text-left text-xs font-medium text-violet-700 shadow-sm transition-colors',
-          'hover:bg-violet-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400'
+          'group flex w-full items-stretch overflow-hidden rounded-lg border border-violet-200 bg-white text-left shadow-sm transition-colors',
+          'hover:bg-violet-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400'
         )}
       >
-        <Sparkles className="h-3.5 w-3.5 shrink-0 text-violet-600" />
-        <span className="flex-1 truncate">
-          AI summary available — click to expand
+        {/* Purple left accent bar — visual marker for AI content */}
+        <span aria-hidden="true" className="w-1 shrink-0 bg-violet-500" />
+        <span className="flex flex-1 items-center gap-2 px-3 py-2.5 min-w-0">
+          <Sparkles className="h-3.5 w-3.5 shrink-0 text-violet-600" />
+          <span className="flex-1 min-w-0">
+            <span className="block text-[10px] font-semibold uppercase tracking-wider text-violet-600">
+              AI Summary
+            </span>
+            <span className="block text-xs leading-snug text-gray-700 truncate">
+              {preview}
+            </span>
+          </span>
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-violet-500 transition-transform group-hover:translate-y-0.5" />
         </span>
-        <ChevronDown className="h-3.5 w-3.5 shrink-0 text-violet-500 transition-transform group-hover:translate-y-0.5" />
       </button>
     )
   }
 
+  // Expanded card. The 4-px purple left bar matches the collapsed
+  // teaser so the "purple = AI" semantic is consistent across both
+  // states — quick visual clue that this is an AI-generated section.
   return (
-    <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+    <div className="flex items-stretch overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+      <span aria-hidden="true" className="w-1 shrink-0 bg-violet-500" />
+      <div className="flex-1 min-w-0">
       <div className="flex items-center gap-2 px-4 py-3">
         <Sparkles size={16} className="text-violet-600" />
         <h3 className="flex-1 text-left text-sm font-semibold text-gray-900">
@@ -165,18 +190,28 @@ export function ThreadSummary({
 
       <div className="border-t border-gray-100 px-4 py-3">
         {state.kind === 'idle' && (
-          // Use the shared Button (variant=secondary) so this reads as a
-          // proper action button rather than a section-header pill (#4.6).
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={() => generate(false)}
-            aria-label="Summarize thread"
-          >
-            <Sparkles className="h-3.5 w-3.5" />
-            Summarize thread
-          </Button>
+          // Friendly empty state per UI audit G — small icon + one-line
+          // explanation + primary action. The previous version was just
+          // a bare button which read as a half-finished widget.
+          <div className="flex flex-col items-center gap-3 py-2 text-center">
+            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-violet-50 ring-1 ring-violet-200">
+              <Sparkles className="h-5 w-5 text-violet-500" strokeWidth={1.75} />
+            </span>
+            <p className="max-w-[240px] text-xs text-gray-600">
+              Get a one-paragraph recap of the conversation, including the
+              customer&apos;s ask and what&apos;s been promised.
+            </p>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => generate(false)}
+              aria-label="Summarize thread"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              Summarize thread
+            </Button>
+          </div>
         )}
 
         {state.kind === 'loading' && (
@@ -248,6 +283,7 @@ export function ThreadSummary({
             </button>
           </div>
         )}
+      </div>
       </div>
     </div>
   )

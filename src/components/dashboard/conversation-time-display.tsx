@@ -11,7 +11,7 @@
 // a full page refresh.
 
 import { useCallback, useEffect, useState } from 'react'
-import { Clock, Plus, RefreshCw } from 'lucide-react'
+import { Clock, Plus, RefreshCw, ChevronRight } from 'lucide-react'
 import { Modal } from '@/components/ui/modal'
 
 interface PerUser {
@@ -63,6 +63,7 @@ export function ConversationTimeDisplay({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
+  const [expanded, setExpanded] = useState(false)
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -91,75 +92,101 @@ export function ConversationTimeDisplay({
 
   const top3 = data?.per_user.slice(0, 3) ?? []
 
+  // Compressed-by-default per UI audit H. The two-card "Total / Your"
+  // grid, top-contributors list, and manual-entry button used to all be
+  // visible at once — now we show a single summary line and let the
+  // user expand for the breakdown. Saves vertical real estate on the
+  // common case ("how long has this been open?") while keeping every
+  // function reachable.
+  const totalSeconds = data?.total_seconds ?? 0
+  const yourSeconds = data?.your_seconds ?? 0
+  const hasContributors = top3.length > 0
+
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="flex items-center gap-2 text-sm font-semibold text-gray-900">
-          <Clock className="h-4 w-4 text-teal-600" /> Time tracking
-        </h3>
-        <button
-          type="button"
-          onClick={() => void refresh()}
-          className="text-gray-400 hover:text-teal-600 transition-colors"
-          title="Refresh"
-          aria-label="Refresh time totals"
-        >
-          <RefreshCw className={loading ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />
-        </button>
-      </div>
-
-      {error && (
-        <p className="text-xs text-red-600 mb-2" role="alert">
-          {error}
-        </p>
-      )}
-
-      {/* Totals */}
-      <div className="grid grid-cols-2 gap-3 mb-3">
-        <div className="rounded-md bg-gray-50 p-2.5">
-          <p className="text-[10px] uppercase tracking-wide text-gray-500">Total</p>
-          <p className="text-base font-semibold text-gray-900">
-            {formatDuration(data?.total_seconds ?? 0)}
-          </p>
-        </div>
-        <div className="rounded-md bg-teal-50 p-2.5">
-          <p className="text-[10px] uppercase tracking-wide text-teal-700">Your time</p>
-          <p className="text-base font-semibold text-teal-900">
-            {formatDuration(data?.your_seconds ?? 0)}
-          </p>
-        </div>
-      </div>
-
-      {/* Top contributors */}
-      {top3.length > 0 && (
-        <div className="mb-3">
-          <p className="text-[10px] uppercase tracking-wide text-gray-500 mb-1.5">
-            Top contributors
-          </p>
-          <ul className="space-y-1">
-            {top3.map((u) => (
-              <li
-                key={u.user_id}
-                className="flex items-center justify-between text-xs"
-              >
-                <span className="truncate text-gray-700">{u.user_name}</span>
-                <span className="font-mono text-gray-900 ml-2 shrink-0">
-                  {formatDuration(u.total_seconds)}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
+    <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
+      {/* Summary row — always visible. Click expands details. */}
       <button
         type="button"
-        onClick={() => setModalOpen(true)}
-        className="w-full inline-flex items-center justify-center gap-1.5 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+        onClick={() => setExpanded((v) => !v)}
+        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-gray-50"
+        aria-expanded={expanded}
+        aria-controls="time-tracking-details"
       >
-        <Plus className="h-3.5 w-3.5" />
-        Add time manually
+        <span className="flex items-center gap-2 min-w-0">
+          <Clock className="h-4 w-4 shrink-0 text-teal-600" />
+          <span className="text-sm font-semibold text-gray-900">Time tracking</span>
+          <span className="text-xs text-gray-500 truncate">
+            {formatDuration(totalSeconds)} total
+            <span className="text-gray-300 mx-1">&middot;</span>
+            <span className="text-teal-700">{formatDuration(yourSeconds)} yours</span>
+          </span>
+        </span>
+        <ChevronRight
+          className={`h-4 w-4 shrink-0 text-gray-400 transition-transform ${expanded ? 'rotate-90' : ''}`}
+        />
       </button>
+
+      {/* Expanded body */}
+      {expanded && (
+        <div id="time-tracking-details" className="border-t border-gray-100 px-4 pb-4 pt-3 space-y-3">
+          {error && (
+            <p className="text-xs text-red-600" role="alert">
+              {error}
+            </p>
+          )}
+
+          {/* Refresh control — only visible in expanded view since the
+              summary row already triggers a re-render whenever the
+              parent fetches. */}
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] uppercase tracking-wide text-gray-500">Breakdown</p>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                void refresh()
+              }}
+              className="text-gray-400 hover:text-teal-600 transition-colors"
+              title="Refresh"
+              aria-label="Refresh time totals"
+            >
+              <RefreshCw className={loading ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />
+            </button>
+          </div>
+
+          {hasContributors ? (
+            <ul className="space-y-1">
+              {top3.map((u) => (
+                <li
+                  key={u.user_id}
+                  className="flex items-center justify-between text-xs"
+                >
+                  <span className="truncate text-gray-700">{u.user_name}</span>
+                  <span className="font-mono text-gray-900 ml-2 shrink-0">
+                    {formatDuration(u.total_seconds)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-xs text-gray-400 italic">
+              No time logged yet. Add an entry manually below.
+            </p>
+          )}
+
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              setModalOpen(true)
+            }}
+            className="w-full inline-flex items-center justify-center gap-1.5 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Add time manually
+          </button>
+        </div>
+      )}
 
       <ManualTimeModal
         open={modalOpen}

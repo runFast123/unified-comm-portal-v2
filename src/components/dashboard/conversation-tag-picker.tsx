@@ -14,7 +14,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Loader2, Plus, X } from 'lucide-react'
+import { Loader2, Plus, Tag, X } from 'lucide-react'
 
 import { createClient } from '@/lib/supabase-client'
 import { useToast } from '@/components/ui/toast'
@@ -135,10 +135,33 @@ export function ConversationTagPicker({
         )}
       </div>
 
+      {/* Empty state — UI audit G: a single placeholder span felt
+          incomplete. A small icon + one-line explanation + primary
+          CTA reads as intentional rather than a missing widget. */}
+      {tags.length === 0 && !showInput && (
+        <button
+          type="button"
+          onClick={() => {
+            setShowInput(true)
+            setTimeout(() => inputRef.current?.focus(), 0)
+          }}
+          disabled={saving}
+          className="group flex w-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-gray-200 bg-gray-50/40 px-4 py-5 text-center transition-colors hover:border-teal-300 hover:bg-teal-50/40"
+        >
+          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-gray-400 group-hover:text-teal-600 ring-1 ring-gray-200">
+            <Tag className="h-4 w-4" strokeWidth={1.75} />
+          </span>
+          <span className="block text-xs text-gray-500 group-hover:text-gray-700">
+            Tags help you categorize this conversation.
+          </span>
+          <span className="inline-flex items-center gap-1 text-xs font-semibold text-teal-700 group-hover:underline">
+            <Plus className="h-3 w-3" />
+            Add the first tag
+          </span>
+        </button>
+      )}
+
       <div className="flex flex-wrap gap-1.5 min-h-[24px]">
-        {tags.length === 0 && !showInput && (
-          <span className="text-xs text-gray-400">No tags yet</span>
-        )}
         {tags.map((t) => {
           const color = colorByName.get(t.toLowerCase()) || NEUTRAL
           return (
