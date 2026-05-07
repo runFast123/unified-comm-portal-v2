@@ -126,6 +126,10 @@ export async function ingestInboundEmail(
       .maybeSingle()
 
     if (existingMsg) {
+      // We did receive the email, even if we'd already stored it. Stamp the
+      // account so the operator-visible "last synced" timestamp reflects
+      // the actual delivery moment instead of staying stuck on a stale poll.
+      void bumpLastPolledAt(supabase, account_id)
       return { ok: true, status: 'duplicate', message_id: existingMsg.id, http_code: 200 }
     }
   }
@@ -423,6 +427,12 @@ export async function ingestInboundEmail(
     })
   }
 
+  // Stamp the account so /admin/channels and the inbox header show a
+  // current "Last synced" time. This is the only signal that survives
+  // when the IMAP poll cron is silently broken — Gmail Pub/Sub still
+  // delivers, but accounts.last_polled_at would otherwise stay frozen.
+  void bumpLastPolledAt(supabase, account_id)
+
   return {
     ok: true,
     status: 'created',
@@ -430,5 +440,35 @@ export async function ingestInboundEmail(
     conversation_id: conversationId,
     is_spam: spamResult.isSpam,
     http_code: 201,
+  }
+}
+
+/**
+ * Fire-and-forget update of `accounts.last_polled_at` after a successful
+ * inbound delivery. We treat any successful ingest — IMAP poll, Gmail
+ * Pub/Sub webhook, manual upload — as evidence the channel is live, so
+ * the operator dashboard reflects reality rather than only the cron's
+ * heartbeat. Also clears any stale `last_poll_error*` state so a
+ * recovered channel surfaces as healthy.
+ *
+ * Called via `void bumpLastPolledAt(...)` because we never want a
+ * timestamp update to delay (or fail) the request that just succeeded.
+ */
+async function bumpLastPolledAt(
+  supabase: SupabaseClient,
+  accountId: string
+): Promise<void> {
+  try {
+    await supabase
+      .from('accounts')
+      .update({
+        last_polled_at: new Date().toISOString(),
+        consecutive_poll_failures: 0,
+        last_poll_error: null,
+        last_poll_error_at: null,
+      })
+      .eq('id', accountId)
+  } catch {
+    // Never break the ingest pipeline because of an observability write.
   }
 }

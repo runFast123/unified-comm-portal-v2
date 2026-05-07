@@ -94,25 +94,14 @@ export async function pollEmailAccount(
 ): Promise<EmailPollResult> {
   const result: EmailPollResult = { account_id: accountId, fetched: 0, forwarded: 0, errors: [] }
 
-  const cfg = (await getChannelConfig(accountId, 'email')) as EmailConfig | null
-  if (!cfg) {
-    result.errors.push('IMAP not configured for account')
-    return result
-  }
-
-  // Gmail OAuth skips the app-password guard — we auth with a bearer token
-  // instead. Otherwise we need the full host+user+password triple.
-  const isGmailOAuth = cfg.auth_mode === 'gmail_oauth' && !!cfg.google_refresh_token
-  if (!isGmailOAuth) {
-    if (!cfg.imap_host || !cfg.imap_user || !cfg.imap_password) {
-      result.errors.push('IMAP not configured for account')
-      return result
-    }
-  } else if (!cfg.google_user_email && !cfg.imap_user) {
-    result.errors.push('Gmail OAuth config missing user email')
-    return result
-  }
-
+  // Read account state up-front. The previous implementation fetched this
+  // mid-function and had four "early return" paths that bypassed the
+  // persist block entirely — silent zombie state where the operator saw
+  // last_polled_at NULL, consecutive_poll_failures=0, last_poll_error
+  // NULL even though every poll attempt was failing on a config check.
+  // Doing the SELECT first lets the `fail()` helper below record the
+  // failure on every error exit, so /admin/channels surfaces the real
+  // last_poll_error and the breaker can actually trip.
   const supabase = await createServiceRoleClient()
   const { data: accountRow } = await supabase
     .from('accounts')
@@ -120,18 +109,54 @@ export async function pollEmailAccount(
     .eq('id', accountId)
     .maybeSingle()
 
+  const failures = (accountRow?.consecutive_poll_failures as number | null | undefined) ?? 0
+  const lastUid = accountRow?.last_imap_uid as number | null | undefined
+  const lastSentUid = accountRow?.last_imap_sent_uid as number | null | undefined
+
+  // Persist a failure and return. Replaces the four `result.errors.push();
+  // return result` snippets that left the DB untouched. Best-effort —
+  // never throws, never blocks the caller on the UPDATE.
+  const fail = async (errMsg: string): Promise<EmailPollResult> => {
+    result.errors.push(errMsg)
+    try {
+      await supabase
+        .from('accounts')
+        .update({
+          consecutive_poll_failures: failures + 1,
+          last_poll_error: errMsg,
+          last_poll_error_at: new Date().toISOString(),
+        })
+        .eq('id', accountId)
+    } catch {
+      /* observability write must never break the caller */
+    }
+    return result
+  }
+
   // Circuit breaker: if this account has failed 5+ polls in a row, skip it
   // entirely until ops fixes the underlying issue. Prevents the cron run
   // from hammering a permanently-broken mailbox every 2 minutes (and from
-  // burning Lambda time on it). The next successful poll resets the counter.
-  const failures = (accountRow?.consecutive_poll_failures as number | null | undefined) ?? 0
+  // burning Lambda time on it). Returns WITHOUT incrementing failures —
+  // a skip isn't a fresh failure. The next successful poll resets the
+  // counter via the persist block at the bottom of this function.
   if (failures >= CIRCUIT_BREAKER_THRESHOLD) {
     result.errors.push('skipped: circuit breaker open')
     return result
   }
 
-  const lastUid = accountRow?.last_imap_uid as number | null | undefined
-  const lastSentUid = accountRow?.last_imap_sent_uid as number | null | undefined
+  const cfg = (await getChannelConfig(accountId, 'email')) as EmailConfig | null
+  if (!cfg) return fail('IMAP not configured for account')
+
+  // Gmail OAuth skips the app-password guard — we auth with a bearer token
+  // instead. Otherwise we need the full host+user+password triple.
+  const isGmailOAuth = cfg.auth_mode === 'gmail_oauth' && !!cfg.google_refresh_token
+  if (!isGmailOAuth) {
+    if (!cfg.imap_host || !cfg.imap_user || !cfg.imap_password) {
+      return fail('IMAP not configured for account')
+    }
+  } else if (!cfg.google_user_email && !cfg.imap_user) {
+    return fail('Gmail OAuth config missing user email')
+  }
 
   // Build ImapFlow auth: bearer token for Gmail OAuth, plain password otherwise.
   let imapAuth: { user: string; pass?: string; accessToken?: string }
@@ -143,14 +168,12 @@ export async function pollEmailAccount(
         accessToken: token,
       }
     } catch (err) {
-      // Token refresh failed — surface reconnect-required as a non-fatal
-      // poll error. The per-account cursor stays put, so nothing is lost.
-      result.errors.push(
-        err instanceof GmailOAuthExpiredError
-          ? err.message
-          : `Gmail token fetch failed: ${err instanceof Error ? err.message : 'unknown'}`
-      )
-      return result
+      // Token refresh failed — record the failure so /admin/channels
+      // surfaces "reconnect required" instead of silently zombie-state.
+      const errMsg = err instanceof GmailOAuthExpiredError
+        ? err.message
+        : `Gmail token fetch failed: ${err instanceof Error ? err.message : 'unknown'}`
+      return fail(errMsg)
     }
   } else {
     imapAuth = { user: cfg.imap_user!, pass: cfg.imap_password! }
