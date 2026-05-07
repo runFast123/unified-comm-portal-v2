@@ -86,14 +86,11 @@ export async function pollTeamsAccount(
 ): Promise<TeamsPollResult> {
   const result: TeamsPollResult = { account_id: accountId, fetched: 0, forwarded: 0, errors: [] }
 
-  const cfg = (await getChannelConfig(accountId, 'teams')) as TeamsConfig | null
-  if (!cfg) {
-    result.errors.push('Teams not configured')
-    return result
-  }
-
-  const isDelegated = cfg.auth_mode === 'delegated' && !!cfg.delegated_refresh_token
-
+  // Read account state up-front so the fail() helper below can record
+  // the failure on every error exit. Mirrors the email-poller refactor —
+  // before this, four early returns left the DB untouched (silent zombie
+  // state where last_poll_error stayed NULL even though every poll
+  // attempt was failing on a config check).
   const supabase = await createServiceRoleClient()
   const { data: account } = await supabase
     .from('accounts')
@@ -101,20 +98,47 @@ export async function pollTeamsAccount(
     .eq('id', accountId)
     .maybeSingle()
 
-  // Circuit breaker: same logic as email-poller — stop hammering an account
-  // that's been failing 5+ runs in a row. Counter resets on the next clean run.
   const failures = (account?.consecutive_poll_failures as number | null | undefined) ?? 0
+
+  // Persist a failure and return. Replaces the "result.errors.push();
+  // return result" snippets that bypassed the persist block at the
+  // bottom of this function. Best-effort — never throws, never blocks.
+  const fail = async (errMsg: string): Promise<TeamsPollResult> => {
+    result.errors.push(errMsg)
+    try {
+      await supabase
+        .from('accounts')
+        .update({
+          consecutive_poll_failures: failures + 1,
+          last_poll_error: errMsg,
+          last_poll_error_at: new Date().toISOString(),
+        })
+        .eq('id', accountId)
+    } catch {
+      /* observability write must never break the caller */
+    }
+    return result
+  }
+
+  // Circuit breaker: same logic as email-poller — stop hammering an account
+  // that's been failing 5+ runs in a row. Returns WITHOUT incrementing
+  // failures (a skip isn't a fresh failure). The next successful poll
+  // resets the counter via the persist block at the bottom.
   if (failures >= CIRCUIT_BREAKER_THRESHOLD) {
     result.errors.push('skipped: circuit breaker open')
     return result
   }
 
+  const cfg = (await getChannelConfig(accountId, 'teams')) as TeamsConfig | null
+  if (!cfg) return fail('Teams not configured')
+
+  const isDelegated = cfg.auth_mode === 'delegated' && !!cfg.delegated_refresh_token
+
   // In delegated mode the authenticated user IS /me — teams_user_id on the
   // account row becomes optional, we self-check against delegated_user_id.
   const selfUserId = isDelegated ? cfg.delegated_user_id : account?.teams_user_id
   if (!isDelegated && !account?.teams_user_id) {
-    result.errors.push('teams_user_id missing on account')
-    return result
+    return fail('teams_user_id missing on account')
   }
 
   // Default: 7-day backfill on first run (matches email poller) so the user
@@ -131,8 +155,7 @@ export async function pollTeamsAccount(
       token = isDelegated ? await getDelegatedAccessToken(cfg, accountId) : await graphToken(cfg)
     } catch (tokenErr) {
       if (tokenErr instanceof TeamsOAuthExpiredError) {
-        result.errors.push(tokenErr.message)
-        return result
+        return fail(tokenErr.message)
       }
       throw tokenErr
     }
@@ -145,8 +168,7 @@ export async function pollTeamsAccount(
       : `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(account!.teams_user_id!)}/chats?$top=50`
     const chatsRes = await fetch(chatsUrl, { headers: authHeaders })
     if (!chatsRes.ok) {
-      result.errors.push(`Graph /chats ${chatsRes.status}: ${(await chatsRes.text()).slice(0, 200)}`)
-      return result
+      return fail(`Graph /chats ${chatsRes.status}: ${(await chatsRes.text()).slice(0, 200)}`)
     }
     const chatsJson = (await chatsRes.json()) as { value?: GraphChat[] }
     const chats = chatsJson.value || []

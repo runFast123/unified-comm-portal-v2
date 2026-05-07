@@ -190,6 +190,21 @@ export async function POST(request: Request) {
       )
     }
 
+    // Stamp the account so /admin/channels shows a current "Last synced"
+    // for Teams accounts whose mail mostly arrives via Graph subscription
+    // webhooks rather than the polling cron. Mirrors email-ingest's
+    // bumpLastPolledAt() — fire-and-forget; never block the webhook.
+    void supabase
+      .from('accounts')
+      .update({
+        last_polled_at: new Date().toISOString(),
+        consecutive_poll_failures: 0,
+        last_poll_error: null,
+        last_poll_error_at: null,
+      })
+      .eq('id', account_id)
+      .then(() => undefined, () => undefined)
+
     // Skip AI processing and notifications for agent messages
     if (isAgent) {
       // If agent message, also mark the inbound messages in this conversation as replied

@@ -176,6 +176,20 @@ export async function POST(request: Request) {
       )
     }
 
+    // Stamp the account so /admin/channels shows a current "Last synced"
+    // even when WhatsApp messages arrive via the webhook rather than the
+    // polling cron. Fire-and-forget; mirrors email + teams. Never blocks.
+    void supabase
+      .from('accounts')
+      .update({
+        last_polled_at: new Date().toISOString(),
+        consecutive_poll_failures: 0,
+        last_poll_error: null,
+        last_poll_error_at: null,
+      })
+      .eq('id', account_id)
+      .then(() => undefined, () => undefined)
+
     // Routing rules — fail-soft so the webhook never errors on rule eval.
     try {
       const routingResult = await evaluateRouting({
