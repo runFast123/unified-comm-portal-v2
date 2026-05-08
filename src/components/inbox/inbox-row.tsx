@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Archive, AlertTriangle, CheckCheck, Sparkles, Clock } from 'lucide-react'
 import { useToast } from '@/components/ui/toast'
@@ -296,7 +297,16 @@ export function InboxRow({ item, selected, onSelect, onItemClick, isActive }: In
   const senderName = cleanSenderName(rawSender)
   const senderEmail = extractEmail(rawSender)
   const accountName = item.account_name || ''
-  const unread = isUnread(item.conversation_id, item.timestamp)
+
+  // Defer client-only state derivations until after mount so the SSR
+  // markup matches the initial client render and React doesn't throw
+  // #418 hydration mismatches on every inbox row. Both `isUnread`
+  // (reads localStorage — empty on the server) and `Date.now()` (server
+  // request time vs client hydration time) produce different values
+  // at SSR vs CSR if computed during render.
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
+  const unread = mounted && isUnread(item.conversation_id, item.timestamp)
 
   // ── Snooze indicator ────────────────────────────────────────────────
   // `snoozed_until` is surfaced from conversations on the InboxItem. We only
@@ -304,7 +314,7 @@ export function InboxRow({ item, selected, onSelect, onItemClick, isActive }: In
   // wake-snoozed cron will null the column out, but we guard here too so we
   // don't briefly show a stale "Snoozed until …" between cron ticks.
   const snoozedUntilIso = item.snoozed_until ?? null
-  const snoozedActive = !!snoozedUntilIso && new Date(snoozedUntilIso).getTime() > Date.now()
+  const snoozedActive = mounted && !!snoozedUntilIso && new Date(snoozedUntilIso).getTime() > Date.now()
   const snoozedLabel = snoozedActive
     ? new Date(snoozedUntilIso!).toLocaleString(undefined, {
         month: 'short',

@@ -416,7 +416,9 @@ function EmailMessage({ message, isOutbound }: { message: Message; isOutbound: b
               )}
             </div>
             <div className="flex flex-col items-end gap-0.5 shrink-0">
-              <span className="text-[11px] font-medium text-gray-600">{formatRelativeTime(message.timestamp)}</span>
+              <span className="text-[11px] font-medium text-gray-600" suppressHydrationWarning>
+                {formatRelativeTime(message.timestamp)}
+              </span>
               <span className="text-[10px] text-gray-400 flex items-center gap-1">
                 <Clock size={9} />
                 {formatTime(message.timestamp)}
@@ -476,7 +478,9 @@ function TeamsBubble({ message, isOutbound }: { message: Message; isOutbound: bo
             </span>
           )}
           {message.sender_type === 'ai' && <AIBadge />}
-          <span className="text-[10px] text-gray-400">{formatRelativeTime(message.timestamp)}</span>
+          <span className="text-[10px] text-gray-400" suppressHydrationWarning>
+            {formatRelativeTime(message.timestamp)}
+          </span>
         </div>
 
         <div
@@ -526,7 +530,9 @@ function WhatsAppBubble({ message, isOutbound }: { message: Message; isOutbound:
         </p>
         {message.attachments && renderAttachments(message.attachments)}
         <div className="mt-1 flex items-center justify-end gap-1.5">
-          <span className="text-[10px] text-gray-500" title={formatTime(message.timestamp)}>{formatRelativeTime(message.timestamp)}</span>
+          <span className="text-[10px] text-gray-500" title={formatTime(message.timestamp)} suppressHydrationWarning>
+            {formatRelativeTime(message.timestamp)}
+          </span>
           {isOutbound && <DeliveryStatus sent={true} />}
         </div>
       </div>

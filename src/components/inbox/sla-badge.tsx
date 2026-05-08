@@ -70,10 +70,17 @@ export function SLABadge({
   conversationStatus,
   className,
 }: SLABadgeProps) {
-  // Auto-update every 60 seconds
-  const [now, setNow] = useState(() => Date.now())
+  // `now` is null on the very first render (both SSR and the initial
+  // client render) and gets a real value only after mount. This is the
+  // fix for React #418 hydration mismatch: previously we seeded the
+  // state with `Date.now()`, which produces different values on the
+  // server (request time) vs the client (hydration time), so the
+  // rendered SLA text differed and React threw on every inbox row.
+  // After mount, the interval below keeps the value fresh.
+  const [now, setNow] = useState<number | null>(null)
 
   useEffect(() => {
+    setNow(Date.now())
     const interval = setInterval(() => setNow(Date.now()), 60_000)
     return () => clearInterval(interval)
   }, [])
@@ -85,6 +92,7 @@ export function SLABadge({
   }
 
   if (!receivedAt) return null
+  if (now === null) return null  // pre-mount: skip render to keep SSR/CSR identical
 
   const receivedTime = new Date(receivedAt).getTime()
   if (isNaN(receivedTime)) return null

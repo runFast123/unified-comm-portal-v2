@@ -133,10 +133,17 @@ export function Sidebar({
 }: SidebarProps) {
   const pathname = usePathname()
   const [hasNewMessages, setHasNewMessages] = useState(false)
-  const [collapsed, setCollapsed] = useState(() => {
-    if (typeof window === 'undefined') return false
-    return localStorage.getItem('sidebar-collapsed') === 'true'
-  })
+
+  // Initialize ALL localStorage-backed state with SSR-safe defaults so the
+  // first client render matches the server-rendered HTML, then sync the
+  // real values from localStorage in a single useEffect after mount.
+  // Previously each `useState(() => localStorage.getItem(...))` returned
+  // a different value on the server (no localStorage → fallback) vs the
+  // client (real persisted value) and triggered React #418 hydration
+  // mismatches on every authenticated page (sidebar renders everywhere).
+  const [collapsed, setCollapsed] = useState(false)
+  const [sectionOpen, setSectionOpen] = useState<Record<string, boolean>>({})
+  const [savedViewsOpen, setSavedViewsOpen] = useState(true)
 
   const isAdmin =
     user.role === 'admin' || user.role === 'company_admin' || user.role === 'super_admin'
@@ -162,17 +169,9 @@ export function Sidebar({
     return item.roles.some((r) => user.role === r)
   })
 
-  // Default Admin to collapsed on narrow viewports (md ≈ 768–1024px) and on
-  // first load for non-admin viewers (the section won't render anyway, but
-  // keeps the localStorage default sensible if their role is later promoted).
-  const adminDefaultOpen = (() => {
-    if (typeof window === 'undefined') return true
-    const stored = localStorage.getItem('sidebar-section:admin')
-    if (stored !== null) return stored === 'true'
-    // No stored pref — collapse on viewports < 1024px (Tailwind lg-).
-    return window.innerWidth >= 1024
-  })()
-
+  // Section definitions — defaultOpen reflects the SSR-safe default
+  // (every section open). The actual persisted/per-viewport state is
+  // synced in the useEffect below to avoid hydration mismatches.
   const sections: NavSection[] = [
     { key: 'inbox', label: 'Inbox', items: INBOX_ITEMS, defaultOpen: true },
     { key: 'customers', label: 'Customers', items: CUSTOMER_ITEMS, defaultOpen: true },
@@ -182,29 +181,39 @@ export function Sidebar({
       label: 'Admin',
       items: visibleAdminItems,
       visible: isAdmin,
-      defaultOpen: adminDefaultOpen,
+      defaultOpen: true,
     },
   ]
 
-  // Persisted per-section open/close state keyed by `sidebar-section:<key>`.
-  const [sectionOpen, setSectionOpen] = useState<Record<string, boolean>>(() => {
-    if (typeof window === 'undefined') {
-      return Object.fromEntries(sections.map((s) => [s.key, s.defaultOpen ?? true]))
-    }
-    return Object.fromEntries(
+  // Sync localStorage-backed state once on mount. Until this fires the
+  // sidebar uses its SSR-safe defaults (collapsed=false, every section
+  // open). Brief visual flash if the user had personal preferences
+  // saved, but no hydration warnings.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    setCollapsed(localStorage.getItem('sidebar-collapsed') === 'true')
+
+    const adminStored = localStorage.getItem('sidebar-section:admin')
+    const adminDefaultOpen = adminStored !== null
+      ? adminStored === 'true'
+      : window.innerWidth >= 1024 // collapse on viewports < 1024px (Tailwind lg-)
+
+    setSectionOpen(Object.fromEntries(
       sections.map((s) => {
+        if (s.key === 'admin') return ['admin', adminDefaultOpen]
         const stored = localStorage.getItem(`sidebar-section:${s.key}`)
         return [s.key, stored === null ? (s.defaultOpen ?? true) : stored === 'true']
       })
-    )
-  })
+    ))
+
+    setSavedViewsOpen(localStorage.getItem('sidebar-saved-views-open') !== 'false')
+    // sections is locally derived from props each render but the keys are
+    // stable, so a one-time hydration sync is enough.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // ── Saved views (smart inboxes) ────────────────────────────────────
   const [savedViews, setSavedViews] = useState<SavedView[]>([])
-  const [savedViewsOpen, setSavedViewsOpen] = useState(() => {
-    if (typeof window === 'undefined') return true
-    return localStorage.getItem('sidebar-saved-views-open') !== 'false'
-  })
   const [savedViewsLoading, setSavedViewsLoading] = useState(false)
   const [showSavedViewModal, setShowSavedViewModal] = useState(false)
 
