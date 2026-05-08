@@ -100,6 +100,13 @@ function humanize(slug: string): string {
     .replace(/\bOoo\b/g, 'OOO')
 }
 
+/** UUID v4 detection — segments that look like a UUID are detail-page
+ *  IDs and should never be humanized into a breadcrumb label (the user
+ *  doesn't recognize "Ddc596a5 6aad 4b65 9866 43573377ef0a"). When we
+ *  hit one, surface the parent collection's friendly label and tag the
+ *  trailing crumb as "Detail" instead. */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 function getBreadcrumbs(pathname: string) {
   const segments = pathname.split('/').filter(Boolean)
   const crumbs: { label: string; href: string }[] = []
@@ -108,10 +115,22 @@ function getBreadcrumbs(pathname: string) {
     crumbs.push({ label: 'Admin', href: '/admin' })
     const fullPath = '/' + segments.join('/')
     const lastSegment = segments[segments.length - 1]
-    crumbs.push({
-      label: PAGE_TITLES[fullPath] || humanize(lastSegment),
-      href: fullPath,
-    })
+    // /admin/<collection>/<uuid> → "Admin / <Collection> / Detail"
+    // Previously this rendered the raw UUID, humanized into letter-
+    // case noise like "Ddc596a5 6aad 4b65 9866 43573377ef0a".
+    if (segments.length >= 3 && UUID_RE.test(lastSegment)) {
+      const parentPath = '/' + segments.slice(0, -1).join('/')
+      const parentLabel =
+        PAGE_TITLES[parentPath] ||
+        (segments[1] ? humanize(segments[1]) : 'Detail')
+      crumbs.push({ label: parentLabel, href: parentPath })
+      crumbs.push({ label: 'Detail', href: pathname })
+    } else {
+      crumbs.push({
+        label: PAGE_TITLES[fullPath] || humanize(lastSegment),
+        href: fullPath,
+      })
+    }
   } else if (segments[0] === 'accounts' && segments.length > 1) {
     crumbs.push({ label: 'Accounts', href: '/accounts' })
     crumbs.push({ label: 'Account Detail', href: pathname })

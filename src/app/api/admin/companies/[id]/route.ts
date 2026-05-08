@@ -330,6 +330,35 @@ export async function DELETE(
     )
   }
 
+  // When force=true we need to manually cascade attached accounts and
+  // users. The FK behaviors are:
+  //   accounts.company_id  → ON DELETE SET NULL
+  //   users.company_id     → ON DELETE SET NULL
+  // Without an explicit cascade, "force delete" left orphan accounts
+  // (company_id=null, is_active untouched) and orphan users (also
+  // company_id=null) hanging around in /admin/accounts and /admin/users
+  // after the company itself was gone — that's the QA finding M-9.
+  //
+  // We hard-delete accounts first; the FKs on messages/conversations/
+  // channel_configs already CASCADE off accounts.id, so the rest of
+  // the tree disappears in one round-trip per child table.
+  // attachedAccounts ids snapshot so we can audit individual deletes.
+  let attachedAccountIds: string[] = []
+  let attachedUserIds: string[] = []
+  if (force && (attachedAccounts ?? 0) > 0) {
+    const { data: accRows } = await admin
+      .from('accounts')
+      .select('id')
+      .eq('company_id', id)
+    attachedAccountIds = (accRows ?? []).map((r) => r.id as string)
+
+    const { data: userRows } = await admin
+      .from('users')
+      .select('id')
+      .eq('company_id', id)
+    attachedUserIds = (userRows ?? []).map((r) => r.id as string)
+  }
+
   // Audit BEFORE the delete — once the company is gone the FK on the
   // user (gate.userId) still resolves but the entity_id no longer points
   // to a row, so we keep the snapshot in `details`.
@@ -342,10 +371,27 @@ export async function DELETE(
       details: {
         deleted_company_name: company.name,
         attached_accounts_at_delete: attachedAccounts ?? 0,
+        cascaded_account_ids: attachedAccountIds,
+        cascaded_user_ids: attachedUserIds,
         force,
       },
     })
   } catch { /* non-fatal — don't block delete on audit write */ }
+
+  // Cascade-delete attached accounts (force=true only). This in turn
+  // cascades messages/conversations/channel_configs via their FKs.
+  if (force && attachedAccountIds.length > 0) {
+    const { error: accDelErr } = await admin
+      .from('accounts')
+      .delete()
+      .in('id', attachedAccountIds)
+    if (accDelErr) {
+      return NextResponse.json(
+        { error: `Failed to cascade-delete attached accounts: ${accDelErr.message}` },
+        { status: 500 },
+      )
+    }
+  }
 
   const { error: deleteErr } = await admin
     .from('companies')
@@ -355,5 +401,13 @@ export async function DELETE(
     return NextResponse.json({ error: deleteErr.message }, { status: 500 })
   }
 
-  return NextResponse.json({ ok: true, deleted: { id, name: company.name } })
+  // Users still exist after the company is gone (FK was SET NULL); the
+  // operator can decide whether to reassign or remove them. We leave
+  // them in place because deleting auth.users is a heavier operation
+  // than this endpoint should own.
+  return NextResponse.json({
+    ok: true,
+    deleted: { id, name: company.name },
+    cascaded: force ? { accounts: attachedAccountIds.length, users_detached: attachedUserIds.length } : undefined,
+  })
 }

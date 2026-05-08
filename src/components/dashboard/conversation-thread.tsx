@@ -3,7 +3,6 @@
 import { Bot, Check, CheckCheck, Mail, Paperclip, Clock, Sparkles, FileText, FileSpreadsheet, FileImage, File, Download } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Message, ChannelType } from '@/types/database'
-import { ThreadSummary } from '@/components/dashboard/thread-summary'
 
 export interface ConversationThreadProps {
   messages: Message[]
@@ -15,9 +14,6 @@ export interface ConversationThreadProps {
    */
   conversationId?: string
 }
-
-/** Minimum thread length at which the auto-summary pill becomes visible. */
-const SUMMARY_MIN_MESSAGES = 5
 
 function formatTime(timestamp: string): string {
   return new Date(timestamp).toLocaleTimeString('en-US', {
@@ -545,23 +541,18 @@ export function ConversationThread({ messages, channel, conversationId }: Conver
   let prevDirection: string | null = null
   let prevTimestamp: string | null = null
 
-  const showSummary =
-    !!conversationId && messages.length >= SUMMARY_MIN_MESSAGES
 
   return (
     // Bumped vertical breathing room from `space-y-5 py-6` — multi-day threads
     // were rendering as a wall of bubbles with too little separation between
     // each. `space-y-7 py-8` gives each message a clear visual boundary.
+    //
+    // The inline ThreadSummary that previously rendered above the message
+    // list has been removed: it duplicated the same content the right-panel
+    // Summary tab now shows (AISidebar embeds ThreadSummary), so the user
+    // saw two identical summary cards with two separate Regenerate buttons
+    // (QA finding H-4). The right panel is the canonical home now.
     <div className="space-y-7 py-8">
-      {showSummary && (
-        <div className="sticky top-0 z-10 -mx-1 px-1 pb-1">
-          <ThreadSummary
-            conversationId={conversationId!}
-            autoFetch
-            defaultCollapsed
-          />
-        </div>
-      )}
       {messages.map((message, idx) => {
         const isOutbound = message.direction === 'outbound'
         const msgDate = formatDate(message.timestamp)
