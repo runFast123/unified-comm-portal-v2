@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { Building2, Check, ChevronDown } from 'lucide-react'
 
@@ -63,7 +64,36 @@ export function CompanySwitcher({ companies, currentCompanyId }: CompanySwitcher
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [mounted, setMounted] = useState(false)
+  const [coords, setCoords] = useState<{ top: number; right: number } | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
+
+  // Portal target only available after mount (SSR-safe).
+  useEffect(() => { setMounted(true) }, [])
+
+  // Recompute dropdown position whenever it opens, the window resizes, or
+  // the page scrolls. Right-edge alignment under the button. position: fixed
+  // lets the panel escape ALL parent stacking/overflow contexts so the
+  // header's filter row can't render on top of it.
+  useEffect(() => {
+    if (!open) return
+    const place = () => {
+      const r = buttonRef.current?.getBoundingClientRect()
+      if (!r) return
+      setCoords({
+        top: r.bottom + 4,
+        right: window.innerWidth - r.right,
+      })
+    }
+    place()
+    window.addEventListener('resize', place)
+    window.addEventListener('scroll', place, true)
+    return () => {
+      window.removeEventListener('resize', place)
+      window.removeEventListener('scroll', place, true)
+    }
+  }, [open])
 
   // On mount, hydrate from cookie/localStorage, falling back to currentCompanyId.
   useEffect(() => {
@@ -77,14 +107,17 @@ export function CompanySwitcher({ companies, currentCompanyId }: CompanySwitcher
     }
   }, [companies, currentCompanyId])
 
-  // Close on outside click.
+  // Close on outside click. The panel lives in a portal so we also check
+  // its dedicated ref — clicking inside the portal must NOT close.
   useEffect(() => {
     if (!open) return
     const onClick = (e: MouseEvent) => {
-      if (!containerRef.current) return
-      if (!containerRef.current.contains(e.target as Node)) {
-        setOpen(false)
-      }
+      const target = e.target as Node
+      if (containerRef.current?.contains(target)) return
+      // Also allow clicks inside the portal panel itself.
+      const panel = document.getElementById('company-switcher-panel')
+      if (panel?.contains(target)) return
+      setOpen(false)
     }
     document.addEventListener('mousedown', onClick)
     return () => document.removeEventListener('mousedown', onClick)
@@ -108,6 +141,7 @@ export function CompanySwitcher({ companies, currentCompanyId }: CompanySwitcher
   return (
     <div ref={containerRef} className="relative">
       <button
+        ref={buttonRef}
         type="button"
         onClick={() => setOpen((o) => !o)}
         className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-700 shadow-sm hover:bg-gray-50 transition-colors max-w-[220px]"
@@ -129,10 +163,12 @@ export function CompanySwitcher({ companies, currentCompanyId }: CompanySwitcher
         <ChevronDown className="h-3.5 w-3.5 text-gray-400 shrink-0" />
       </button>
 
-      {open && (
+      {open && mounted && coords && createPortal(
         <div
+          id="company-switcher-panel"
           role="listbox"
-          className="absolute right-0 top-full z-[100] mt-1 w-72 rounded-lg border border-gray-200 bg-white shadow-lg max-h-[60vh] overflow-y-auto"
+          style={{ position: 'fixed', top: coords.top, right: coords.right, zIndex: 9999 }}
+          className="w-72 rounded-lg border border-gray-200 bg-white shadow-lg max-h-[60vh] overflow-y-auto"
         >
           <div className="py-1">
             {companies.map((c) => {
@@ -176,7 +212,8 @@ export function CompanySwitcher({ companies, currentCompanyId }: CompanySwitcher
               )
             })}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

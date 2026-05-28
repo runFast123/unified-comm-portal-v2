@@ -39,6 +39,23 @@ export function UserProvider({ user, serverCompanyAccountIds, children }: {
 
   const [companyAccountIds, setCompanyAccountIds] = useState<string[]>(initialIds)
 
+  // Sync companyAccountIds when the parent layout passes a NEW
+  // serverCompanyAccountIds (e.g. super_admin picked a different tenant in
+  // the switcher → router.refresh() → layout re-runs with new cookie →
+  // new IDs reach this provider as props). useState only seeds from initial
+  // props; without this effect, the context would keep the stale tenant's
+  // IDs and downstream useEffects with companyAccountIds in their deps
+  // never re-fire — which is exactly the "had to manually refresh" bug.
+  // Compare by joined-string key so a new array with same contents doesn't
+  // thrash state.
+  const serverIdsKey = (serverCompanyAccountIds ?? []).join(',')
+  useEffect(() => {
+    if (serverCompanyAccountIds && serverCompanyAccountIds.length > 0) {
+      setCompanyAccountIds(serverCompanyAccountIds)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serverIdsKey])
+
   // For non-admin users: always fetch sibling accounts via API.
   // Admins (any of admin / super_admin / company_admin) can see everything
   // via RLS so they don't need the sibling-account fetch.
