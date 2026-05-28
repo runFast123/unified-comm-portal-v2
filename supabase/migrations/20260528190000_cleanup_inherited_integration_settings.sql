@@ -15,14 +15,34 @@
 -- the current client). Other companies' rows are deleted; they can set up
 -- their own Google/Azure clients via the /admin/integrations UI.
 --
--- Idempotent: re-running is a no-op (the same DELETE WHERE clause matches
--- zero rows on a clean state).
+-- Safety guard: only run when the buggy state is detectable (rows older
+-- than the bug-fix cutoff). If any integration_settings row was created or
+-- updated AFTER 2026-05-28 19:00 UTC (when this cleanup shipped), assume
+-- a tenant has since configured their own OAuth client legitimately and
+-- DO NOT purge anything — that would silently delete real user config on
+-- a migration replay (CI rebuild, dev DB recreate, branch reset).
 -- ============================================================================
 
-DELETE FROM public.integration_settings
-WHERE company_id NOT IN (
-  SELECT DISTINCT a.company_id
-  FROM public.channel_configs cc
-  JOIN public.accounts a ON a.id = cc.account_id
-  WHERE a.company_id IS NOT NULL
-);
+DO $$
+DECLARE
+  newer_row_count int;
+BEGIN
+  SELECT count(*) INTO newer_row_count
+  FROM public.integration_settings
+  WHERE updated_at > '2026-05-28 19:00:00+00';
+
+  IF newer_row_count > 0 THEN
+    RAISE NOTICE
+      'cleanup_inherited_integration_settings: % row(s) newer than 2026-05-28 19:00 UTC found — skipping cleanup to avoid purging legitimate post-fix configs.',
+      newer_row_count;
+    RETURN;
+  END IF;
+
+  DELETE FROM public.integration_settings
+  WHERE company_id NOT IN (
+    SELECT DISTINCT a.company_id
+    FROM public.channel_configs cc
+    JOIN public.accounts a ON a.id = cc.account_id
+    WHERE a.company_id IS NOT NULL
+  );
+END $$;

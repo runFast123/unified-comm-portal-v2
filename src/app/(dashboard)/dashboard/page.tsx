@@ -915,8 +915,12 @@ export default function DashboardPage() {
       {/* Combined-view banner: shown only when super_admin has no tenant
           selected (activeCompanyId === null). Helps make the cross-tenant
           aggregation explicit so it's obvious why numbers look bigger than
-          a single tenant's. Picking a company from the switcher clears it. */}
-      {activeCompanyId === null && (
+          a single tenant's. Picking a company from the switcher clears it.
+          isAdmin guard: a non-admin should NEVER land in the combined view
+          path; if it ever happens (e.g. a misconfigured user with no
+          company), don't mislead them with this banner — RLS will still
+          show them nothing, but the label would be wrong. */}
+      {isAdmin && activeCompanyId === null && (
         <div
           role="status"
           className="flex items-start gap-3 rounded-xl border border-teal-200 bg-gradient-to-r from-teal-50 to-emerald-50 px-4 py-3 shadow-sm"

@@ -46,8 +46,14 @@ export function UserProvider({ user, serverCompanyAccountIds, activeCompanyId = 
   activeCompanyId?: string | null
   children: React.ReactNode
 }) {
-  // Start with server-provided IDs or single account_id
-  const initialIds = serverCompanyAccountIds && serverCompanyAccountIds.length > 0
+  // Start with server-provided IDs. Use the server value WHEN IT IS DEFINED
+  // — even if it's an empty array (a real tenant with zero accounts must
+  // scope queries to `[]`, NOT silently fall back to the user's own
+  // account_id, which would leak the super_admin's home-tenant data into
+  // the zero-account tenant view for the first render). Only fall back to
+  // `[user.account_id]` when the prop is `undefined` (the provider being
+  // used outside the dashboard layout).
+  const initialIds = serverCompanyAccountIds !== undefined
     ? serverCompanyAccountIds
     : user.account_id ? [user.account_id] : []
 
@@ -81,7 +87,11 @@ export function UserProvider({ user, serverCompanyAccountIds, activeCompanyId = 
     fetch('/api/user-accounts')
       .then(res => res.json())
       .then(data => {
-        if (data.accountIds && data.accountIds.length > 0) {
+        // Accept the API response when it's an array — including the empty
+        // array case (account got deactivated mid-session, no siblings
+        // found). Same logic as the server-prop sync above: empty array
+        // must scope queries to `[]`, not retain the stale [account_id].
+        if (Array.isArray(data.accountIds)) {
           setCompanyAccountIds(data.accountIds)
         }
       })
