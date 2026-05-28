@@ -205,7 +205,7 @@ function getDayName(date: Date): string {
 // --- Page ---
 
 export default function ReportsPage() {
-  const { isAdmin, companyAccountIds } = useUser()
+  const { isAdmin, companyAccountIds, activeCompanyId } = useUser()
   const [activeTab, setActiveTab] = useState<ReportTab>('overview')
   const [dateRange, setDateRange] = useState<DateRange>('7d')
   const [loading, setLoading] = useState(true)
@@ -251,9 +251,12 @@ export default function ReportsPage() {
     const endDate = getDateRangeEnd(dateRange, customTo)
 
     try {
-      // Always scope to the active company's accounts (cookie-resolved in
-      // layout) so the super_admin company switcher actually filters data.
-      const accountIdFilter = companyAccountIds.length > 0 ? companyAccountIds : null
+      // Scope to the active tenant's accounts (cookie-resolved in layout).
+      // `activeCompanyId === null` is super_admin combined view → no scope.
+      // A real tenant with zero accounts passes `[]` here so the query
+      // returns no rows (the correct empty answer), instead of running
+      // unscoped under the old `length > 0` gate.
+      const accountIdFilter = activeCompanyId ? companyAccountIds : null
 
       // 1. Fetch messages for the date range
       let messagesQuery = supabase
@@ -569,7 +572,7 @@ export default function ReportsPage() {
     } finally {
       setLoading(false)
     }
-  }, [dateRange, customFrom, customTo, compareEnabled, isAdmin, companyAccountIds])
+  }, [dateRange, customFrom, customTo, compareEnabled, isAdmin, companyAccountIds, activeCompanyId])
 
   useEffect(() => {
     fetchReportData()

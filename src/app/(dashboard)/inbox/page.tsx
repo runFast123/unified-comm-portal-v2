@@ -88,7 +88,7 @@ function derivePriority(urgency: string | null | undefined): Priority {
 }
 
 export default function InboxPage() {
-  const { isAdmin, account_id: userAccountId, companyAccountIds } = useUser()
+  const { isAdmin, account_id: userAccountId, companyAccountIds, activeCompanyId } = useUser()
   const { toast } = useToast()
   const searchParams = useSearchParams()
   const [filters, setFilters] = useState<InboxFilters>(() => {
@@ -414,9 +414,11 @@ export default function InboxPage() {
         messagesQuery = messagesQuery.eq('reply_required', true).eq('replied', false)
       }
 
-      // Always scope to the active company's accounts (cookie-resolved in
-      // layout) so the super_admin company switcher actually filters data.
-      if (resolvedAccountIds.length > 0) {
+      // Scope to the active tenant's accounts (cookie-resolved in layout).
+      // `activeCompanyId === null` is the super_admin combined view → run
+      // unscoped. A real tenant with zero accounts passes `[]` here so the
+      // query correctly returns no rows instead of falling through unscoped.
+      if (activeCompanyId) {
         messagesQuery = messagesQuery.in('account_id', resolvedAccountIds)
       }
 
@@ -430,7 +432,7 @@ export default function InboxPage() {
         .eq('is_spam', true)
         .in('spam_reason', ['newsletter', 'marketing', 'automated_notification', 'ai_classified_newsletter'])
         .is('conversations.merged_into_id', null)
-      if (resolvedAccountIds.length > 0) {
+      if (activeCompanyId) {
         newsletterCountQuery = newsletterCountQuery.in('account_id', resolvedAccountIds)
       }
 
@@ -441,7 +443,7 @@ export default function InboxPage() {
         .eq('is_spam', true)
         .not('spam_reason', 'in', '(newsletter,marketing,automated_notification,ai_classified_newsletter)')
         .is('conversations.merged_into_id', null)
-      if (resolvedAccountIds.length > 0) {
+      if (activeCompanyId) {
         spamCountQuery = spamCountQuery.in('account_id', resolvedAccountIds)
       }
 
@@ -454,7 +456,7 @@ export default function InboxPage() {
         .eq('direction', 'inbound')
         .eq('is_spam', false)
         .is('conversations.merged_into_id', null)
-      if (resolvedAccountIds.length > 0) {
+      if (activeCompanyId) {
         inboxCountQuery = inboxCountQuery.in('account_id', resolvedAccountIds)
       }
 
@@ -564,7 +566,7 @@ export default function InboxPage() {
     } finally {
       setLoading(false)
     }
-  }, [isAdmin, companyAccountIds, inboxView, dashboardFilter, filters.channel, INBOX_PAGE_SIZE])
+  }, [isAdmin, companyAccountIds, activeCompanyId, inboxView, dashboardFilter, filters.channel, INBOX_PAGE_SIZE])
 
   useEffect(() => {
     fetchInboxItems()
@@ -600,7 +602,9 @@ export default function InboxPage() {
       else moreQuery = moreQuery.eq('is_spam', true).not('spam_reason', 'in', '(newsletter,marketing,automated_notification,ai_classified_newsletter)')
 
       if (filters.channel !== 'all') moreQuery = moreQuery.eq('channel', filters.channel)
-      if (companyAccountIds.length > 0) moreQuery = moreQuery.in('account_id', companyAccountIds)
+      // Scope to the active tenant. `activeCompanyId === null` is super_admin
+      // combined view → run unscoped. Zero-account tenants pass `[]` → no rows.
+      if (activeCompanyId) moreQuery = moreQuery.in('account_id', companyAccountIds)
 
       const { data: moreMessages } = await moreQuery
 
@@ -656,7 +660,7 @@ export default function InboxPage() {
     } finally {
       setLoadingMore(false)
     }
-  }, [items, loadingMore, hasMore, isAdmin, companyAccountIds, inboxView, filters.channel, INBOX_PAGE_SIZE])
+  }, [items, loadingMore, hasMore, isAdmin, companyAccountIds, activeCompanyId, inboxView, filters.channel, INBOX_PAGE_SIZE])
 
   // Real-time: auto-refresh inbox when new messages arrive (debounced 3s)
   const debounceRef = useRef<NodeJS.Timeout | null>(null)
@@ -669,8 +673,9 @@ export default function InboxPage() {
         fetchInboxItems()
       }, 3000)
     }, [fetchInboxItems]),
-    // Non-admins: scope realtime to accounts they can see
-    accountIds: companyAccountIds.length > 0 ? companyAccountIds : undefined,
+    // Scope realtime to the active tenant. `undefined` = combined view
+    // (super_admin) → subscribe to every account.
+    accountIds: activeCompanyId ? companyAccountIds : undefined,
   })
 
   // ── Inbox sync (fires IMAP/Graph pollers manually — Vercel Cron only runs

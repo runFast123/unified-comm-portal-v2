@@ -76,28 +76,53 @@ export default async function DashboardLayout({
     }
   } catch { /* non-fatal */ }
 
-  // Resolve the "active" company — read from cookie if present and
-  // accessible, else fall back to the user's home company.
+  // Resolve the "active" company.
+  //
+  // Semantics — the matrix the consumer pages depend on:
+  //   - super_admin + cookie matching an accessible company → that id
+  //   - super_admin + no cookie (or stale/invalid cookie)   → null
+  //     → "combined view": no tenant scope; queries run cross-tenant
+  //   - non-admin → userCompanyId (their home company); fall back to the
+  //     first accessible company when home company is missing. Non-admins
+  //     can NEVER reach the `null` (combined view) state — their switcher
+  //     is hidden in the header anyway.
   const cookieStore = await cookies()
   const cookieCompanyId = cookieStore.get('selected_company_id')?.value ?? null
-  const activeCompanyId =
-    cookieCompanyId && accessibleCompanies.some((c) => c.id === cookieCompanyId)
-      ? cookieCompanyId
-      : userCompanyId
-  const activeCompany = accessibleCompanies.find((c) => c.id === activeCompanyId) ?? null
+  const userIsSuperAdmin = isSuperAdmin(user.role as string)
+  let activeCompanyId: string | null
+  if (userIsSuperAdmin) {
+    // super_admin: cookie wins when it points to a real accessible company,
+    // otherwise null = combined view (DEFAULT for fresh logins).
+    activeCompanyId =
+      cookieCompanyId && accessibleCompanies.some((c) => c.id === cookieCompanyId)
+        ? cookieCompanyId
+        : null
+  } else {
+    // Non-admin: pinned to their home company. Fall back to first accessible
+    // if the home column is null but they happen to have access to one.
+    activeCompanyId = userCompanyId ?? accessibleCompanies[0]?.id ?? null
+  }
+  const activeCompany = activeCompanyId
+    ? accessibleCompanies.find((c) => c.id === activeCompanyId) ?? null
+    : null
 
-  // Resolve `companyAccountIds` for the ACTIVE company (cookie-selected or
-  // user's home). Applies to all users — admin or not — so the switcher
-  // actually scopes the dashboard/inbox/reports queries.
+  // Resolve `companyAccountIds` for the ACTIVE company.
   //
-  // Strategy:
-  //   1. Happy path — `activeCompanyId` is set → fetch accounts via FK.
-  //   2. Legacy fallback — `activeCompanyId` is null AND `userCompanyId`
-  //      is null AND `user.account_id` exists → use the old name-substring
-  //      grouping so we don't break users whose accounts haven't been
-  //      backfilled with company_id yet.
-  //   3. Otherwise → [user.account_id] (or []) as a safe default.
-  let companyAccountIds: string[] = user.account_id ? [user.account_id] : []
+  // Gating rules (paired with consumer pages):
+  //   - activeCompanyId === null → `[]`. Consumer pages MUST NOT apply
+  //     `.in('account_id', [])` here — they gate on `activeCompanyId`,
+  //     not on `companyAccountIds.length`. An empty array reaching a
+  //     consumer means "real tenant, zero accounts → no rows", which
+  //     would silently fall through to an unscoped query under the old
+  //     `length > 0` gate (the bug we're fixing).
+  //   - activeCompanyId set → query accounts.id for that company. May be
+  //     `[]` for a freshly-created tenant. That `[]` IS correct here —
+  //     consumer pages will pass it to `.in('account_id', [])` and get
+  //     zero rows back (the correct answer).
+  //   - Legacy fallback (account lacking company_id) only kicks in when
+  //     activeCompanyId resolves to a real company AND the FK lookup
+  //     returns nothing AND the user's own account has no company_id.
+  let companyAccountIds: string[] = []
   try {
     if (activeCompanyId) {
       const { data: siblings } = await service
@@ -106,44 +131,54 @@ export default async function DashboardLayout({
         .eq('company_id', activeCompanyId)
         .eq('is_active', true)
       companyAccountIds = ((siblings as Array<{ id: string }> | null) ?? []).map((s) => s.id)
-    } else if (!userCompanyId && user.account_id) {
-      // Legacy fallback — user's account hasn't been backfilled with
-      // company_id. Warn and fall back to the old name-substring grouping
-      // so we don't break existing tenants pre-migration.
-      const { data: myAccount } = await service
-        .from('accounts')
-        .select('id, name, company_id')
-        .eq('id', user.account_id)
-        .maybeSingle()
 
-      if (myAccount && !myAccount.company_id) {
-        console.warn(
-          `[layout] Falling back to name-substring match — account ${user.account_id} ` +
-            `has no company_id. Run/verify the companies backfill migration.`
-        )
-        const { data: allAccounts } = await service
+      // Legacy fallback — user's account hasn't been backfilled with
+      // company_id and the FK lookup turned up empty. Walk the name-
+      // substring grouping to avoid breaking tenants pre-migration.
+      // Only applies for the user's OWN active company.
+      if (
+        companyAccountIds.length === 0 &&
+        user.account_id &&
+        activeCompanyId === userCompanyId
+      ) {
+        const { data: myAccount } = await service
           .from('accounts')
-          .select('id, name')
-          .eq('is_active', true)
-        if (allAccounts && myAccount.name) {
-          const stripChannelSuffix = (n: string) =>
-            n.replace(/\s+Teams$/i, '').replace(/\s+WhatsApp$/i, '').trim()
-          const baseName = stripChannelSuffix(myAccount.name as string)
-          companyAccountIds = allAccounts
-            .filter((a) => stripChannelSuffix(a.name as string) === baseName)
-            .map((a) => a.id as string)
+          .select('id, name, company_id')
+          .eq('id', user.account_id)
+          .maybeSingle()
+
+        if (myAccount && !myAccount.company_id) {
+          console.warn(
+            `[layout] Falling back to name-substring match — account ${user.account_id} ` +
+              `has no company_id. Run/verify the companies backfill migration.`
+          )
+          const { data: allAccounts } = await service
+            .from('accounts')
+            .select('id, name')
+            .eq('is_active', true)
+          if (allAccounts && myAccount.name) {
+            const stripChannelSuffix = (n: string) =>
+              n.replace(/\s+Teams$/i, '').replace(/\s+WhatsApp$/i, '').trim()
+            const baseName = stripChannelSuffix(myAccount.name as string)
+            companyAccountIds = allAccounts
+              .filter((a) => stripChannelSuffix(a.name as string) === baseName)
+              .map((a) => a.id as string)
+          }
         }
       }
     }
-  } catch { /* fallback to single account_id */ }
+    // activeCompanyId === null → combined view → keep `[]`. Consumers
+    // gate on activeCompanyId, so they will skip the `.in()` filter.
+  } catch { /* fallback to empty scope */ }
 
-  // Fetch pending reply count — always scoped to the active company's
-  // accounts when we have any (consumer pages do the same; see below).
+  // Fetch pending reply count — scope to the active company's accounts
+  // when a tenant is selected. In combined view (super_admin, activeCompanyId
+  // === null) we leave the query unscoped so the badge reflects everything.
   let pendingQuery = supabase
     .from('ai_replies')
     .select('*', { count: 'exact', head: true })
     .eq('status', 'pending_approval')
-  if (companyAccountIds.length > 0) {
+  if (activeCompanyId) {
     pendingQuery = pendingQuery.in('account_id', companyAccountIds)
   }
   const { count: pendingCount } = await pendingQuery
@@ -167,6 +202,8 @@ export default async function DashboardLayout({
       user={user}
       pendingCount={pendingCount ?? 0}
       companyAccountIds={companyAccountIds}
+      activeCompanyId={activeCompanyId}
+      canSeeAllCompanies={userIsSuperAdmin}
       accessibleCompanies={accessibleCompanies}
       currentCompanyId={userCompanyId}
       brandLogoUrl={activeCompany?.logo_url ?? null}

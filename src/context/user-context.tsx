@@ -16,6 +16,17 @@ interface UserContextType {
   isAdmin: boolean
   /** All account IDs for the same company (email + teams + whatsapp siblings) */
   companyAccountIds: string[]
+  /**
+   * The active tenant id, or `null` when the super_admin is in
+   * "combined view" mode (no tenant selected → cross-tenant queries).
+   *
+   * Consumers MUST gate the `account_id IN (companyAccountIds)` filter on
+   * `activeCompanyId !== null`, NOT on `companyAccountIds.length > 0` —
+   * a real tenant with zero accounts should produce ZERO rows (an empty
+   * `.in('account_id', [])` returns no rows), but a `null` activeCompanyId
+   * means "show everything across all tenants" for super_admin.
+   */
+  activeCompanyId: string | null
 }
 
 const UserContext = createContext<UserContextType>({
@@ -25,11 +36,14 @@ const UserContext = createContext<UserContextType>({
   account_id: null,
   isAdmin: false,
   companyAccountIds: [],
+  activeCompanyId: null,
 })
 
-export function UserProvider({ user, serverCompanyAccountIds, children }: {
-  user: Omit<UserContextType, 'isAdmin' | 'companyAccountIds'>
+export function UserProvider({ user, serverCompanyAccountIds, activeCompanyId = null, children }: {
+  user: Omit<UserContextType, 'isAdmin' | 'companyAccountIds' | 'activeCompanyId'>
   serverCompanyAccountIds?: string[]
+  /** Server-resolved active tenant id. `null` = super_admin combined view. */
+  activeCompanyId?: string | null
   children: React.ReactNode
 }) {
   // Start with server-provided IDs or single account_id
@@ -47,10 +61,12 @@ export function UserProvider({ user, serverCompanyAccountIds, children }: {
   // IDs and downstream useEffects with companyAccountIds in their deps
   // never re-fire — which is exactly the "had to manually refresh" bug.
   // Compare by joined-string key so a new array with same contents doesn't
-  // thrash state.
+  // thrash state. We also accept *empty* arrays here — a real tenant with
+  // zero accounts must scope queries to `[]` (i.e. "no rows"), NOT keep
+  // the previous tenant's IDs.
   const serverIdsKey = (serverCompanyAccountIds ?? []).join(',')
   useEffect(() => {
-    if (serverCompanyAccountIds && serverCompanyAccountIds.length > 0) {
+    if (serverCompanyAccountIds) {
       setCompanyAccountIds(serverCompanyAccountIds)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -73,7 +89,7 @@ export function UserProvider({ user, serverCompanyAccountIds, children }: {
   }, [user.role, user.account_id])
 
   return (
-    <UserContext.Provider value={{ ...user, isAdmin: ADMIN_ROLES.has(user.role), companyAccountIds }}>
+    <UserContext.Provider value={{ ...user, isAdmin: ADMIN_ROLES.has(user.role), companyAccountIds, activeCompanyId }}>
       {children}
     </UserContext.Provider>
   )

@@ -35,7 +35,7 @@ function getBaseName(accountName: string): string {
 }
 
 export default function AccountsPage() {
-  const { isAdmin, companyAccountIds } = useUser()
+  const { isAdmin, companyAccountIds, activeCompanyId } = useUser()
   const [accounts, setAccounts] = useState<AccountWithStats[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -56,14 +56,15 @@ export default function AccountsPage() {
       }
 
       // Admin or fallback: use Supabase client directly. Scope to the active
-      // company's accounts (cookie-resolved in layout) so the super_admin
-      // switcher actually filters the visible accounts.
+      // tenant's accounts (cookie-resolved in layout). `activeCompanyId
+      // === null` (super_admin combined view) leaves the query unscoped so
+      // every tenant's accounts show.
       if (!accountRows) {
         let q = supabase
           .from('accounts')
           .select('*')
           .order('name')
-        if (companyAccountIds.length > 0) {
+        if (activeCompanyId) {
           q = q.in('id', companyAccountIds)
         }
         const { data, error } = await q
@@ -133,7 +134,7 @@ export default function AccountsPage() {
     }
 
     fetchAccounts()
-  }, [isAdmin, companyAccountIds])
+  }, [isAdmin, companyAccountIds, activeCompanyId])
 
   if (loading) {
     return (

@@ -57,7 +57,7 @@ function getInitials(name: string): string {
 
 export default function ContactsPage() {
   const supabase = createClient()
-  const { isAdmin, companyAccountIds } = useUser()
+  const { isAdmin, companyAccountIds, activeCompanyId } = useUser()
 
   const [contacts, setContacts] = useState<ContactRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -109,7 +109,10 @@ export default function ContactsPage() {
         .select('contact_id, channel, account_id')
         .in('contact_id', ids)
         .limit(10000)
-      if (companyAccountIds.length > 0) {
+      if (activeCompanyId) {
+        // Tenant selected — scope to its accounts (`[]` returns no rows for
+        // zero-account tenants). Combined view (super_admin, no cookie)
+        // intentionally runs unscoped to surface cross-tenant contacts.
         convQuery = convQuery.in('account_id', companyAccountIds)
       }
       const { data: convRows } = await convQuery
@@ -128,10 +131,10 @@ export default function ContactsPage() {
           ...c,
           channels: Array.from(channelsByContact.get(c.id) || []),
         }))
-        // When scoped to a company (cookie-selected or user's home), hide
-        // contacts that have zero conversations in that company. When
-        // unscoped (super_admin with no active company), show all contacts.
-        .filter((c) => companyAccountIds.length === 0 || c.channels.length > 0)
+        // When scoped to a tenant (activeCompanyId !== null), hide contacts
+        // that have zero conversations in that tenant. In combined view
+        // (super_admin, no cookie), show every contact.
+        .filter((c) => activeCompanyId === null || c.channels.length > 0)
 
       setContacts(enriched)
     } catch (err) {
@@ -140,7 +143,7 @@ export default function ContactsPage() {
       setLoading(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdmin, companyAccountIds.join(',')])
+  }, [isAdmin, companyAccountIds.join(','), activeCompanyId])
 
   useEffect(() => {
     fetchContacts()

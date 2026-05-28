@@ -36,6 +36,17 @@ interface DashboardShellProps {
   user: Pick<User, 'email' | 'full_name' | 'role' | 'account_id'>
   pendingCount: number
   companyAccountIds?: string[]
+  /**
+   * The active tenant id, or `null` for super_admin "combined view".
+   * Forwarded to UserProvider for consumer-page query gating, and to
+   * CompanySwitcher so its trigger can render "All companies" when null.
+   */
+  activeCompanyId?: string | null
+  /**
+   * Whether the current user can see the "All companies" combined-view
+   * option in the switcher dropdown. True for super_admin only.
+   */
+  canSeeAllCompanies?: boolean
   /** Companies the user can switch into. Hidden when ≤ 1. */
   accessibleCompanies?: CompanyOption[]
   /** The user's home company id (from `users.company_id`). */
@@ -178,6 +189,8 @@ export function DashboardShell({
   user,
   pendingCount,
   companyAccountIds,
+  activeCompanyId = null,
+  canSeeAllCompanies = false,
   accessibleCompanies = [],
   currentCompanyId = null,
   brandLogoUrl = null,
@@ -277,7 +290,7 @@ export function DashboardShell({
     : undefined
 
   return (
-    <UserProvider user={user} serverCompanyAccountIds={companyAccountIds}>
+    <UserProvider user={user} serverCompanyAccountIds={companyAccountIds} activeCompanyId={activeCompanyId}>
     <div className="flex h-screen overflow-hidden bg-background" style={rootStyle}>
       <Sidebar
         user={user}
@@ -319,6 +332,8 @@ export function DashboardShell({
           <CompanySwitcher
             companies={accessibleCompanies}
             currentCompanyId={currentCompanyId}
+            activeCompanyId={activeCompanyId}
+            canSeeAllCompanies={canSeeAllCompanies}
           />
           <MentionsBell />
           <NotificationCenter />

@@ -67,7 +67,7 @@ function getCategoryVariant(category: string): 'info' | 'warning' | 'success' | 
 
 export default function TemplatesPage() {
   const supabase = createClient()
-  const { isAdmin, companyAccountIds } = useUser()
+  const { isAdmin, companyAccountIds, activeCompanyId } = useUser()
   const [templates, setTemplates] = useState<ReplyTemplate[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -95,9 +95,9 @@ export default function TemplatesPage() {
       .select('id, name')
       .eq('is_active', true)
       .order('name')
-    // Scope to the active company's accounts (cookie-resolved in layout)
-    // so the switcher actually filters which accounts are listed.
-    if (companyAccountIds.length > 0) {
+    // Scope to the active tenant's accounts. `activeCompanyId === null`
+    // (super_admin combined view) leaves the query unscoped.
+    if (activeCompanyId) {
       query = query.in('id', companyAccountIds)
     }
     const { data } = await query
@@ -113,9 +113,9 @@ export default function TemplatesPage() {
       .select('*')
       .order('updated_at', { ascending: false })
 
-    // Scope to the active company's accounts (cookie-resolved in layout)
-    // OR shared rows (account_id IS NULL). Applies to all users.
-    if (companyAccountIds.length > 0) {
+    // Scope to the active tenant's accounts OR shared rows (account_id IS NULL).
+    // Combined view (super_admin, activeCompanyId === null) runs unscoped.
+    if (activeCompanyId) {
       query = query.or(companyAccountIds.map(id => `account_id.eq.${id}`).concat('account_id.is.null').join(','))
     }
 
@@ -135,7 +135,7 @@ export default function TemplatesPage() {
     fetchTemplates()
     fetchAccounts()
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdmin, companyAccountIds])
+  }, [isAdmin, companyAccountIds, activeCompanyId])
 
   // Derived stats
   const totalTemplates = templates.length

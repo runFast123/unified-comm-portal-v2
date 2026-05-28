@@ -22,6 +22,7 @@ import {
   ShieldAlert,
   ShieldCheck,
   AlertTriangle,
+  Globe,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -169,7 +170,7 @@ function getChannelColoredIcon(channel: ChannelType) {
 
 export default function DashboardPage() {
   const router = useRouter()
-  const { isAdmin, account_id: userAccountId, companyAccountIds } = useUser()
+  const { isAdmin, account_id: userAccountId, companyAccountIds, activeCompanyId } = useUser()
   const { visible: widgetVisibility, setVisible: setWidgetVisibility, isVisible: isWidgetVisible } = useWidgetVisibility()
   const [channelFilter, setChannelFilter] = useState<ChannelFilterValue>('all')
   const [dateRange, setDateRange] = useState<DateRange>('today')
@@ -259,7 +260,11 @@ export default function DashboardPage() {
       if (endDate) aiQuery = aiQuery.lte('created_at', endDate)
       if (selectedAccountIds.size > 0) {
         aiQuery = aiQuery.in('account_id', Array.from(selectedAccountIds))
-      } else if (companyAccountIds.length > 0) {
+      } else if (activeCompanyId) {
+        // Tenant selected — scope to its accounts (empty array → no rows,
+        // which is the correct answer for a zero-account tenant). Combined
+        // view (super_admin, activeCompanyId === null) deliberately skips
+        // this filter so the query runs cross-tenant.
         aiQuery = aiQuery.in('account_id', companyAccountIds)
       }
 
@@ -295,10 +300,12 @@ export default function DashboardPage() {
     if (startDate) query = query.gte('received_at', startDate)
     if (endDate) query = query.lte('received_at', endDate)
 
-    // Apply account filter if selected, or scope to company for non-admins
+    // Apply account filter if selected, else scope to active tenant. In
+    // combined view (super_admin, no tenant cookie) we run unscoped to
+    // surface cross-tenant data.
     if (selectedAccountIds.size > 0) {
       query = query.in('account_id', Array.from(selectedAccountIds))
-    } else if (companyAccountIds.length > 0) {
+    } else if (activeCompanyId) {
       query = query.in('account_id', companyAccountIds)
     }
 
@@ -413,11 +420,13 @@ export default function DashboardPage() {
       const customToISO = getDateRangeEnd(dateRange, customTo)
 
       try {
-        // Build scoped queries — always scope to the active company's
-        // accounts (cookie-resolved in layout) so the company switcher
-        // actually drives data. `accountIdFilter` is null only when there
-        // are zero accounts (e.g. a fresh tenant with nothing seeded).
-        const accountIdFilter = companyAccountIds.length > 0 ? companyAccountIds : null
+        // Build scoped queries — scope to the active tenant's accounts when
+        // a tenant is selected. `activeCompanyId === null` is the super_admin
+        // "combined view" mode → no scope → cross-tenant query. When a real
+        // tenant IS selected but has zero accounts, we still pass `[]` so
+        // `.in('account_id', [])` returns zero rows (the correct empty state)
+        // instead of falling through to an unscoped query.
+        const accountIdFilter = activeCompanyId ? companyAccountIds : null
 
         let accountsQuery = supabase
           .from('accounts')
@@ -903,6 +912,29 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {/* Combined-view banner: shown only when super_admin has no tenant
+          selected (activeCompanyId === null). Helps make the cross-tenant
+          aggregation explicit so it's obvious why numbers look bigger than
+          a single tenant's. Picking a company from the switcher clears it. */}
+      {activeCompanyId === null && (
+        <div
+          role="status"
+          className="flex items-start gap-3 rounded-xl border border-teal-200 bg-gradient-to-r from-teal-50 to-emerald-50 px-4 py-3 shadow-sm"
+        >
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-teal-600 text-white shadow">
+            <Globe className="h-4 w-4" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-teal-900">
+              Showing combined data across {companyStats.length > 0 ? `all ${companyStats.length} companies` : 'all tenants'}
+            </p>
+            <p className="mt-0.5 text-sm text-teal-800">
+              Pick a specific company from the top-right switcher to drill in.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Page header with channel filter */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -1443,7 +1475,7 @@ export default function DashboardPage() {
                 if (channelFilter !== 'all' && s.channel_type !== channelFilter) return false
                 return true
               })}
-              companyAccountIds={companyAccountIds.length > 0 ? companyAccountIds : undefined}
+              companyAccountIds={activeCompanyId ? companyAccountIds : undefined}
             />
           </div>
         </div>

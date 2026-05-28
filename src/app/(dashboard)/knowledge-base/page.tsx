@@ -36,7 +36,7 @@ import Link from 'next/link'
 import { useToast } from '@/components/ui/toast'
 
 function GapCount() {
-  const { isAdmin, companyAccountIds } = useUser()
+  const { isAdmin, companyAccountIds, activeCompanyId } = useUser()
   const [count, setCount] = useState<number | null>(null)
   useEffect(() => {
     async function fetchGapCount() {
@@ -45,14 +45,14 @@ function GapCount() {
         .from('message_classifications')
         .select('message_id, messages!inner(account_id)' as any, { count: 'exact', head: true })
         .lt('confidence', 0.6)
-      if (companyAccountIds.length > 0) {
+      if (activeCompanyId) {
         query = (query as any).in('messages.account_id', companyAccountIds)
       }
       const { count: c } = await query
       setCount(c || 0)
     }
     fetchGapCount()
-  }, [isAdmin, companyAccountIds])
+  }, [isAdmin, companyAccountIds, activeCompanyId])
   if (count === null) {
     return <div className="h-7 w-12 animate-pulse rounded bg-gray-200" />
   }
@@ -62,7 +62,7 @@ function GapCount() {
 // ─── Gap Analysis Component ──────────────────────────────────────────────────
 
 function GapAnalysis() {
-  const { isAdmin, companyAccountIds } = useUser()
+  const { isAdmin, companyAccountIds, activeCompanyId } = useUser()
   const [gaps, setGaps] = useState<{
     id: string
     message_text: string
@@ -102,7 +102,7 @@ function GapAnalysis() {
         .lt('confidence', 0.6)
         .order('classified_at', { ascending: false })
         .limit(20)
-      if (companyAccountIds.length > 0) {
+      if (activeCompanyId) {
         gapQuery = (gapQuery as any).in('messages.account_id', companyAccountIds)
       }
       const { data } = await gapQuery
@@ -124,7 +124,7 @@ function GapAnalysis() {
       setLoading(false)
     }
     fetchGaps()
-  }, [isAdmin, companyAccountIds])
+  }, [isAdmin, companyAccountIds, activeCompanyId])
 
   if (loading) {
     return (
@@ -232,7 +232,7 @@ function getCategoryVariant(category: string): 'info' | 'warning' | 'success' | 
 
 export default function KnowledgeBasePage() {
   const supabase = createClient()
-  const { isAdmin, companyAccountIds } = useUser()
+  const { isAdmin, companyAccountIds, activeCompanyId } = useUser()
   const [articles, setArticles] = useState<KBArticle[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -257,9 +257,10 @@ export default function KnowledgeBasePage() {
       .select('id, name')
       .eq('is_active', true)
       .order('name')
-    // Scope to the active company's accounts (cookie-resolved in layout)
-    // so the switcher actually filters which accounts are listed.
-    if (companyAccountIds.length > 0) {
+    // Scope to the active tenant's accounts. `activeCompanyId === null`
+    // (super_admin combined view) leaves the query unscoped to show every
+    // tenant's accounts.
+    if (activeCompanyId) {
       query = query.in('id', companyAccountIds)
     }
     const { data } = await query
@@ -275,9 +276,9 @@ export default function KnowledgeBasePage() {
       .select('*')
       .order('updated_at', { ascending: false })
 
-    // Scope to the active company's accounts (cookie-resolved in layout)
-    // OR shared rows (account_id IS NULL). Applies to all users.
-    if (companyAccountIds.length > 0) {
+    // Scope to the active tenant's accounts OR shared rows (account_id IS NULL).
+    // Combined view (super_admin, activeCompanyId === null) runs unscoped.
+    if (activeCompanyId) {
       query = query.or(companyAccountIds.map(id => `account_id.eq.${id}`).concat('account_id.is.null').join(','))
     }
 
@@ -297,7 +298,7 @@ export default function KnowledgeBasePage() {
     fetchArticles()
     fetchAccounts()
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdmin, companyAccountIds])
+  }, [isAdmin, companyAccountIds, activeCompanyId])
 
   // Derived stats
   const totalArticles = articles.length

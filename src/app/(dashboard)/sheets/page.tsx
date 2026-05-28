@@ -68,7 +68,7 @@ import { useUser } from '@/context/user-context'
 interface AccountOption { id: string; name: string }
 
 export default function SheetsPage() {
-  const { isAdmin, companyAccountIds } = useUser()
+  const { isAdmin, companyAccountIds, activeCompanyId } = useUser()
   const supabase = createClient()
   const [sheets, setSheets] = useState<GoogleSheetsSync[]>([])
   const [accounts, setAccounts] = useState<AccountOption[]>([])
@@ -92,12 +92,15 @@ export default function SheetsPage() {
         .select('id, name')
         .eq('is_active', true)
         .order('name')
-      if (companyAccountIds.length > 0) query = query.in('id', companyAccountIds)
+      // Scope to the active tenant's accounts; combined view (super_admin,
+      // activeCompanyId === null) keeps the query unscoped.
+      if (activeCompanyId) query = query.in('id', companyAccountIds)
       const { data } = await query
       if (data) setAccounts(data)
     }
     fetchAccounts()
-  }, [isAdmin, companyAccountIds])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin, companyAccountIds, activeCompanyId])
 
   // Helper to get account name
   function getAccountName(accountId: string | null): string {
@@ -113,9 +116,10 @@ export default function SheetsPage() {
         .from('google_sheets_sync')
         .select('*')
         .order('created_at', { ascending: false })
-      // Scope to the active company's accounts (cookie-resolved in layout)
-      // OR shared rows (account_id IS NULL). Applies to all users.
-      if (companyAccountIds.length > 0) {
+      // Scope to the active tenant's accounts OR shared rows
+      // (account_id IS NULL). Combined view (super_admin, activeCompanyId
+      // === null) runs unscoped.
+      if (activeCompanyId) {
         query = query.or(companyAccountIds.map(id => `account_id.eq.${id}`).concat('account_id.is.null').join(','))
       }
       const { data, error } = await query
@@ -133,7 +137,7 @@ export default function SheetsPage() {
       setStatusMessage('Error loading sheet configurations.')
     }
     setLoading(false)
-  }, [isAdmin, companyAccountIds])
+  }, [isAdmin, companyAccountIds, activeCompanyId])
 
   useEffect(() => {
     loadSheets()
