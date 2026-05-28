@@ -94,7 +94,7 @@ export async function pollTeamsAccount(
   const supabase = await createServiceRoleClient()
   const { data: account } = await supabase
     .from('accounts')
-    .select('teams_user_id, last_polled_at, consecutive_poll_failures')
+    .select('teams_user_id, last_polled_at, consecutive_poll_failures, last_poll_error_at')
     .eq('id', accountId)
     .maybeSingle()
 
@@ -124,10 +124,26 @@ export async function pollTeamsAccount(
   // that's been failing 5+ runs in a row. Returns WITHOUT incrementing
   // failures (a skip isn't a fresh failure). The next successful poll
   // resets the counter via the persist block at the bottom.
-  if (failures >= CIRCUIT_BREAKER_THRESHOLD) {
+  //
+  // Half-open: if breaker has been open for at least CIRCUIT_BREAKER_COOLDOWN_MS
+  // since the last error, allow ONE retry. If it succeeds, the persist block
+  // at the bottom resets failures to 0. If it fails, fail() increments back
+  // to 6+ and we bail again until the next cooldown window.
+  //
+  // Without this, the only recovery path is OAuth re-auth, which traps
+  // accounts that suffer transient network issues with otherwise-valid creds.
+  const CIRCUIT_BREAKER_COOLDOWN_MS = 30 * 60 * 1000 // 30 min
+
+  const lastErrorAt = account?.last_poll_error_at
+    ? new Date(account.last_poll_error_at).getTime()
+    : 0
+  const cooldownElapsed = Date.now() - lastErrorAt > CIRCUIT_BREAKER_COOLDOWN_MS
+
+  if (failures >= CIRCUIT_BREAKER_THRESHOLD && !cooldownElapsed) {
     result.errors.push('skipped: circuit breaker open')
     return result
   }
+  // else: breaker is open but cooldown elapsed — fall through and try once.
 
   const cfg = (await getChannelConfig(accountId, 'teams')) as TeamsConfig | null
   if (!cfg) return fail('Teams not configured')
