@@ -35,6 +35,14 @@
 -- creds via /admin/integrations from now on WILL invalidate that
 -- company's existing refresh tokens — by design.
 --
+-- ⚠ KNOWN ISSUE — see 20260528190000_cleanup_inherited_integration_settings:
+-- The "clone to every company" backfill below was a footgun: it made every
+-- tenant LOOK configured in the UI even when only one had actually set the
+-- creds. The follow-up migration deletes orphan clones for companies with
+-- no OAuth-dependent channel_configs. Future deploys against an empty DB
+-- naturally skip the backfill (no global rows to clone), so this only
+-- affected the single migration of an existing production database.
+--
 -- Idempotent: safe to re-run.
 -- ============================================================================
 
