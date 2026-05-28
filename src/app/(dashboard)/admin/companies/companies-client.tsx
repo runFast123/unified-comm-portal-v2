@@ -104,7 +104,7 @@ function OverflowMenu({
           e.stopPropagation()
           setOpen((v) => !v)
         }}
-        className="inline-flex items-center justify-center rounded-md p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+        className="inline-flex items-center justify-center rounded-md p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors"
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={label}

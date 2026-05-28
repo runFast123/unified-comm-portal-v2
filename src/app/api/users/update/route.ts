@@ -9,7 +9,33 @@ interface AdminCtx {
   companyId: string | null
 }
 
-const ROLES: UserRole[] = ['admin', 'company_admin', 'company_member', 'reviewer', 'viewer']
+// Canonical list of role values accepted by the update endpoint. Mirrors
+// `/api/users/invite`. Modern roles (super_admin/company_admin/supervisor/
+// company_member) are the canonical post-Phase-1 set; legacy admin/reviewer/
+// viewer are retained for back-compat with existing rows. `super_admin`
+// promotion is additionally gated by the caller-role check below.
+const ROLES: UserRole[] = [
+  'super_admin',
+  'admin',
+  'company_admin',
+  'supervisor',
+  'company_member',
+  'reviewer',
+  'viewer',
+]
+
+/**
+ * Roles a non-super_admin caller may assign via this endpoint. Mirrors the
+ * invite-route gate: only super_admin can mint or promote-to super_admin
+ * (and the legacy cross-tenant `admin`).
+ */
+const COMPANY_ADMIN_ASSIGNABLE_ROLES: ReadonlySet<UserRole> = new Set<UserRole>([
+  'company_admin',
+  'supervisor',
+  'company_member',
+  'reviewer',
+  'viewer',
+])
 
 /**
  * Auth gate: caller must be super_admin OR a company-level admin.
@@ -98,6 +124,24 @@ export async function POST(request: Request) {
     patch.role = role
   }
 
+  // Determine whether the caller is super_admin once — we use it for both
+  // the role-assignment gate below and the cross-company guards further on.
+  const isSuper = isSuperAdmin(gate.ctx.role)
+
+  // company_admin (or legacy admin) MUST NOT be able to promote anyone to
+  // super_admin or the legacy cross-tenant `admin` role via this endpoint —
+  // mirrors the invite-route gate.
+  if (
+    role !== undefined &&
+    !isSuper &&
+    !COMPANY_ADMIN_ASSIGNABLE_ROLES.has(role)
+  ) {
+    return NextResponse.json(
+      { error: 'Forbidden: company_admin cannot assign this role' },
+      { status: 403 }
+    )
+  }
+
   if (account_id !== undefined) {
     if (account_id !== null && typeof account_id !== 'string') {
       return NextResponse.json({ error: 'account_id must be a string or null' }, { status: 400 })
@@ -131,8 +175,6 @@ export async function POST(request: Request) {
   if (!target) {
     return NextResponse.json({ error: 'User not found' }, { status: 404 })
   }
-
-  const isSuper = isSuperAdmin(gate.ctx.role)
 
   // FIX: non-super_admin can ONLY mutate users in their own company.
   if (!isSuper) {

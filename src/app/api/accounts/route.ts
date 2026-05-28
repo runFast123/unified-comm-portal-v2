@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase-server'
 import { getChannelConfig, saveChannelConfig } from '@/lib/channel-config'
 import { getAzureOAuth } from '@/lib/integration-settings'
@@ -12,9 +13,9 @@ async function requireAdmin() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { ok: false as const, status: 401, error: 'Unauthorized' }
   const admin = await createServiceRoleClient()
-  const { data: profile } = await admin.from('users').select('role').eq('id', user.id).maybeSingle()
+  const { data: profile } = await admin.from('users').select('role, company_id').eq('id', user.id).maybeSingle()
   if (!['admin','super_admin','company_admin'].includes(profile?.role ?? '')) return { ok: false as const, status: 403, error: 'Admin only' }
-  return { ok: true as const, userId: user.id }
+  return { ok: true as const, userId: user.id, companyId: (profile?.company_id as string | null) ?? null }
 }
 
 // POST /api/accounts  { name, channel_type, setup_mode?, gmail_address?, teams_user_id?, teams_tenant_id?, whatsapp_phone?, reuse_tenant_from_account_id? }
@@ -98,9 +99,27 @@ export async function POST(request: Request) {
     // into channel_configs before the user is redirected to consent (the
     // callback reads them back to exchange the auth code). Reads DB first,
     // env second, via the integration-settings helper.
+    //
+    // OAuth client creds are PER-COMPANY — resolve which company to look
+    // up. For super_admin the active company comes from the switcher
+    // cookie (`selected_company_id`); for company_admin it's their own
+    // company. We refuse to proceed without a resolved company because
+    // we'd otherwise pick the wrong tenant's Azure app.
     let sharedAzureCreds: Awaited<ReturnType<typeof getAzureOAuth>> = null
     if (setup_mode === 'oauth' && channel_type === 'teams' && !reusedTenantConfig) {
-      sharedAzureCreds = await getAzureOAuth()
+      const cookieStore = await cookies()
+      const cookieCompanyId = cookieStore.get('selected_company_id')?.value ?? null
+      const azureCompanyId = cookieCompanyId || gate.companyId
+      if (!azureCompanyId) {
+        return NextResponse.json(
+          {
+            error:
+              'No active company selected — pick a tenant in the company switcher before creating a Teams OAuth account.',
+          },
+          { status: 400 }
+        )
+      }
+      sharedAzureCreds = await getAzureOAuth(azureCompanyId)
       if (!sharedAzureCreds) {
         return NextResponse.json(
           {

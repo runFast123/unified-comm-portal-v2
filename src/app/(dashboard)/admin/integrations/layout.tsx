@@ -1,21 +1,21 @@
 import { redirect } from 'next/navigation'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
-import { getCurrentUser, isSuperAdmin } from '@/lib/auth'
+import { getCurrentUser, isCompanyAdmin, isSuperAdmin } from '@/lib/auth'
 
 /**
- * Server-side super_admin gate for /admin/integrations.
+ * Server-side admin gate for /admin/integrations.
  *
- * The `integrations` table holds platform-wide OAuth client credentials
- * (Google Cloud OAuth client, Azure App Registration) shared by EVERY
- * tenant. A company_admin must not be able to rotate the OAuth app used
- * by other companies, so we restrict this surface to super_admin only.
+ * The `integration_settings` table is now PER-COMPANY (migration
+ * 20260528170000_integrations_per_company.sql) — each tenant owns its
+ * own Google/Azure OAuth client rows. That means company_admin needs
+ * access to manage their own rows; super_admin still has cross-tenant
+ * access via the switcher cookie.
+ *
+ * RLS enforces the row-level boundary; this gate just keeps non-admins
+ * out of the UI entirely.
  *
  * The matching API guard lives in `src/app/api/integrations/**`. UI
  * visibility is also gated in `src/components/dashboard/sidebar.tsx`.
- *
- * TODO(multi-tenant): future work could add a `company_id` column to
- * `integrations` and let each tenant configure its own OAuth client. For
- * now we keep the table platform-wide and lock the UI to super_admin.
  */
 export default async function IntegrationsAdminLayout({
   children,
@@ -27,7 +27,7 @@ export default async function IntegrationsAdminLayout({
   if (!authUser) redirect('/login')
 
   const profile = await getCurrentUser(authUser.id)
-  if (!isSuperAdmin(profile?.role)) {
+  if (!isSuperAdmin(profile?.role) && !isCompanyAdmin(profile?.role)) {
     redirect('/dashboard')
   }
 

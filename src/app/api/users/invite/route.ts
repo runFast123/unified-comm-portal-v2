@@ -9,7 +9,21 @@ interface AdminCtx {
   companyId: string | null
 }
 
-const ALL_ROLES: UserRole[] = ['admin', 'company_admin', 'company_member', 'reviewer', 'viewer']
+// Canonical list of role values accepted by the invite endpoint. The modern
+// roles (super_admin/company_admin/supervisor/company_member) are the only
+// ones the UI surfaces for new invites, but we still accept the legacy
+// admin/reviewer/viewer literals so re-invite and migration flows keep
+// working. The `super_admin` literal is only assignable by a super_admin
+// caller — enforced below via COMPANY_ADMIN_ASSIGNABLE_ROLES.
+const ALL_ROLES: UserRole[] = [
+  'super_admin',
+  'admin',
+  'company_admin',
+  'supervisor',
+  'company_member',
+  'reviewer',
+  'viewer',
+]
 
 /**
  * Roles a non-super_admin caller is allowed to assign when inviting a new
@@ -19,6 +33,7 @@ const ALL_ROLES: UserRole[] = ['admin', 'company_admin', 'company_member', 'revi
  */
 const COMPANY_ADMIN_ASSIGNABLE_ROLES: ReadonlySet<UserRole> = new Set<UserRole>([
   'company_admin',
+  'supervisor',
   'company_member',
   'reviewer',
   'viewer',

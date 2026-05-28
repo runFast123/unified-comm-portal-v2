@@ -566,7 +566,167 @@ function OverviewTab({
           </Button>
         </div>
       </div>
+      {canSuper && <DangerZone company={company} />}
     </Card>
+  )
+}
+
+// ─── Danger zone ─────────────────────────────────────────────────────
+// Super-admin-only "Delete company permanently" entry point on the Overview
+// tab. Mirrors the confirm-by-typing-name + force-cascade modal pattern
+// used on the companies list page so the experience is consistent whether
+// you delete from the list or the detail page.
+
+function DangerZone({ company }: { company: Company }) {
+  const router = useRouter()
+  const { toast } = useToast()
+  const [open, setOpen] = useState(false)
+  const [typedName, setTypedName] = useState('')
+  const [force, setForce] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [attachedCount, setAttachedCount] = useState<number | null>(null)
+
+  const close = useCallback(() => {
+    if (busy) return
+    setOpen(false)
+    setTypedName('')
+    setForce(false)
+    setError(null)
+    setAttachedCount(null)
+  }, [busy])
+
+  const handleDelete = useCallback(async () => {
+    if (typedName !== company.name) {
+      setError(`Type the company name exactly to confirm: "${company.name}"`)
+      return
+    }
+    setBusy(true)
+    setError(null)
+    try {
+      const url = `/api/admin/companies/${company.id}?confirm=${encodeURIComponent(company.name)}${force ? '&force=true' : ''}`
+      const res = await fetch(url, { method: 'DELETE' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        // 409 = attached accounts still present. Surface the count and the
+        // path forward (detach or force cascade).
+        if (res.status === 409 && typeof data?.attached_accounts === 'number') {
+          setAttachedCount(data.attached_accounts)
+          setError(
+            `${data.error} Check "Force delete (cascade)" below to remove them all, or detach accounts on the Accounts tab first.`,
+          )
+        } else {
+          setError(data?.error ?? 'Failed to delete company')
+        }
+        setBusy(false)
+        return
+      }
+      toast.success(`Company ${company.name} deleted`)
+      router.push('/admin/companies')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Network error')
+      setBusy(false)
+    }
+  }, [company.id, company.name, typedName, force, router, toast])
+
+  return (
+    <>
+      <div className="mt-8 border-t border-gray-200 pt-6">
+        <h3 className="text-base font-semibold text-red-700">Danger zone</h3>
+        <p className="mt-0.5 text-sm text-gray-500">
+          Irreversible and destructive actions.
+        </p>
+        <div className="mt-3 rounded-lg border border-red-200 bg-red-50/40 p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="text-sm">
+              <p className="font-medium text-gray-900">Delete this company</p>
+              <p className="mt-0.5 text-gray-600">
+                Permanently removes the company and (optionally) cascade-deletes
+                its accounts, conversations, messages, and users. Cannot be
+                undone — consider archiving instead.
+              </p>
+            </div>
+            <Button
+              variant="danger"
+              onClick={() => setOpen(true)}
+              className="shrink-0"
+            >
+              <Trash2 className="h-4 w-4" /> Delete company permanently
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <Modal
+        open={open}
+        onClose={close}
+        title={`Delete "${company.name}"`}
+        footer={
+          <>
+            <Button variant="secondary" onClick={close} disabled={busy}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleDelete}
+              disabled={busy || typedName !== company.name}
+              loading={busy}
+            >
+              <Trash2 className="h-4 w-4" /> Delete forever
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div className="flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-3">
+            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-600" />
+            <div className="space-y-1 text-sm text-red-800">
+              <p className="font-semibold">This is permanent and cannot be undone.</p>
+              <p>
+                Deleting this company will cascade-delete all of its accounts,
+                conversations, messages, contacts, channel configs, audit
+                history, and integration settings.
+              </p>
+              <p className="mt-2">
+                <span className="font-medium">Consider archiving instead</span> —
+                it hides the company from active lists but keeps all data so
+                you can restore it later.
+              </p>
+            </div>
+          </div>
+
+          {error && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+              {error}
+            </div>
+          )}
+
+          <Input
+            label={`Type "${company.name}" to confirm`}
+            placeholder={company.name}
+            value={typedName}
+            onChange={(e) => setTypedName(e.target.value)}
+            autoFocus
+          />
+
+          {(attachedCount ?? 0) > 0 && (
+            <label className="flex items-start gap-2 rounded-lg border border-gray-200 bg-gray-50 p-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={force}
+                onChange={(e) => setForce(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500"
+              />
+              <span className="text-sm text-gray-700">
+                <span className="font-medium">Force delete (cascade)</span> — also
+                remove the {attachedCount} attached account{attachedCount === 1 ? '' : 's'}.
+                Without this, you must detach accounts on the Accounts tab first.
+              </span>
+            </label>
+          )}
+        </div>
+      </Modal>
+    </>
   )
 }
 

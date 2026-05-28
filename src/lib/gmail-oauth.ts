@@ -1,5 +1,6 @@
 import { getChannelConfig, saveChannelConfig, type EmailConfig } from '@/lib/channel-config'
 import { getGoogleOAuth } from '@/lib/integration-settings'
+import { createServiceRoleClient } from '@/lib/supabase-server'
 
 /**
  * Gmail OAuth 2.0 helpers.
@@ -14,6 +15,11 @@ import { getGoogleOAuth } from '@/lib/integration-settings'
  *  - We return a valid access_token (cached or freshly minted).
  *  - If the refresh token is missing / revoked / consent withdrawn we
  *    throw GmailOAuthExpiredError so the UI can prompt re-auth.
+ *
+ * Note on multi-tenancy: OAuth client credentials are PER-COMPANY (see
+ * src/lib/integration-settings.ts + migration 20260528170000). Every
+ * resolver here looks the company_id up from the owning account before
+ * calling getGoogleOAuth().
  */
 
 // https://mail.google.com/ is required for IMAP/SMTP OAuth2 (there is no
@@ -43,10 +49,37 @@ interface TokenErrorResponse {
   error_description?: string
 }
 
-async function requireClientCreds(): Promise<{ clientId: string; clientSecret: string }> {
+/**
+ * Look up the company that owns this account so we can fetch the right
+ * per-company OAuth client. Throws if the account doesn't exist or has
+ * no company assigned — we'd rather fail loudly than silently fall back
+ * to env vars for the wrong tenant.
+ */
+async function companyIdForAccount(accountId: string): Promise<string> {
+  const admin = await createServiceRoleClient()
+  const { data, error } = await admin
+    .from('accounts')
+    .select('company_id')
+    .eq('id', accountId)
+    .maybeSingle()
+  if (error) {
+    throw new Error(`Failed to resolve company for account ${accountId}: ${error.message}`)
+  }
+  if (!data?.company_id) {
+    throw new Error(
+      `Account ${accountId} has no company_id — cannot resolve Gmail OAuth client. ` +
+        `Assign the account to a company first.`
+    )
+  }
+  return data.company_id as string
+}
+
+async function requireClientCreds(
+  companyId: string
+): Promise<{ clientId: string; clientSecret: string }> {
   // DB-backed (integration_settings) with env fallback — admins can configure
   // OAuth via /admin/integrations without a redeploy.
-  const creds = await getGoogleOAuth()
+  const creds = await getGoogleOAuth(companyId)
   if (!creds) {
     throw new Error(
       'Gmail OAuth is not configured. Go to /admin/integrations to set the Google OAuth client ID and secret.'
@@ -65,8 +98,10 @@ async function requireClientCreds(): Promise<{ clientId: string; clientSecret: s
  *     project deleted, etc.) we throw GmailOAuthExpiredError.
  *
  * Accepts `accountId` so we can persist rotated refresh tokens back to the
- * DB. If accountId is null we still return a usable token but skip the
- * write-back silently.
+ * DB AND resolve the per-company OAuth client. If accountId is null we
+ * can't determine which tenant's OAuth client to use, so we throw — the
+ * old behaviour of returning a usable token but skipping write-back is no
+ * longer safe because the wrong client_id/secret could be picked.
  */
 export async function getGmailAccessToken(
   cfg: EmailConfig,
@@ -90,7 +125,15 @@ export async function getGmailAccessToken(
   // rotated tokens.
   const startingRefreshToken = cfg.google_refresh_token
 
-  const { clientId, clientSecret } = await requireClientCreds()
+  // Resolve OAuth client per company. accountId is required from this
+  // point — see the function-level doc comment for why.
+  if (!accountId) {
+    throw new Error(
+      'getGmailAccessToken requires accountId to resolve the per-company OAuth client.'
+    )
+  }
+  const companyId = await companyIdForAccount(accountId)
+  const { clientId, clientSecret } = await requireClientCreds(companyId)
 
   const res = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
@@ -133,36 +176,34 @@ export async function getGmailAccessToken(
   // refresh_token we started with. If someone else already rotated, use
   // their tokens and skip our write — otherwise we'd clobber a fresher
   // refresh token with our now-stale one.
-  if (accountId) {
-    try {
-      const freshCfg = (await getChannelConfig(accountId, 'email')) as EmailConfig | null
+  try {
+    const freshCfg = (await getChannelConfig(accountId, 'email')) as EmailConfig | null
+    if (
+      freshCfg &&
+      freshCfg.google_refresh_token &&
+      freshCfg.google_refresh_token !== startingRefreshToken
+    ) {
+      // Concurrent rotation detected — prefer their newer access token if
+      // it's still valid, else fall back to the one we just minted.
       if (
-        freshCfg &&
-        freshCfg.google_refresh_token &&
-        freshCfg.google_refresh_token !== startingRefreshToken
+        freshCfg.google_access_token &&
+        freshCfg.google_access_token_expires_at &&
+        freshCfg.google_access_token_expires_at > Date.now() + ACCESS_TOKEN_SAFETY_MARGIN_MS
       ) {
-        // Concurrent rotation detected — prefer their newer access token if
-        // it's still valid, else fall back to the one we just minted.
-        if (
-          freshCfg.google_access_token &&
-          freshCfg.google_access_token_expires_at &&
-          freshCfg.google_access_token_expires_at > Date.now() + ACCESS_TOKEN_SAFETY_MARGIN_MS
-        ) {
-          return freshCfg.google_access_token
-        }
-        return json.access_token
+        return freshCfg.google_access_token
       }
-      const updated: EmailConfig = {
-        ...(freshCfg ?? cfg),
-        auth_mode: 'gmail_oauth',
-        google_refresh_token: json.refresh_token || startingRefreshToken,
-        google_access_token: json.access_token,
-        google_access_token_expires_at: expiresAtMs,
-      }
-      await saveChannelConfig(accountId, 'email', updated)
-    } catch (writeErr) {
-      console.error('Failed to persist rotated Gmail tokens:', writeErr)
+      return json.access_token
     }
+    const updated: EmailConfig = {
+      ...(freshCfg ?? cfg),
+      auth_mode: 'gmail_oauth',
+      google_refresh_token: json.refresh_token || startingRefreshToken,
+      google_access_token: json.access_token,
+      google_access_token_expires_at: expiresAtMs,
+    }
+    await saveChannelConfig(accountId, 'email', updated)
+  } catch (writeErr) {
+    console.error('Failed to persist rotated Gmail tokens:', writeErr)
   }
 
   return json.access_token
@@ -172,17 +213,22 @@ export async function getGmailAccessToken(
  * Exchange an authorization code for access + refresh tokens. Used by the
  * OAuth callback handler. Requires access_type=offline AND prompt=consent
  * on the authorize request to reliably get a refresh token.
+ *
+ * Takes the owning account_id so we can resolve the per-company OAuth client
+ * — the callback handler sources this from the verified state cookie.
  */
 export async function exchangeGmailAuthCode(
   code: string,
-  redirectUri: string
+  redirectUri: string,
+  accountId: string
 ): Promise<{
   access_token: string
   refresh_token: string
   expires_in: number
   id_token?: string
 }> {
-  const { clientId, clientSecret } = await requireClientCreds()
+  const companyId = await companyIdForAccount(accountId)
+  const { clientId, clientSecret } = await requireClientCreds(companyId)
 
   const res = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',

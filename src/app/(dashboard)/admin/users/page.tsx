@@ -41,6 +41,30 @@ interface Account {
 
 function getRoleBadge(role: UserRole) {
   switch (role) {
+    case 'super_admin':
+      return (
+        <Badge variant="teams">
+          <Shield className="mr-1 h-3 w-3" /> Super Admin
+        </Badge>
+      )
+    case 'company_admin':
+      return (
+        <Badge variant="info">
+          <Shield className="mr-1 h-3 w-3" /> Company Admin
+        </Badge>
+      )
+    case 'supervisor':
+      return (
+        <Badge variant="success">
+          <UserCheck className="mr-1 h-3 w-3" /> Supervisor
+        </Badge>
+      )
+    case 'company_member':
+      return (
+        <Badge variant="default">
+          <Users className="mr-1 h-3 w-3" /> Member
+        </Badge>
+      )
     case 'admin':
       return (
         <Badge variant="danger">
@@ -57,6 +81,12 @@ function getRoleBadge(role: UserRole) {
       return (
         <Badge variant="default">
           <Eye className="mr-1 h-3 w-3" /> Viewer
+        </Badge>
+      )
+    default:
+      return (
+        <Badge variant="default">
+          <Eye className="mr-1 h-3 w-3" /> {String(role)}
         </Badge>
       )
   }
@@ -93,12 +123,29 @@ const STATUS_OPTIONS = [
   { value: 'inactive', label: 'Inactive' },
 ]
 
-const ROLE_EDIT_OPTIONS = [
-  { value: 'admin', label: 'Admin' },
+// Inline row Select options — canonical post-Phase-1 roles, with `super_admin`
+// only surfaced when the current viewer is themselves a super_admin (mirrors
+// `INVITE_ROLE_OPTIONS_BASE` above). Legacy admin/reviewer/viewer values are
+// NOT offered as new picks here so editors can't accidentally move users TO
+// those roles — but if a row's current role IS legacy, we splice that single
+// legacy option in dynamically per-row so the Select can still display the
+// row's actual value (see `roleEditOptionsFor` inside the component).
+const ROLE_EDIT_OPTIONS_BASE = [
+  { value: 'company_admin', label: 'Company Admin' },
   { value: 'supervisor', label: 'Supervisor' },
-  { value: 'reviewer', label: 'Reviewer' },
-  { value: 'viewer', label: 'Viewer' },
+  { value: 'company_member', label: 'Member' },
 ]
+const ROLE_EDIT_OPTION_SUPER = { value: 'super_admin', label: 'Super Admin' }
+
+// Legacy fallback labels — only used when the current row already has one of
+// these roles, so the Select has an option matching `value`. NEVER added to
+// every row's dropdown (we don't want admins to silently migrate users INTO
+// these legacy roles).
+const LEGACY_ROLE_LABELS: Partial<Record<UserRole, string>> = {
+  admin: 'Admin (legacy)',
+  reviewer: 'Reviewer (legacy)',
+  viewer: 'Viewer (legacy)',
+}
 
 interface RowDraft {
   role: UserRole
@@ -130,6 +177,31 @@ export default function UsersPage() {
     [canInviteSuperAdmin]
   )
 
+  // Per-row inline role-edit options — mirrors `inviteRoleOptions` but ALSO
+  // splices in the row's current role if it's a legacy/non-canonical value
+  // so the <Select> always has an option matching `value`. Without this the
+  // browser falls back to the first option (silently demoting modern users
+  // — the original Bug 3).
+  const roleEditOptionsFor = useCallback(
+    (currentRole: UserRole) => {
+      const base = canInviteSuperAdmin
+        ? [ROLE_EDIT_OPTION_SUPER, ...ROLE_EDIT_OPTIONS_BASE]
+        : [...ROLE_EDIT_OPTIONS_BASE]
+      const alreadyPresent = base.some((o) => o.value === currentRole)
+      if (alreadyPresent) return base
+      // Row currently has a role not offered in the base list. Splice in a
+      // matching option so the Select renders it instead of defaulting to
+      // the first item.
+      const legacyLabel = LEGACY_ROLE_LABELS[currentRole]
+      if (legacyLabel) {
+        return [...base, { value: currentRole, label: legacyLabel }]
+      }
+      // Unknown / future role — show it raw so the row at least matches.
+      return [...base, { value: currentRole, label: String(currentRole) }]
+    },
+    [canInviteSuperAdmin]
+  )
+
   const [users, setUsers] = useState<User[]>([])
   const [accounts, setAccounts] = useState<Account[]>([])
   const [accountMap, setAccountMap] = useState<Record<string, string>>({})
@@ -154,24 +226,44 @@ export default function UsersPage() {
   const [inviting, setInviting] = useState(false)
   const [inviteError, setInviteError] = useState<string | null>(null)
 
-  // Fetch users and accounts from Supabase
+  // Fetch users and accounts.
+  //
+  // Users now come from `/api/admin/users` instead of a client-scoped
+  // Supabase query. That endpoint uses the service-role client when the
+  // caller is super_admin, so super_admin actually sees users across every
+  // company (Bug 5). For company_admin / legacy admin the endpoint returns
+  // the same scope the previous RLS-bound query produced — i.e. only their
+  // own company's users — so behavior for non-super callers is unchanged.
+  //
+  // Accounts still go through the user-scoped Supabase client; the page
+  // doesn't need cross-company accounts for the assignment dropdown and the
+  // existing RLS gives company_admins the right slice.
   const fetchData = useCallback(async () => {
     setLoading(true)
     setError(null)
 
     const [usersResult, accountsResult] = await Promise.allSettled([
-      supabase
-        .from('users')
-        .select('*')
-        .order('created_at', { ascending: true }),
+      fetch('/api/admin/users', {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+      }).then(async (r) => {
+        const json = (await r.json().catch(() => ({}))) as {
+          users?: User[]
+          error?: string
+        }
+        if (!r.ok) {
+          throw new Error(json?.error || `Failed to fetch users (${r.status})`)
+        }
+        return (json.users ?? []) as User[]
+      }),
       supabase
         .from('accounts')
         .select('id, name, is_active')
         .order('name'),
     ])
 
-    if (usersResult.status === 'fulfilled' && !usersResult.value.error) {
-      const fetched = (usersResult.value.data as User[]) ?? []
+    if (usersResult.status === 'fulfilled') {
+      const fetched = usersResult.value
       setUsers(fetched)
       // Seed drafts so inline controls have stable state
       const seed: Record<string, RowDraft> = {}
@@ -184,9 +276,10 @@ export default function UsersPage() {
       }
       setDrafts(seed)
     } else {
-      const errorMsg = usersResult.status === 'rejected'
-        ? usersResult.reason?.message || 'Failed to fetch users'
-        : usersResult.value.error?.message || 'Failed to fetch users'
+      const errorMsg =
+        usersResult.reason instanceof Error
+          ? usersResult.reason.message
+          : 'Failed to fetch users'
       setError(errorMsg)
       setUsers([])
     }
@@ -559,8 +652,8 @@ export default function UsersPage() {
                     </TableCell>
                     <TableCell>
                       <Select
-                        className="min-w-[120px]"
-                        options={ROLE_EDIT_OPTIONS}
+                        className="min-w-[140px]"
+                        options={roleEditOptionsFor(draft.role)}
                         value={draft.role}
                         onChange={(e) =>
                           updateDraft(user.id, { role: e.target.value as UserRole })

@@ -52,28 +52,13 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Account not found' }, { status: 404 })
   }
 
-  // Fail fast if OAuth creds aren't configured (DB or env) — otherwise the
-  // user would bounce to Google, get a client_id error, and have no idea
-  // what to fix. DB takes precedence over env vars.
-  const creds = await getGoogleOAuth()
-  if (!creds) {
-    return NextResponse.json(
-      {
-        error:
-          'Gmail OAuth not configured. An admin must configure the Google OAuth client at /admin/integrations (or set the GOOGLE_OAUTH_CLIENT_ID / GOOGLE_OAUTH_CLIENT_SECRET env vars).',
-      },
-      { status: 500 }
-    )
-  }
-  const clientId = creds.client_id
-
-  // Verify the account exists and is email-channel. We don't need an
-  // existing EmailConfig here (this IS how they configure credentials),
-  // so don't reject accounts with no saved config yet.
+  // Verify the account exists and is email-channel. We also need its
+  // company_id to resolve the per-company OAuth client below — keep this
+  // lookup before the creds check so we can scope correctly.
   const admin = await createServiceRoleClient()
   const { data: account } = await admin
     .from('accounts')
-    .select('id, channel_type')
+    .select('id, channel_type, company_id')
     .eq('id', accountId)
     .maybeSingle()
   if (!account) {
@@ -85,6 +70,27 @@ export async function GET(request: Request) {
       { status: 400 }
     )
   }
+  if (!account.company_id) {
+    return NextResponse.json(
+      { error: 'Account has no company_id — cannot resolve Gmail OAuth client.' },
+      { status: 500 }
+    )
+  }
+
+  // Fail fast if OAuth creds aren't configured for THIS company (DB or env)
+  // — otherwise the user would bounce to Google, get a client_id error, and
+  // have no idea what to fix. DB takes precedence over env vars.
+  const creds = await getGoogleOAuth(account.company_id as string)
+  if (!creds) {
+    return NextResponse.json(
+      {
+        error:
+          'Gmail OAuth not configured for this company. An admin must configure the Google OAuth client at /admin/integrations (or set the GOOGLE_OAUTH_CLIENT_ID / GOOGLE_OAUTH_CLIENT_SECRET env vars).',
+      },
+      { status: 500 }
+    )
+  }
+  const clientId = creds.client_id
 
   // CSRF state cookie: HMAC-signed JSON { account_id, nonce, expires_at }.
   // The `state` query parameter carries only the nonce; the cookie is

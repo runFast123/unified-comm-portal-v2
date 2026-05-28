@@ -56,7 +56,9 @@ export async function GET(request: Request) {
 
   let tokenResult
   try {
-    tokenResult = await exchangeGmailAuthCode(code, redirectUri)
+    // accountId comes from the HMAC-verified state cookie above. We pass it
+    // so exchangeGmailAuthCode can resolve the per-company OAuth client.
+    tokenResult = await exchangeGmailAuthCode(code, redirectUri, accountId)
   } catch (err) {
     console.error('Gmail OAuth code exchange failed:', err)
     return redirectBack(origin, { gmail_oauth_error: 'exchange_failed' })

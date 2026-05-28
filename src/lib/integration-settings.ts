@@ -1,16 +1,20 @@
 /**
- * Integration settings — DB-backed OAuth-app credentials.
+ * Integration settings — DB-backed OAuth-app credentials, PER-COMPANY.
  *
- * Moves "which Google Cloud OAuth client / Azure App Registration do we use"
- * out of env vars into an admin-configurable table so any portal admin can
- * rotate creds without server access. Same AES-256-GCM envelope scheme as
- * channel_configs — shares the key ring configured via
- * `CHANNEL_CONFIG_ENCRYPTION_KEY` / `CHANNEL_CONFIG_ENCRYPTION_KEYS`
- * (see `src/lib/encryption.ts`).
+ * Every row in `integration_settings` is scoped to exactly one company
+ * (see migration `20260528170000_integrations_per_company.sql`). Callers
+ * MUST pass the owning `companyId` so we look up the right row — there is
+ * no global fallback. If a company doesn't have its own row yet, the
+ * resolvers fall through to env vars (back-compat) so a fresh deploy
+ * with only env-var creds still works.
  *
- * Resolution order for `getGoogleOAuth` / `getAzureOAuth`:
- *   1. Decrypt from `integration_settings` row (service-role read, RLS bypass)
- *   2. Env vars (back-compat)
+ * Same AES-256-GCM envelope scheme as channel_configs — shares the key
+ * ring configured via `CHANNEL_CONFIG_ENCRYPTION_KEY` /
+ * `CHANNEL_CONFIG_ENCRYPTION_KEYS` (see `src/lib/encryption.ts`).
+ *
+ * Resolution order for `getGoogleOAuth(companyId)` / `getAzureOAuth(companyId)`:
+ *   1. Decrypt from `integration_settings` row matching (key, companyId)
+ *   2. Env vars (back-compat for tenants who haven't configured DB creds)
  *   3. null
  */
 
@@ -66,15 +70,23 @@ interface IntegrationRow {
   last_tested_ok: boolean | null
 }
 
-async function fetchRow(key: IntegrationKey): Promise<IntegrationRow | null> {
+/**
+ * Fetch the (key, companyId) row. Returns null if no row exists for that
+ * pair — callers fall back to env vars.
+ */
+async function fetchRow(
+  key: IntegrationKey,
+  companyId: string
+): Promise<IntegrationRow | null> {
   const supabase = await createServiceRoleClient()
   const { data, error } = await supabase
     .from('integration_settings')
     .select('key, config_encrypted, updated_at, last_tested_at, last_tested_ok')
     .eq('key', key)
+    .eq('company_id', companyId)
     .maybeSingle()
   if (error) {
-    console.error(`[integration_settings] fetch ${key} failed:`, error.message)
+    console.error(`[integration_settings] fetch ${key}/${companyId} failed:`, error.message)
     return null
   }
   return data as IntegrationRow | null
@@ -113,8 +125,10 @@ function decryptConfig(row: IntegrationRow | null): DecryptResult {
 
 // ─── Resolvers (DB → env → null) ─────────────────────────────────────
 
-export async function getGoogleOAuth(): Promise<GoogleOAuthCreds | null> {
-  const row = await fetchRow('google_oauth')
+export async function getGoogleOAuth(
+  companyId: string
+): Promise<GoogleOAuthCreds | null> {
+  const row = await fetchRow('google_oauth', companyId)
   const parsed = decryptConfig(row).value
   if (isGoogleCreds(parsed) && parsed.client_id && parsed.client_secret) {
     return { client_id: parsed.client_id, client_secret: parsed.client_secret }
@@ -125,8 +139,10 @@ export async function getGoogleOAuth(): Promise<GoogleOAuthCreds | null> {
   return null
 }
 
-export async function getAzureOAuth(): Promise<AzureOAuthCreds | null> {
-  const row = await fetchRow('azure_oauth')
+export async function getAzureOAuth(
+  companyId: string
+): Promise<AzureOAuthCreds | null> {
+  const row = await fetchRow('azure_oauth', companyId)
   const parsed = decryptConfig(row).value
   if (
     isAzureCreds(parsed) &&
@@ -154,7 +170,8 @@ export async function getAzureOAuth(): Promise<AzureOAuthCreds | null> {
 export async function saveIntegration(
   key: IntegrationKey,
   config: unknown,
-  actorUserId: string
+  actorUserId: string,
+  companyId: string
 ): Promise<void> {
   // Normalise the persisted shape — we only store known fields. Preventing
   // accidental extra keys from the client makes later reads predictable.
@@ -178,6 +195,7 @@ export async function saveIntegration(
     .upsert(
       {
         key,
+        company_id: companyId,
         config_encrypted: ciphertext,
         updated_at: new Date().toISOString(),
         updated_by: actorUserId,
@@ -186,20 +204,30 @@ export async function saveIntegration(
         last_tested_at: null,
         last_tested_ok: null,
       },
-      { onConflict: 'key' }
+      // Composite PK — onConflict must list BOTH columns or Postgres can't
+      // find a unique index matching the conflict target.
+      { onConflict: 'key,company_id' }
     )
   if (error) throw new Error(`Failed to save integration ${key}: ${error.message}`)
 }
 
-export async function deleteIntegration(key: IntegrationKey): Promise<void> {
+export async function deleteIntegration(
+  key: IntegrationKey,
+  companyId: string
+): Promise<void> {
   const supabase = await createServiceRoleClient()
-  const { error } = await supabase.from('integration_settings').delete().eq('key', key)
+  const { error } = await supabase
+    .from('integration_settings')
+    .delete()
+    .eq('key', key)
+    .eq('company_id', companyId)
   if (error) throw new Error(`Failed to delete integration ${key}: ${error.message}`)
 }
 
 export async function markIntegrationTested(
   key: IntegrationKey,
-  ok: boolean
+  ok: boolean,
+  companyId: string
 ): Promise<void> {
   const supabase = await createServiceRoleClient()
   // Only updates an existing row — don't create one just to record a test.
@@ -210,6 +238,7 @@ export async function markIntegrationTested(
       last_tested_ok: ok,
     })
     .eq('key', key)
+    .eq('company_id', companyId)
   if (error) {
     console.error(`[integration_settings] markTested ${key} failed:`, error.message)
   }
@@ -227,9 +256,10 @@ export async function markIntegrationTested(
  * so an admin can eyeball which Google/Azure app is wired up.
  */
 export async function getIntegrationStatus(
-  key: IntegrationKey
+  key: IntegrationKey,
+  companyId: string
 ): Promise<IntegrationStatus> {
-  const row = await fetchRow(key)
+  const row = await fetchRow(key, companyId)
   const decrypted = decryptConfig(row)
   const parsed = decrypted.value
 

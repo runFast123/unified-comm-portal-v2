@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase-server'
-import { isSuperAdmin } from '@/lib/auth'
+import { isCompanyAdmin, isSuperAdmin } from '@/lib/auth'
 import {
   getGoogleOAuth,
   getAzureOAuth,
@@ -11,14 +12,11 @@ import {
 export const dynamic = 'force-dynamic'
 
 /**
- * Super_admin-only — see the matching gate in `../route.ts` for the
- * rationale. The integrations table is platform-wide, so we must not let
- * any company_admin probe / mutate it.
- *
- * TODO(multi-tenant): when integrations become per-tenant, scope this to
- * company_admin of the matching tenant.
+ * Admin gate — mirrors `../route.ts`. Integrations are PER-COMPANY now
+ * (migration 20260528170000), so company_admin gets access scoped to
+ * their own tenant and super_admin scopes via the switcher cookie.
  */
-async function requireSuperAdmin() {
+async function requireIntegrationsAdmin() {
   const supabase = await createServerSupabaseClient()
   const {
     data: { user },
@@ -27,13 +25,29 @@ async function requireSuperAdmin() {
   const admin = await createServiceRoleClient()
   const { data: profile } = await admin
     .from('users')
-    .select('role')
+    .select('role, company_id')
     .eq('id', user.id)
     .maybeSingle()
-  if (!isSuperAdmin(profile?.role ?? null)) {
-    return { ok: false as const, status: 403, error: 'Super admin only' }
+  const role = profile?.role ?? null
+  const homeCompanyId = (profile?.company_id as string | null) ?? null
+  if (!isSuperAdmin(role) && !isCompanyAdmin(role)) {
+    return { ok: false as const, status: 403, error: 'Admin only' }
   }
-  return { ok: true as const, userId: user.id }
+  let companyId: string | null
+  if (isSuperAdmin(role)) {
+    const cookieStore = await cookies()
+    companyId = (cookieStore.get('selected_company_id')?.value ?? null) || homeCompanyId
+  } else {
+    companyId = homeCompanyId
+  }
+  if (!companyId) {
+    return {
+      ok: false as const,
+      status: 400,
+      error: 'No active company selected — pick a tenant in the company switcher.',
+    }
+  }
+  return { ok: true as const, userId: user.id, companyId }
 }
 
 interface TestResult {
@@ -159,7 +173,7 @@ function isIntegrationKey(v: unknown): v is IntegrationKey {
 }
 
 export async function POST(request: Request) {
-  const gate = await requireSuperAdmin()
+  const gate = await requireIntegrationsAdmin()
   if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: gate.status })
 
   let body: { key?: unknown; config?: unknown }
@@ -200,10 +214,10 @@ export async function POST(request: Request) {
         )
       }
     } else {
-      const creds = await getGoogleOAuth()
+      const creds = await getGoogleOAuth(gate.companyId)
       if (!creds) {
         return NextResponse.json(
-          { ok: false, error: 'Google OAuth is not configured (no DB row and no env vars).' }
+          { ok: false, error: 'Google OAuth is not configured for this company (no DB row and no env vars).' }
         )
       }
       clientId = creds.client_id
@@ -238,10 +252,10 @@ export async function POST(request: Request) {
         )
       }
     } else {
-      const creds = await getAzureOAuth()
+      const creds = await getAzureOAuth(gate.companyId)
       if (!creds) {
         return NextResponse.json(
-          { ok: false, error: 'Azure OAuth is not configured (no DB row and no env vars).' }
+          { ok: false, error: 'Azure OAuth is not configured for this company (no DB row and no env vars).' }
         )
       }
       tenantId = creds.tenant_id
@@ -255,7 +269,7 @@ export async function POST(request: Request) {
   // A one-off test of unsaved form values shouldn't touch the DB row.
   if (!hasInlineConfig) {
     try {
-      await markIntegrationTested(key, result.ok)
+      await markIntegrationTested(key, result.ok, gate.companyId)
     } catch (err) {
       // Non-fatal — the test result is still authoritative for the caller.
       console.error('Failed to persist test outcome:', err)
