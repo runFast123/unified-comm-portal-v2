@@ -148,6 +148,14 @@ export async function pollTeamsAccount(
     ? new Date(account.last_polled_at)
     : new Date(Date.now() - TEAMS_BACKFILL_DAYS * 24 * 60 * 60 * 1000)
   const sinceIso = since.toISOString()
+  // Capture ONE timestamp before the Graph request so the value we write to
+  // last_polled_at on success equals the upper bound of what we just fetched.
+  // Previously last_polled_at was set to a fresh now() at persist time,
+  // leaving a race window: messages arriving between the Graph request and
+  // the persist were silently skipped on the next run.
+  const pollStartedAtIso = new Date().toISOString()
+  // Per-chat pagination cap so a runaway chat doesn't exhaust the cron budget.
+  const MAX_MESSAGES_PER_CHAT = 200
 
   try {
     let token: string
@@ -173,28 +181,50 @@ export async function pollTeamsAccount(
     const chatsJson = (await chatsRes.json()) as { value?: GraphChat[] }
     const chats = chatsJson.value || []
 
-    // 2) For each chat, fetch messages newer than `since`
+    // 2) For each chat, fetch messages newer than `since`.
+    //    Graph returns at most $top per page and an @odata.nextLink for the
+    //    rest. Previously we only read the first page ($top=20) — anything
+    //    older than that on a busy chat was silently dropped. Follow the
+    //    nextLink until we either run out of pages, hit a message at or
+    //    before the cursor (results are ordered desc), or hit the per-chat
+    //    cap to keep cron runs bounded.
     for (const chat of chats) {
       try {
-        const msgsUrl = isDelegated
-          ? `https://graph.microsoft.com/v1.0/me/chats/${encodeURIComponent(chat.id)}/messages?$top=20&$orderby=createdDateTime desc`
-          : `https://graph.microsoft.com/v1.0/chats/${encodeURIComponent(chat.id)}/messages?$top=20&$orderby=createdDateTime desc`
-        const msgsRes = await fetch(msgsUrl, { headers: authHeaders })
-        if (!msgsRes.ok) {
-          result.errors.push(`chat ${chat.id} messages ${msgsRes.status}`)
-          continue
+        let pageUrl: string | null = isDelegated
+          ? `https://graph.microsoft.com/v1.0/me/chats/${encodeURIComponent(chat.id)}/messages?$top=50&$orderby=createdDateTime desc`
+          : `https://graph.microsoft.com/v1.0/chats/${encodeURIComponent(chat.id)}/messages?$top=50&$orderby=createdDateTime desc`
+
+        const messages: GraphMessage[] = []
+        let reachedCursor = false
+        while (pageUrl && messages.length < MAX_MESSAGES_PER_CHAT && !reachedCursor) {
+          const msgsRes = await fetch(pageUrl, { headers: authHeaders })
+          if (!msgsRes.ok) {
+            result.errors.push(`chat ${chat.id} messages ${msgsRes.status}`)
+            break
+          }
+          const msgsJson = (await msgsRes.json()) as {
+            value?: GraphMessage[]
+            '@odata.nextLink'?: string
+          }
+          const page = msgsJson.value || []
+          for (const m of page) {
+            // Because results are ordered desc, the first message at or
+            // below `since` means the rest of the pages can't be newer.
+            if (m.createdDateTime && new Date(m.createdDateTime) <= since) {
+              reachedCursor = true
+              break
+            }
+            if (!m.createdDateTime) continue
+            // Skip agent's own messages. In delegated mode the self-id comes
+            // from delegated_user_id; in app mode it's account.teams_user_id.
+            if (selfUserId && m.from?.user?.id === selfUserId) continue
+            // Skip system/control messages
+            if (m.messageType && m.messageType !== 'message') continue
+            messages.push(m)
+            if (messages.length >= MAX_MESSAGES_PER_CHAT) break
+          }
+          pageUrl = msgsJson['@odata.nextLink'] || null
         }
-        const msgsJson = (await msgsRes.json()) as { value?: GraphMessage[] }
-        const messages = (msgsJson.value || []).filter((m) => {
-          if (!m.createdDateTime) return false
-          if (new Date(m.createdDateTime) <= since) return false
-          // Skip agent's own messages. In delegated mode the self-id comes
-          // from delegated_user_id; in app mode it's account.teams_user_id.
-          if (selfUserId && m.from?.user?.id === selfUserId) return false
-          // Skip system/control messages
-          if (m.messageType && m.messageType !== 'message') return false
-          return true
-        })
 
         for (const m of messages) {
           result.fetched++
@@ -245,7 +275,10 @@ export async function pollTeamsAccount(
     const patch: Record<string, unknown> =
       result.errors.length === 0
         ? {
-            last_polled_at: new Date().toISOString(),
+            // Use the timestamp captured BEFORE the Graph request so the
+            // cursor equals the upper bound of what we just fetched — no
+            // race window for messages arriving mid-poll.
+            last_polled_at: pollStartedAtIso,
             consecutive_poll_failures: 0,
             last_poll_error: null,
             last_poll_error_at: null,

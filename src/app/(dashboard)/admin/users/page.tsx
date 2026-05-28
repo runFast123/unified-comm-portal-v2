@@ -283,53 +283,62 @@ export default function UsersPage() {
     [drafts, toast]
   )
 
-  // Invite handler (existing pre-registration flow — unchanged, direct insert)
+  // Invite handler (pre-registration flow).
+  //
+  // SECURITY: previously did `supabase.from('users').insert(...)` directly
+  // from the client, which let any user with portal access mint accounts
+  // at any role — including super_admin. The insert is now done by the
+  // server route, which enforces:
+  //   - caller is super_admin or company_admin
+  //   - company_admin can only assign non-super_admin roles
+  //   - the invited user is bound to the caller's company
+  // See src/app/api/users/invite/route.ts.
   const handleInvite = useCallback(async () => {
     if (!inviteEmail) return
     setInviting(true)
     setInviteError(null)
 
-    const newUser = {
-      email: inviteEmail.trim().toLowerCase(),
-      full_name: inviteName.trim() || null,
-      role: inviteRole,
-      avatar_url: null,
-      is_active: true,
-      last_login_at: null,
-      account_id: inviteAccountId || null,
-    }
+    try {
+      const res = await fetch('/api/users/invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: inviteEmail.trim().toLowerCase(),
+          full_name: inviteName.trim() || null,
+          role: inviteRole,
+          account_id: inviteAccountId || null,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setInviteError(data?.error || 'Failed to invite user')
+        setInviting(false)
+        return
+      }
 
-    const { data, error: insertError } = await supabase
-      .from('users')
-      .insert(newUser)
-      .select()
-      .single()
-
-    if (insertError) {
-      setInviteError(insertError.message)
+      const inserted = data.user as User
+      setUsers((prev) => [...prev, inserted])
+      setDrafts((prev) => ({
+        ...prev,
+        [inserted.id]: {
+          role: inserted.role,
+          account_id: inserted.account_id ?? '',
+          is_active: inserted.is_active,
+        },
+      }))
+      setInviteEmail('')
+      setInviteName('')
+      setInviteRole('viewer')
+      setInviteAccountId('')
+      setInviteError(null)
+      setShowInvite(false)
+      toast.success(`User ${inviteEmail} pre-registered successfully`)
+    } catch (err) {
+      setInviteError(err instanceof Error ? err.message : 'Failed to invite user')
+    } finally {
       setInviting(false)
-      return
     }
-
-    const inserted = data as User
-    setUsers((prev) => [...prev, inserted])
-    setDrafts((prev) => ({
-      ...prev,
-      [inserted.id]: {
-        role: inserted.role,
-        account_id: inserted.account_id ?? '',
-        is_active: inserted.is_active,
-      },
-    }))
-    setInviteEmail('')
-    setInviteName('')
-    setInviteRole('viewer')
-    setInviteAccountId('')
-    setInviteError(null)
-    setShowInvite(false)
-    setInviting(false)
-    toast.success(`User ${inviteEmail} pre-registered successfully`)
-  }, [inviteEmail, inviteName, inviteRole, inviteAccountId, supabase, toast])
+  }, [inviteEmail, inviteName, inviteRole, inviteAccountId, toast])
 
   if (loading) {
     return (

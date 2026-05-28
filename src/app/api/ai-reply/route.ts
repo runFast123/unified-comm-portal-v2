@@ -197,10 +197,15 @@ export async function POST(request: Request) {
     let kbAccountIds = [account_id]
 
     // Find sibling accounts with same base name (e.g. email version of a Teams account)
-    const { data: siblingAccounts } = await supabase
+    // Scoped to the SAME company_id so we never pull another tenant's KB rows.
+    let siblingQuery = supabase
       .from('accounts')
       .select('id, name')
       .eq('is_active', true)
+    if (account.company_id) {
+      siblingQuery = siblingQuery.eq('company_id', account.company_id)
+    }
+    const { data: siblingAccounts } = await siblingQuery
     if (siblingAccounts) {
       for (const sib of siblingAccounts) {
         const sibBase = sib.name.replace(/\s+Teams$/i, '').replace(/\s+WhatsApp$/i, '').trim()
@@ -413,10 +418,13 @@ export async function POST(request: Request) {
     // Cap at 0.98
     confidenceScore = Math.min(Math.round(confidenceScore * 100) / 100, 0.98)
 
-    // Determine reply status based on trust mode
-    const replyStatus: AIReplyStatus = account.ai_trust_mode
-      ? 'sent'
-      : 'pending_approval'
+    // Determine reply status based on trust mode.
+    // Always insert as `pending_approval` first — the trust-mode send block
+    // below flips it to `sent` (with sent_at + delivery_status) only after
+    // the channel actually delivered. Previously we inserted as `sent`
+    // pre-emptively, which left the row stuck on `sent` even when the send
+    // branch was skipped (e.g. missing participant_email/phone) or failed.
+    const replyStatus: AIReplyStatus = 'pending_approval'
 
     // Store the AI reply
     const { data: aiReply, error: replyError } = await supabase
@@ -431,7 +439,6 @@ export async function POST(request: Request) {
         confidence_score: confidenceScore,
         system_prompt_used: systemPrompt,
         created_at: new Date().toISOString(),
-        ...(replyStatus === 'sent' ? { sent_at: new Date().toISOString() } : {}),
       })
       .select('*')
       .single()
@@ -454,7 +461,12 @@ export async function POST(request: Request) {
       try { await supabase.from('kb_hits').insert(kbHits) } catch { /* ignore */ }
     }
 
-    // If trust mode is on, send the reply directly via SMTP / Graph / Meta
+    // If trust mode is on, send the reply directly via SMTP / Graph / Meta.
+    // The ai_replies row was inserted above as `pending_approval`; we only
+    // flip it to `sent` after the channel send actually succeeds. If the
+    // send branch is skipped (missing participant) or returns !ok, we leave
+    // the row as `pending_approval` but stamp delivery_status='failed' so
+    // ops can see the attempt happened.
     if (account.ai_trust_mode && aiReply) {
       try {
         const { data: convForReply } = await supabase
@@ -484,13 +496,40 @@ export async function POST(request: Request) {
             .update({ status: 'sent', sent_at: new Date().toISOString(), delivery_status: 'sent' })
             .eq('id', aiReply.id)
         } else if (sendResult) {
+          // Send returned but reported failure — keep row pending_approval,
+          // mark delivery_status so the admin UI flags it.
+          await supabase
+            .from('ai_replies')
+            .update({ status: 'pending_approval', delivery_status: 'failed' })
+            .eq('id', aiReply.id)
           logError('ai', 'trust_send_failed', sendResult.error, {
             request_id: requestId,
             account_id,
             reply_id: aiReply.id,
           })
+        } else {
+          // No branch matched — missing participant_email/phone/teams_chat_id.
+          // Row stays pending_approval; surface delivery_status=failed so it
+          // doesn't look like a clean send.
+          await supabase
+            .from('ai_replies')
+            .update({ status: 'pending_approval', delivery_status: 'failed' })
+            .eq('id', aiReply.id)
+          logError('ai', 'trust_send_skipped', 'no recipient identifier for channel', {
+            request_id: requestId,
+            account_id,
+            reply_id: aiReply.id,
+            channel: channelKey,
+          })
         }
       } catch (sendError) {
+        // Best-effort flag — the throw path also leaves the row pending.
+        try {
+          await supabase
+            .from('ai_replies')
+            .update({ status: 'pending_approval', delivery_status: 'failed' })
+            .eq('id', aiReply.id)
+        } catch { /* never break the response */ }
         logError('ai', 'trust_send_error', sendError instanceof Error ? sendError.message : 'unknown', {
           request_id: requestId,
           account_id,

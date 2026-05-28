@@ -424,7 +424,23 @@ export async function callAI(
         throw err
       }
       const isTimeout = err.name === 'AbortError'
-      const isRetryable = isTimeout || (err.message && /\b5\d{2}\b/.test(err.message))
+      // Prefer the structured status field if the upstream client surfaced
+      // one. The previous \b5\d{2}\b text-match would falsely flag any
+      // error message that happened to contain a 3-digit run starting with
+      // 5 (e.g. "502abc" in a body excerpt, request ids, etc.) as retryable.
+      const errStatus =
+        typeof err?.status === 'number'
+          ? err.status
+          : typeof err?.statusCode === 'number'
+            ? err.statusCode
+            : null
+      const isHttp5xxByStatus = errStatus !== null && errStatus >= 500 && errStatus < 600
+      // Fallback to a tighter text match for callers (like the fetch wrapper
+      // below) that fold the status into the error message text. The shape
+      // we throw upstream is `AI API error (NNN): ...` — anchor on that.
+      const isHttp5xxByMessage =
+        !!err.message && /\bAI API error \(5\d{2}\)|\bHTTP\s?5\d{2}\b|status[\s:]+5\d{2}\b/i.test(err.message)
+      const isRetryable = isTimeout || isHttp5xxByStatus || isHttp5xxByMessage
 
       if (attempt < AI_MAX_RETRIES && isRetryable) {
         console.warn(`AI call attempt ${attempt + 1} failed (${isTimeout ? 'timeout' : err.message}), retrying in ${AI_RETRY_DELAYS[attempt]}ms...`)

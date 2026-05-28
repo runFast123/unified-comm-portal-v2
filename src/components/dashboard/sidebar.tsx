@@ -262,11 +262,16 @@ export function Sidebar({
     localStorage.setItem('sidebar-collapsed', String(next))
   }
 
-  // Subscribe to realtime messages for badge pulse
+  // Subscribe to realtime messages for badge pulse.
+  // Non-admins: scope to the user's own account_id so they don't see cross-tenant pulses.
+  // (Sidebar only has the user's own account; the inbox page passes the full
+  // sibling-account set when subscribing for itself.)
+  const realtimeAccountIds = user.role !== 'super_admin' && user.account_id ? [user.account_id] : undefined
   useRealtimeMessages({
     onNewMessage: useCallback(() => {
       setHasNewMessages(true)
     }, []),
+    accountIds: realtimeAccountIds,
   })
 
   // Clear the pulse when user navigates to inbox

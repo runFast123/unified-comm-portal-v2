@@ -3,21 +3,38 @@ import { createServiceRoleClient } from '@/lib/supabase-server'
 import { validateWebhookSecret } from '@/lib/api-helpers'
 
 /**
+ * Accept either `X-Webhook-Secret` (internal callers) or
+ * `Authorization: Bearer <secret>` (Vercel Cron). Delegates to the shared
+ * timing-safe validator in api-helpers.ts. Mirrors the pattern in
+ * `src/app/api/cron/email-poll/route.ts`.
+ */
+function authorizeCron(request: Request): boolean {
+  if (validateWebhookSecret(request)) return true
+  const auth = request.headers.get('authorization')
+  const bearer = auth?.startsWith('Bearer ') ? auth.slice(7) : null
+  if (!bearer) return false
+  const shim = new Request(request.url, {
+    method: 'GET',
+    headers: { 'x-webhook-secret': bearer },
+  })
+  return validateWebhookSecret(shim)
+}
+
+/**
  * SLA Auto-Escalation Endpoint
  *
  * Can be called periodically via cron.
  * Checks all pending inbound messages older than their account's sla_critical_hours,
  * and escalates the conversation if sla_auto_escalate is enabled.
  *
- * Authentication: requires WEBHOOK_SECRET header or valid user session.
+ * Authentication: requires WEBHOOK_SECRET header (or Bearer for Vercel Cron)
+ * or valid user session.
  */
 export async function POST(request: Request) {
   try {
-    // Authenticate via webhook secret (for cron calls)
-    const webhookSecret = request.headers.get('x-webhook-secret')
-    const expectedSecret = process.env.WEBHOOK_SECRET
-
-    if (!validateWebhookSecret(request)) {
+    // Authenticate via webhook secret (for cron calls) — accepts both
+    // X-Webhook-Secret and Authorization: Bearer (Vercel Cron).
+    if (!authorizeCron(request)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 

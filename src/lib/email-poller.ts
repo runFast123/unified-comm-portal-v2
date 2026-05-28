@@ -216,8 +216,13 @@ export async function pollEmailAccount(
         const uids = (await client.search(searchCriteria, { uid: true })) as number[] | false
         if (uids && uids.length > 0) {
           const sorted = [...uids].sort((a, b) => a - b)
+          // Take the HEAD (oldest UIDs) not the tail. We advance the cursor
+          // to max(processed UIDs), so taking the tail would orphan every
+          // older UID below it — chronological gaps on first-run backfill.
+          // The next run resumes from `last_imap_uid + 1`, naturally picking
+          // up the remaining unfetched UIDs.
           const toFetch =
-            sorted.length > MAX_MESSAGES_PER_RUN ? sorted.slice(-MAX_MESSAGES_PER_RUN) : sorted
+            sorted.length > MAX_MESSAGES_PER_RUN ? sorted.slice(0, MAX_MESSAGES_PER_RUN) : sorted
 
           for await (const msg of client.fetch(
             toFetch,
@@ -292,9 +297,10 @@ export async function pollEmailAccount(
         const sentUids = (await client.search(sentCriteria, { uid: true })) as number[] | false
         if (sentUids && sentUids.length > 0) {
           const sortedSent = [...sentUids].sort((a, b) => a - b)
+          // Same head-slice as the inbox pass — see comment there.
           const toFetchSent =
             sortedSent.length > MAX_MESSAGES_PER_RUN
-              ? sortedSent.slice(-MAX_MESSAGES_PER_RUN)
+              ? sortedSent.slice(0, MAX_MESSAGES_PER_RUN)
               : sortedSent
 
           for await (const msg of client.fetch(

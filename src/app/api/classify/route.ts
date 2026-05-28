@@ -109,9 +109,11 @@ export async function POST(request: Request) {
 
     // Get account info for context
     let accountName = 'Unknown'
+    let accountCompanyId: string | null = null
     try {
       const account = await getAccountSettings(supabaseForAccount, account_id)
       accountName = account.name || 'Unknown'
+      accountCompanyId = account.company_id ?? null
     } catch { /* use default */ }
 
     // Call AI API for classification with account context
@@ -263,12 +265,17 @@ export async function POST(request: Request) {
             .maybeSingle()
 
           if (conv && !conv.assigned_to) {
-            // Find least-loaded active agent
-            const { data: agents } = await supabase
+            // Find least-loaded active agent — scoped to the same company
+            // as the originating account so we never auto-assign cross-tenant.
+            let agentsQuery = supabase
               .from('users')
               .select('id, full_name')
               .eq('is_active', true)
               .in('role', ['admin', 'reviewer'])
+            if (accountCompanyId) {
+              agentsQuery = agentsQuery.eq('company_id', accountCompanyId)
+            }
+            const { data: agents } = await agentsQuery
 
             if (agents && agents.length > 0) {
               // Count active conversations per agent

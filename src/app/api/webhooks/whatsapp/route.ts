@@ -45,6 +45,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     // Validate webhook secret
+    // TODO: also verify Meta X-Hub-Signature-256 using WHATSAPP_APP_SECRET env
     if (!validateWebhookSecret(request)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }

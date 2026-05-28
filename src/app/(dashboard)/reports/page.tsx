@@ -96,6 +96,12 @@ function getDateRangeEnd(range: DateRange, customTo?: string): string | null {
   if (range === 'custom' && customTo) {
     return new Date(customTo + 'T23:59:59').toISOString()
   }
+  if (range === 'yesterday') {
+    const end = new Date()
+    end.setDate(end.getDate() - 1)
+    end.setHours(23, 59, 59, 999)
+    return end.toISOString()
+  }
   return null
 }
 
@@ -480,13 +486,22 @@ export default function ReportsPage() {
       try {
         const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
 
-        let volQuery = supabase.from('messages').select('received_at').eq('direction', 'inbound').gte('received_at', thirtyDaysAgo).limit(10000)
+        let volQuery = supabase.from('messages').select('id, conversation_id, received_at').eq('direction', 'inbound').gte('received_at', thirtyDaysAgo).limit(10000)
         let aiTrendQuery = supabase.from('ai_replies').select('created_at').eq('status', 'sent').gte('created_at', thirtyDaysAgo).limit(10000)
+        // Outbound messages for real first-reply latency calc
+        let outboundQuery = supabase
+          .from('messages')
+          .select('conversation_id, timestamp')
+          .eq('direction', 'outbound')
+          .gte('timestamp', thirtyDaysAgo)
+          .order('timestamp', { ascending: true })
+          .limit(10000)
         if (accountIdFilter) {
           volQuery = volQuery.in('account_id', accountIdFilter)
           aiTrendQuery = aiTrendQuery.in('account_id', accountIdFilter)
+          outboundQuery = outboundQuery.in('account_id', accountIdFilter)
         }
-        const [volResult, aiResult] = await Promise.all([volQuery, aiTrendQuery])
+        const [volResult, aiResult, outboundResult] = await Promise.all([volQuery, aiTrendQuery, outboundQuery])
 
         // Daily volume
         const volByDay: Record<string, number> = {}
@@ -511,8 +526,40 @@ export default function ReportsPage() {
 
         setDailyVolume(days.map(d => ({ date: d, count: volByDay[d] || 0 })))
         setDailyAiReplies(days.map(d => ({ date: d, count: aiByDay[d] || 0 })))
-        // Response time per day: compute from volume and AI reply ratio (actual response time requires message join)
-        setDailyResponseTime(days.map(d => ({ date: d, avgMins: volByDay[d] && aiByDay[d] ? Math.round(volByDay[d] / Math.max(aiByDay[d], 1)) : 0 })))
+
+        // Real first-reply latency per day:
+        // for each inbound msg, find earliest outbound in same conversation with timestamp > received_at,
+        // compute gap in minutes, average by inbound-received day.
+        const earliestOutboundByConv: Record<string, number[]> = {}
+        ;(outboundResult.data || []).forEach((o: any) => {
+          if (!o.conversation_id || !o.timestamp) return
+          const ts = new Date(o.timestamp).getTime()
+          if (!earliestOutboundByConv[o.conversation_id]) earliestOutboundByConv[o.conversation_id] = []
+          earliestOutboundByConv[o.conversation_id].push(ts)
+        })
+        // pre-sort each conv's outbound timestamps
+        Object.values(earliestOutboundByConv).forEach((arr) => arr.sort((a, b) => a - b))
+
+        const latencySumByDay: Record<string, number> = {}
+        const latencyCountByDay: Record<string, number> = {}
+        ;(volResult.data || []).forEach((m: any) => {
+          if (!m.conversation_id || !m.received_at) return
+          const day = m.received_at.substring(0, 10)
+          const receivedMs = new Date(m.received_at).getTime()
+          const outs = earliestOutboundByConv[m.conversation_id]
+          if (!outs) return
+          // first outbound timestamp strictly after received_at
+          const reply = outs.find((ts) => ts > receivedMs)
+          if (!reply) return
+          const gapMins = Math.max(0, (reply - receivedMs) / 60000)
+          latencySumByDay[day] = (latencySumByDay[day] || 0) + gapMins
+          latencyCountByDay[day] = (latencyCountByDay[day] || 0) + 1
+        })
+
+        setDailyResponseTime(days.map(d => ({
+          date: d,
+          avgMins: latencyCountByDay[d] ? Math.round(latencySumByDay[d] / latencyCountByDay[d]) : 0,
+        })))
       } catch { /* non-critical */ }
 
     } catch (err) {

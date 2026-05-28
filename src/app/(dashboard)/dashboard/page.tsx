@@ -128,6 +128,24 @@ function getDateRangeStart(range: DateRange, customFrom?: string): string {
   }
 }
 
+/**
+ * Returns the inclusive upper bound for a date range, or null if open-ended.
+ * Yesterday returns end-of-yesterday so the query window is exactly 24h
+ * instead of 48h (yesterday-start with no upper bound previously leaked into today).
+ */
+function getDateRangeEnd(range: DateRange, customTo?: string): string | null {
+  if (range === 'yesterday') {
+    const end = new Date()
+    end.setDate(end.getDate() - 1)
+    end.setHours(23, 59, 59, 999)
+    return end.toISOString()
+  }
+  if (range === 'custom' && customTo) {
+    return new Date(customTo + 'T23:59:59.999Z').toISOString()
+  }
+  return null
+}
+
 function getDateRangeLabel(range: DateRange): string {
   switch (range) {
     case 'today': return 'today'
@@ -226,6 +244,7 @@ export default function DashboardPage() {
     setDashDrillLoading(true)
     const supabase = createClient()
     const startDate = getDateRangeStart(dateRange, customFrom)
+    const endDate = getDateRangeEnd(dateRange, customTo)
 
     // For ai_processed, query ai_replies table instead of messages
     if (type === 'ai_processed') {
@@ -237,6 +256,7 @@ export default function DashboardPage() {
         .limit(200)
 
       if (startDate) aiQuery = aiQuery.gte('created_at', startDate)
+      if (endDate) aiQuery = aiQuery.lte('created_at', endDate)
       if (selectedAccountIds.size > 0) {
         aiQuery = aiQuery.in('account_id', Array.from(selectedAccountIds))
       } else if (!isAdmin && companyAccountIds.length > 0) {
@@ -273,6 +293,7 @@ export default function DashboardPage() {
       .limit(200)
 
     if (startDate) query = query.gte('received_at', startDate)
+    if (endDate) query = query.lte('received_at', endDate)
 
     // Apply account filter if selected, or scope to company for non-admins
     if (selectedAccountIds.size > 0) {
@@ -317,7 +338,7 @@ export default function DashboardPage() {
     })
     setDashDrillMsgs(mapped)
     setDashDrillLoading(false)
-  }, [dashDrill, dateRange, selectedAccountIds, customFrom, isAdmin, companyAccountIds])
+  }, [dashDrill, dateRange, selectedAccountIds, customFrom, customTo, isAdmin, companyAccountIds])
 
   const dashDrillTitle: Record<string, string> = {
     total: 'All Messages',
@@ -387,10 +408,9 @@ export default function DashboardPage() {
       setLoading(true)
       const supabase = createClient()
       const rangeISO = getDateRangeStart(dateRange, customFrom)
-      // Custom "to" date — set to end of day if provided
-      const customToISO = dateRange === 'custom' && customTo
-        ? new Date(customTo + 'T23:59:59.999Z').toISOString()
-        : null
+      // Upper bound — needed for 'yesterday' (cap at end-of-yesterday) and
+      // 'custom' (set to end of supplied "to" date). Open-ended for other ranges.
+      const customToISO = getDateRangeEnd(dateRange, customTo)
 
       try {
         // Build scoped queries - non-admins see all sibling accounts for their company
@@ -622,6 +642,7 @@ export default function DashboardPage() {
             let respondedCount = 0
             let withinSLA = 0
             let breached = 0
+            let unrespondedBreached = 0
             const now = Date.now()
 
             for (const msg of slaInbound as { id: string; conversation_id: string; received_at: string }[]) {
@@ -644,12 +665,16 @@ export default function DashboardPage() {
                 const waitMs = now - receivedMs
                 if (waitMs > DEFAULT_SLA_CRITICAL_HOURS * 60 * 60 * 1000) {
                   breached++
+                  unrespondedBreached++
                 }
               }
             }
 
             const avgResponseMins = respondedCount > 0 ? Math.round(totalResponseMs / respondedCount / 60000) : 0
-            const compliancePct = respondedCount > 0 ? Math.round((withinSLA / respondedCount) * 100) : 100
+            // Denominator must include stranded (still-unreplied, past-SLA) messages,
+            // otherwise an account with 1 on-time reply + 50 stranded shows 100%.
+            const complianceDenominator = respondedCount + unrespondedBreached
+            const compliancePct = complianceDenominator > 0 ? Math.round((withinSLA / complianceDenominator) * 100) : 100
 
             setSlaStats({ avgResponseMins, compliancePct, breachedCount: breached })
           } else {
@@ -679,39 +704,54 @@ export default function DashboardPage() {
         try {
           const companyPerf: CompanyPerformance[] = await Promise.all(
             (accountsResult.data || []).map(async (acc: { id: string; name: string; channel_type: string; gmail_address: string | null }) => {
+              let totalQ = supabase
+                .from('messages')
+                .select('*', { count: 'exact', head: true })
+                .eq('account_id', acc.id)
+                .eq('direction', 'inbound')
+                .gte('received_at', rangeISO)
+              if (customToISO) totalQ = totalQ.lte('received_at', customToISO)
+
+              let pendingQ = supabase
+                .from('messages')
+                .select('*', { count: 'exact', head: true })
+                .eq('account_id', acc.id)
+                .eq('direction', 'inbound')
+                .eq('reply_required', true)
+                .eq('replied', false)
+                .gte('received_at', rangeISO)
+              if (customToISO) pendingQ = pendingQ.lte('received_at', customToISO)
+
+              let aiSentQ = supabase
+                .from('ai_replies')
+                .select('*', { count: 'exact', head: true })
+                .eq('account_id', acc.id)
+                .eq('status', 'sent')
+                .gte('created_at', rangeISO)
+              if (customToISO) aiSentQ = aiSentQ.lte('created_at', customToISO)
+
+              let aiDraftsQ = supabase
+                .from('ai_replies')
+                .select('*', { count: 'exact', head: true })
+                .eq('account_id', acc.id)
+                .in('status', ['pending_approval', 'edited'])
+                .gte('created_at', rangeISO)
+              if (customToISO) aiDraftsQ = aiDraftsQ.lte('created_at', customToISO)
+
+              let classQ = supabase
+                .from('message_classifications')
+                .select('category, messages!inner(account_id)')
+                .eq('messages.account_id', acc.id)
+                .gte('classified_at', rangeISO)
+                .limit(200)
+              if (customToISO) classQ = classQ.lte('classified_at', customToISO)
+
               const [totalRes, pendingRes, aiSentRes, aiDraftsRes, classRes] = await Promise.all([
-                supabase
-                  .from('messages')
-                  .select('*', { count: 'exact', head: true })
-                  .eq('account_id', acc.id)
-                  .eq('direction', 'inbound')
-                  .gte('received_at', rangeISO),
-                supabase
-                  .from('messages')
-                  .select('*', { count: 'exact', head: true })
-                  .eq('account_id', acc.id)
-                  .eq('direction', 'inbound')
-                  .eq('reply_required', true)
-                  .eq('replied', false)
-                  .gte('received_at', rangeISO),
-                supabase
-                  .from('ai_replies')
-                  .select('*', { count: 'exact', head: true })
-                  .eq('account_id', acc.id)
-                  .eq('status', 'sent')
-                  .gte('created_at', rangeISO),
-                supabase
-                  .from('ai_replies')
-                  .select('*', { count: 'exact', head: true })
-                  .eq('account_id', acc.id)
-                  .in('status', ['pending_approval', 'edited'])
-                  .gte('created_at', rangeISO),
-                supabase
-                  .from('message_classifications')
-                  .select('category, messages!inner(account_id)')
-                  .eq('messages.account_id', acc.id)
-                  .gte('classified_at', rangeISO)
-                  .limit(200),
+                totalQ,
+                pendingQ,
+                aiSentQ,
+                aiDraftsQ,
+                classQ,
               ])
 
               const total = totalRes.count || 0

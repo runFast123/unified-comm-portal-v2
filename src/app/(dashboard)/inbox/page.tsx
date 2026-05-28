@@ -419,23 +419,27 @@ export default function InboxPage() {
         messagesQuery = messagesQuery.in('account_id', resolvedAccountIds)
       }
 
-      // Also fetch newsletter + spam counts for the badges
+      // Also fetch newsletter + spam counts for the badges. We inner-join
+      // conversations and filter merged_into_id IS NULL so the badge totals
+      // match the visible list (which drops merged conversations).
       let newsletterCountQuery = supabase
         .from('messages')
-        .select('id', { count: 'exact', head: true })
+        .select('id, conversations!messages_conversation_id_fkey!inner(merged_into_id)', { count: 'exact', head: true })
         .eq('direction', 'inbound')
         .eq('is_spam', true)
         .in('spam_reason', ['newsletter', 'marketing', 'automated_notification', 'ai_classified_newsletter'])
+        .is('conversations.merged_into_id', null)
       if (!isAdmin && resolvedAccountIds.length > 0) {
         newsletterCountQuery = newsletterCountQuery.in('account_id', resolvedAccountIds)
       }
 
       let spamCountQuery = supabase
         .from('messages')
-        .select('id', { count: 'exact', head: true })
+        .select('id, conversations!messages_conversation_id_fkey!inner(merged_into_id)', { count: 'exact', head: true })
         .eq('direction', 'inbound')
         .eq('is_spam', true)
         .not('spam_reason', 'in', '(newsletter,marketing,automated_notification,ai_classified_newsletter)')
+        .is('conversations.merged_into_id', null)
       if (!isAdmin && resolvedAccountIds.length > 0) {
         spamCountQuery = spamCountQuery.in('account_id', resolvedAccountIds)
       }
@@ -445,9 +449,10 @@ export default function InboxPage() {
       // consistently (#5.7).
       let inboxCountQuery = supabase
         .from('messages')
-        .select('id', { count: 'exact', head: true })
+        .select('id, conversations!messages_conversation_id_fkey!inner(merged_into_id)', { count: 'exact', head: true })
         .eq('direction', 'inbound')
         .eq('is_spam', false)
+        .is('conversations.merged_into_id', null)
       if (!isAdmin && resolvedAccountIds.length > 0) {
         inboxCountQuery = inboxCountQuery.in('account_id', resolvedAccountIds)
       }
@@ -515,7 +520,7 @@ export default function InboxPage() {
           time_waiting: msg.received_at ?? msg.timestamp ?? '',
           priority: derivePriority(urgency),
           ai_status: mapAiStatus(aiReply?.status, phase2Enabled),
-          ai_confidence: classification?.confidence ?? null,
+          ai_confidence: classification?.confidence != null ? Math.round(Number(classification.confidence) * 100) : null,
           message_id: msg.id,
           conversation_id: msg.conversation_id,
           conversation_status: conversation?.status ?? null,
@@ -663,6 +668,8 @@ export default function InboxPage() {
         fetchInboxItems()
       }, 3000)
     }, [fetchInboxItems]),
+    // Non-admins: scope realtime to accounts they can see
+    accountIds: !isAdmin && companyAccountIds.length > 0 ? companyAccountIds : undefined,
   })
 
   // ── Inbox sync (fires IMAP/Graph pollers manually — Vercel Cron only runs
@@ -851,10 +858,12 @@ export default function InboxPage() {
   }, [filteredItems, toast, fetchInboxItems, reportPartial])
 
   const handleMarkRepliedBulk = useCallback(async () => {
+    if (selectedIds.size === 0) {
+      toast.warning('Select messages first.')
+      return
+    }
     const supabase = createClient()
-    const messageIds = selectedIds.size > 0
-      ? selectedMessageIds()
-      : filteredItems.filter((item) => item.ai_status !== 'auto_sent').map((item) => item.message_id)
+    const messageIds = selectedMessageIds()
     if (messageIds.length === 0) {
       toast.warning('Nothing to mark.')
       return
@@ -944,10 +953,12 @@ export default function InboxPage() {
   }, [currentUserId, selectedConversationIds, toast, clearSelection, fetchInboxItems, reportPartial])
 
   const handleArchiveBulk = useCallback(async () => {
+    if (selectedIds.size === 0) {
+      toast.warning('Select messages first.')
+      return
+    }
     const supabase = createClient()
-    const messageIds = selectedIds.size > 0
-      ? selectedMessageIds()
-      : filteredItems.map((item) => item.message_id)
+    const messageIds = selectedMessageIds()
     if (messageIds.length === 0) {
       toast.warning('Nothing to archive.')
       return
@@ -1391,10 +1402,15 @@ export default function InboxPage() {
           <Button
             variant="secondary"
             size="sm"
+            disabled={selectedIds.size === 0}
             onClick={() => {
-              const messageIds = selectedIds.size > 0
-                ? filteredItems.filter((item) => selectedIds.has(item.id)).map((item) => item.message_id)
-                : filteredItems.filter((item) => item.ai_status !== 'auto_sent').map((item) => item.message_id)
+              if (selectedIds.size === 0) {
+                toast.warning('Select messages first.')
+                return
+              }
+              const messageIds = filteredItems
+                .filter((item) => selectedIds.has(item.id))
+                .map((item) => item.message_id)
               if (messageIds.length === 0) {
                 toast.warning('No pending messages to mark.')
                 return
@@ -1408,8 +1424,15 @@ export default function InboxPage() {
           <Button
             variant="secondary"
             size="sm"
+            disabled={selectedIds.size === 0}
             onClick={() => {
-              const messageIds = filteredItems.map((item) => item.message_id)
+              if (selectedIds.size === 0) {
+                toast.warning('Select messages first.')
+                return
+              }
+              const messageIds = filteredItems
+                .filter((item) => selectedIds.has(item.id))
+                .map((item) => item.message_id)
               if (messageIds.length === 0) {
                 toast.warning('No messages to archive.')
                 return

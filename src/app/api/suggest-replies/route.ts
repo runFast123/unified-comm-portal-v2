@@ -75,9 +75,36 @@ Example output: ["Thank you for reaching out. I'll look into this right away.", 
 
     let suggestions: string[] = []
     try {
-      const match = aiResponse.match(/\[[\s\S]*\]/)
-      if (match) suggestions = JSON.parse(match[0])
+      // Balanced-bracket extraction — mirrors the JSON object extractor in
+      // src/app/api/classify/route.ts. The previous greedy regex
+      // `/\[[\s\S]*\]/` would happily swallow content past the first array
+      // close-bracket if the AI followed up with markdown or another array.
+      const startIdx = aiResponse.indexOf('[')
+      if (startIdx !== -1) {
+        let depth = 0
+        let jsonStr = ''
+        for (let i = startIdx; i < aiResponse.length; i++) {
+          if (aiResponse[i] === '[') depth++
+          if (aiResponse[i] === ']') depth--
+          if (depth === 0) {
+            jsonStr = aiResponse.substring(startIdx, i + 1)
+            break
+          }
+        }
+        if (jsonStr) {
+          const parsed = JSON.parse(jsonStr)
+          // Defensive: ensure the parsed result is an array of strings
+          // before exposing it to the UI — the AI sometimes returns an
+          // array of objects or numbers.
+          if (Array.isArray(parsed)) {
+            suggestions = parsed.filter((s): s is string => typeof s === 'string')
+          }
+        }
+      }
     } catch {
+      suggestions = []
+    }
+    if (suggestions.length === 0) {
       suggestions = ['Thank you for reaching out. How can I help you?', 'I\'ll look into this and get back to you shortly.', 'Could you provide more details so I can assist you better?']
     }
 
