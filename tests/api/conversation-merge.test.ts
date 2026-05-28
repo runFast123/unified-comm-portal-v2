@@ -18,6 +18,10 @@ interface AuthFixture {
   user: { id: string } | null
   /** account_ids the user can access; empty Set = nothing. */
   allowedAccounts: Set<string>
+  /** Optional role override (default: 'supervisor'). Phase 2 destructive
+   *  ops require isSupervisor() = supervisor / company_admin / super_admin.
+   *  Set to 'company_member' to assert 403 on the role gate. */
+  userRole?: string
 }
 
 const fixture = {
@@ -102,7 +106,10 @@ function makeServiceClient() {
               return {
                 data: {
                   id: fixture.auth.user.id,
-                  role: fixture.auth.allowedAccounts.size > 100 ? 'super_admin' : 'company_member',
+                  // Phase 2: merge/unmerge require supervisor+. Default to
+                  // supervisor for happy paths; tests that need to assert
+                  // the member→403 boundary override fixture.auth.userRole.
+                  role: fixture.auth.userRole ?? 'supervisor',
                   account_id: 'acc-a',
                   company_id: 'comp-a',
                 },

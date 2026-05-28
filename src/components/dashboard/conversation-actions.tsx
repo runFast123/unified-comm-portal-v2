@@ -27,6 +27,7 @@ import { useToast } from '@/components/ui/toast'
 import { useConversationPresence } from '@/hooks/useConversationPresence'
 import { useSmartCompose } from '@/hooks/useSmartCompose'
 import { useUser } from '@/context/user-context'
+import { isSupervisor } from '@/lib/roles'
 import type { ReplyTemplate } from '@/types/database'
 import { substituteTemplate as substituteTemplateVars } from '@/lib/templates'
 
@@ -77,6 +78,11 @@ export function ConversationActions({
   const { toast } = useToast()
   const { role: viewerRole } = useUser()
   const isReadOnly = READ_ONLY_ROLES.has(viewerRole)
+  // Phase 2 gate: `company_member` keeps reply / escalate / resolve but loses
+  // medium-trust ops (AI approve, edit-AI-draft). Anything supervisor-or-above
+  // sees the full toolbar. The corresponding API routes enforce the same
+  // check server-side — this just hides UI we know would 403.
+  const canApproveAI = isSupervisor(viewerRole)
   const [loading, setLoading] = useState<string | null>(null)
 
   // ── Realtime presence: who else is viewing this conversation ────────
@@ -1737,13 +1743,16 @@ export function ConversationActions({
           and stops the dual-purpose toolbar from looking like one
           undifferentiated wall of buttons. */}
       <div className="flex flex-wrap items-center gap-2">
-        {aiReplyId && aiReplyStatus === 'pending_approval' && (
+        {/* AI approve / edit-draft actions are supervisor+ only. Members can
+            still see the AI draft in the sidebar (read-only) and reply
+            manually, but can't approve/send it as-is or edit it. */}
+        {aiReplyId && aiReplyStatus === 'pending_approval' && canApproveAI && (
           <Button size="sm" variant="success" onClick={handleApprove} disabled={loading === 'approve'}>
             {loading === 'approve' ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={14} />}
             Approve &amp; Send
           </Button>
         )}
-        {aiDraftText && (
+        {aiDraftText && canApproveAI && (
           <Button
             size="sm"
             variant="secondary"
@@ -1753,6 +1762,17 @@ export function ConversationActions({
             <Pencil size={14} />
             Edit &amp; Send
           </Button>
+        )}
+        {/* View-only marker shown to members when an AI draft exists so they
+            understand why the Approve / Edit buttons aren't there. Tiny and
+            unobtrusive — appears next to Manual Reply. */}
+        {aiDraftText && !canApproveAI && (
+          <span
+            className="inline-flex items-center gap-1 rounded-md bg-gray-50 px-2 py-1 text-[11px] font-medium text-gray-500 ring-1 ring-gray-200"
+            title="AI draft is view-only for your role — reply manually or ask a supervisor to approve."
+          >
+            <Eye size={11} /> AI draft (view only)
+          </span>
         )}
         <Button
           size="sm"

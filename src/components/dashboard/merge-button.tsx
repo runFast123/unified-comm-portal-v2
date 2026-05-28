@@ -17,6 +17,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { GitMerge, Loader2, X, ArrowRight } from 'lucide-react'
 import { useToast } from '@/components/ui/toast'
+import { useUser } from '@/context/user-context'
+import { isSupervisor } from '@/lib/roles'
 
 interface MergeCandidate {
   id: string
@@ -69,6 +71,7 @@ function formatDate(iso: string | null): string {
 export function MergeButton({ conversationId }: Props) {
   const router = useRouter()
   const { toast } = useToast()
+  const { role: viewerRole } = useUser()
   const [open, setOpen] = useState(false)
   const [stage, setStage] = useState<'picker' | 'preview'>('picker')
   const [candidates, setCandidates] = useState<MergeCandidate[]>([])
@@ -171,6 +174,14 @@ export function MergeButton({ conversationId }: Props) {
   }, [selectedSecondaryId, preview, conversationId, router, toast])
 
   const triggerLabel = useMemo(() => 'Merge', [])
+
+  // Phase 2 gate: merge is a destructive cross-conversation op restricted to
+  // supervisor+. Render nothing for members — there's no read-only fallback
+  // since "Merge" has no view-only meaning. The /merge API enforces the
+  // same check server-side.
+  if (!isSupervisor(viewerRole)) {
+    return null
+  }
 
   return (
     <>

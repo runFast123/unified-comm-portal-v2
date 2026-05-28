@@ -13,6 +13,8 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { GitMerge, Loader2, Undo2, ArrowRight } from 'lucide-react'
 import { useToast } from '@/components/ui/toast'
+import { useUser } from '@/context/user-context'
+import { isSupervisor } from '@/lib/roles'
 
 export interface MergedSecondary {
   id: string
@@ -47,6 +49,11 @@ function formatDate(iso: string | null): string {
 export function MergeBanner({ mergedIntoId, mergedSecondaries, primaryConversationId }: MergeBannerProps) {
   const router = useRouter()
   const { toast } = useToast()
+  const { role: viewerRole } = useUser()
+  // Phase 2 gate: members see WHICH conversations are merged (informational)
+  // but can't unmerge. Only the per-row Unmerge button is hidden; the banner
+  // itself stays so they understand the unified thread context.
+  const canUnmerge = isSupervisor(viewerRole)
   const [unmerging, setUnmerging] = useState<string | null>(null)
 
   const handleUnmerge = useCallback(async (secondaryId: string) => {
@@ -128,19 +135,21 @@ export function MergeBanner({ mergedIntoId, mergedSecondaries, primaryConversati
                   <span className="text-purple-600">
                     merged {formatDate(s.merged_at)}{s.merged_by_name ? ` by ${s.merged_by_name}` : ''}
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => handleUnmerge(s.id)}
-                    disabled={isUnmerging}
-                    className="ml-auto inline-flex items-center gap-1 rounded-md border border-purple-200 bg-white px-2 py-0.5 text-[11px] font-medium text-purple-700 shadow-sm transition-colors hover:border-purple-300 hover:bg-purple-50 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {isUnmerging ? (
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                    ) : (
-                      <Undo2 className="h-3 w-3" />
-                    )}
-                    Unmerge
-                  </button>
+                  {canUnmerge && (
+                    <button
+                      type="button"
+                      onClick={() => handleUnmerge(s.id)}
+                      disabled={isUnmerging}
+                      className="ml-auto inline-flex items-center gap-1 rounded-md border border-purple-200 bg-white px-2 py-0.5 text-[11px] font-medium text-purple-700 shadow-sm transition-colors hover:border-purple-300 hover:bg-purple-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {isUnmerging ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Undo2 className="h-3 w-3" />
+                      )}
+                      Unmerge
+                    </button>
+                  )}
                 </li>
               )
             })}

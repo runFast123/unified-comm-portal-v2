@@ -21,6 +21,7 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase-server'
 import { verifyAccountAccess } from '@/lib/api-helpers'
+import { getCurrentUser, isSupervisor } from '@/lib/auth'
 import { createSurvey, publicSurveyUrl } from '@/lib/csat'
 import { sendEmail } from '@/lib/channel-sender'
 import { substituteTemplate } from '@/lib/templates'
@@ -57,6 +58,16 @@ export async function POST(
     const allowed = await verifyAccountAccess(user.id, conv.account_id)
     if (!allowed) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    // ── Phase 2: role-tier enforcement ──
+    // CSAT is a customer-facing send; members cannot trigger it.
+    const callerProfile = await getCurrentUser(user.id)
+    if (!isSupervisor(callerProfile?.role ?? null)) {
+      return NextResponse.json(
+        { error: 'Only supervisors and admins can send CSAT surveys' },
+        { status: 403 }
+      )
     }
 
     if (!conv.participant_email) {

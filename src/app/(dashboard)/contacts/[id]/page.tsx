@@ -73,6 +73,11 @@ export default async function ContactProfilePage({
     .eq('id', user.id)
     .maybeSingle()
   const isAdmin = ['admin','super_admin','company_admin'].includes(profile?.role ?? '')
+  // Phase 2 gate: supervisor-or-above may edit a contact's fields. Members
+  // get a read-only view (no display-name field, no notes textarea, no tag
+  // chips with remove buttons, no VIP toggle). The PATCH /api/contacts/[id]
+  // route enforces the same check server-side.
+  const canEditContact = ['admin','super_admin','company_admin','supervisor'].includes(profile?.role ?? '')
 
   const { data: contactRow, error: contactErr } = await admin
     .from('contacts')
@@ -238,6 +243,7 @@ export default async function ContactProfilePage({
             initialIsVip={contact.is_vip}
             initialDisplayName={contact.display_name ?? ''}
             isAdmin={isAdmin}
+            canEdit={canEditContact}
           />
         </div>
 

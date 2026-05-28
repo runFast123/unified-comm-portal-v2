@@ -501,14 +501,26 @@ describe('FIX 4: contact PATCH/DELETE require company-scoped access', () => {
     expect(fixture.contacts.get(CONTACT_B)?.display_name).toBe('CB')
   })
 
-  it('PATCH on contact in own company → 200', async () => {
-    fixture.authUserId = MEMBER_A_ID
+  it('PATCH by company_admin on contact in own company → 200', async () => {
+    // Phase 2: contact PATCH now requires supervisor+ (was: any company member).
+    // Switched from MEMBER_A_ID to ADMIN_A_ID so this happy-path stays valid.
+    fixture.authUserId = ADMIN_A_ID
     const res = await contactPatch(
       jsonReq(`http://x/api/contacts/${CONTACT_A}`, { display_name: 'CA renamed' }, 'PATCH'),
       { params: Promise.resolve({ id: CONTACT_A }) },
     )
     expect(res.status).toBe(200)
     expect(fixture.contacts.get(CONTACT_A)?.display_name).toBe('CA renamed')
+  })
+
+  it('PATCH by company_member on contact in own company → 403 (Phase 2 supervisor gate)', async () => {
+    fixture.authUserId = MEMBER_A_ID
+    const res = await contactPatch(
+      jsonReq(`http://x/api/contacts/${CONTACT_A}`, { display_name: 'pwned-by-member' }, 'PATCH'),
+      { params: Promise.resolve({ id: CONTACT_A }) },
+    )
+    expect(res.status).toBe(403)
+    expect(fixture.contacts.get(CONTACT_A)?.display_name).toBe('CA')
   })
 
   it('DELETE by company_admin of B against contact A → 403', async () => {

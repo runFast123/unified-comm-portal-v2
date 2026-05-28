@@ -6,6 +6,7 @@ import {
   getCurrentUser,
   isCompanyAdmin,
   isSuperAdmin,
+  isSupervisor,
   getAllowedAccountIds,
 } from '@/lib/auth'
 
@@ -83,18 +84,18 @@ function validatePatch(body: ContactPatchBody): { ok: true; patch: ValidatedPatc
  *
  * Rules:
  *   - super_admin → always allowed (cross-tenant).
- *   - other roles → must be (a) company-admin/admin/company-member AND
- *     (b) have at least one conversation referencing this contact whose
- *     `account_id` is in the caller's allowed account set.
+ *   - other roles → must satisfy the requested role tier AND have at least
+ *     one conversation referencing this contact whose `account_id` is in
+ *     the caller's allowed account set.
  *
- * For the bare PATCH path we accept any company-scoped role that can see
- * the contact (the route used to require zero auth). DELETE additionally
- * requires `isCompanyAdmin` privilege.
+ * Phase 2: both PATCH and DELETE require supervisor+ (was: PATCH allowed
+ * any company-member, DELETE required company_admin). Members can still
+ * GET contacts.
  */
 async function authorizeContactAccess(
   userId: string,
   contactId: string,
-  opts: { requireAdmin: boolean },
+  opts: { requireAdmin?: boolean; requireSupervisor?: boolean } = {},
 ): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
   const profile = await getCurrentUser(userId)
   if (!profile) return { ok: false, status: 403, error: 'Forbidden' }
@@ -102,7 +103,16 @@ async function authorizeContactAccess(
   // super_admin bypass
   if (isSuperAdmin(profile.role)) return { ok: true }
 
-  // For DELETE we additionally require company-admin.
+  // Phase 2: supervisor+ gate for destructive contact ops.
+  if (opts.requireSupervisor && !isSupervisor(profile.role)) {
+    return {
+      ok: false,
+      status: 403,
+      error: 'Only supervisors and admins can modify contacts',
+    }
+  }
+
+  // Legacy admin-only gate (kept for back-compat if anything else still uses it).
   if (opts.requireAdmin && !isCompanyAdmin(profile.role)) {
     return { ok: false, status: 403, error: 'Forbidden: admin only' }
   }
@@ -170,8 +180,8 @@ export async function PATCH(
       return NextResponse.json({ error: 'Contact not found' }, { status: 404 })
     }
 
-    // FIX: gate on company-scoped conversation membership.
-    const authz = await authorizeContactAccess(user.id, id, { requireAdmin: false })
+    // Phase 2: PATCH requires supervisor+ (members are read-only).
+    const authz = await authorizeContactAccess(user.id, id, { requireSupervisor: true })
     if (!authz.ok) {
       return NextResponse.json({ error: authz.error }, { status: authz.status })
     }
@@ -240,8 +250,8 @@ export async function DELETE(
       return NextResponse.json({ error: 'Contact not found' }, { status: 404 })
     }
 
-    // FIX: company-admin role + scoped conversation match (super_admin bypass).
-    const authz = await authorizeContactAccess(user.id, id, { requireAdmin: true })
+    // Phase 2: DELETE requires supervisor+ (was admin-only, widened per role spec).
+    const authz = await authorizeContactAccess(user.id, id, { requireSupervisor: true })
     if (!authz.ok) {
       return NextResponse.json({ error: authz.error }, { status: authz.status })
     }

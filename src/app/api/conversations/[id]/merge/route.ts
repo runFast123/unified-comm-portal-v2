@@ -12,6 +12,7 @@ import {
 } from '@/lib/supabase-server'
 import { verifyAccountAccess, checkRateLimit } from '@/lib/api-helpers'
 import { mergeConversations } from '@/lib/conversation-merge'
+import { getCurrentUser, isSupervisor } from '@/lib/auth'
 
 interface Body {
   secondary_conversation_id?: string
@@ -74,6 +75,16 @@ export async function POST(
           { status: 403 }
         )
       }
+    }
+
+    // ── Phase 2: role-tier enforcement ──
+    // Merge is destructive (rewrites message ownership). Require supervisor+.
+    const callerProfile = await getCurrentUser(user.id)
+    if (!isSupervisor(callerProfile?.role ?? null)) {
+      return NextResponse.json(
+        { error: 'Only supervisors and admins can merge conversations' },
+        { status: 403 }
+      )
     }
 
     let result

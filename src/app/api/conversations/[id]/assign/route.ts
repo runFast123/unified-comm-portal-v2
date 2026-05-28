@@ -14,6 +14,7 @@ import { NextResponse } from 'next/server'
 
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase-server'
 import { verifyAccountAccess } from '@/lib/api-helpers'
+import { getCurrentUser, isSupervisor } from '@/lib/auth'
 
 interface PostBody {
   user_id?: string | null
@@ -57,6 +58,23 @@ export async function POST(
     const allowed = await verifyAccountAccess(user.id, conv.account_id)
     if (!allowed) {
       return NextResponse.json({ error: 'Forbidden: account scope mismatch' }, { status: 403 })
+    }
+
+    // ── Phase 2: role-tier enforcement ──
+    // Members may only self-assign or clear their own assignment. Any
+    // operation that touches someone else's assignment (reassign to another
+    // user, or unassign a conversation currently owned by someone else)
+    // requires supervisor+ privileges.
+    const callerProfileForRole = await getCurrentUser(user.id)
+    const callerRoleForGate = callerProfileForRole?.role ?? null
+    const targetUserId = body.user_id ?? null
+    const isSelfAssign = targetUserId !== null && targetUserId === user.id
+    const isSelfUnassign = targetUserId === null && conv.assigned_to === user.id
+    if (!isSelfAssign && !isSelfUnassign && !isSupervisor(callerRoleForGate)) {
+      return NextResponse.json(
+        { error: 'Only supervisors and admins can reassign conversations to other users' },
+        { status: 403 }
+      )
     }
 
     // ── H6 fix: validate assignee belongs to the same company ──

@@ -450,6 +450,7 @@ export default async function ConversationPage({
               conversationId={id}
               currentAssignedTo={conversation.assigned_to || null}
               currentAssignedName={assignedUser?.full_name || assignedUser?.email || null}
+              currentUserId={currentUserId}
             />
             <CSATSendButton
               conversationId={id}

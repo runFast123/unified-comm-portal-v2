@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
-import { Crown, Loader2, Tag, Trash2, X } from 'lucide-react'
+import { Crown, Eye, Loader2, Tag, Trash2, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -15,6 +15,13 @@ interface ContactProfileClientProps {
   initialIsVip: boolean
   initialDisplayName: string
   isAdmin: boolean
+  /**
+   * When false, renders a read-only view (no display-name input, no notes
+   * textarea, no tag remove/add controls, no VIP toggle, no delete).
+   * Defaults to true to preserve the previous behaviour for callers that
+   * haven't migrated yet. Companion to the supervisor+ API gate.
+   */
+  canEdit?: boolean
 }
 
 /**
@@ -34,6 +41,7 @@ export function ContactProfileClient({
   initialIsVip,
   initialDisplayName,
   isAdmin,
+  canEdit = true,
 }: ContactProfileClientProps) {
   const router = useRouter()
 
@@ -152,6 +160,78 @@ export function ContactProfileClient({
       is_vip: initialIsVip,
     }
   }, [initialNotes, initialTags, initialIsVip, initialDisplayName])
+
+  // ── Read-only branch ────────────────────────────────────────────────
+  // For company_member: render the same shape (display name / tags / notes /
+  // VIP indicator) but with no inputs, no save handlers, no delete. A small
+  // "View only" banner up top sets expectations.
+  if (!canEdit) {
+    return (
+      <div className="space-y-6">
+        <div className="inline-flex items-center gap-1.5 rounded-md bg-gray-50 px-2.5 py-1 text-[11px] font-medium text-gray-500 ring-1 ring-gray-200">
+          <Eye className="h-3 w-3" />
+          View-only access — contact your supervisor to edit this contact.
+        </div>
+
+        {/* VIP indicator (read-only) */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold',
+              isVip
+                ? 'bg-amber-100 text-amber-800 ring-1 ring-amber-200'
+                : 'bg-gray-100 text-gray-500 ring-1 ring-gray-200'
+            )}
+          >
+            <Crown className="h-3 w-3" />
+            {isVip ? 'VIP' : 'Not VIP'}
+          </span>
+        </div>
+
+        {/* Display name (read-only) */}
+        <div className="rounded-2xl border border-gray-200/80 bg-white p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+            Display Name
+          </p>
+          <p className="mt-2 text-sm text-gray-800">
+            {displayName.trim() || <span className="text-gray-400">No display name</span>}
+          </p>
+        </div>
+
+        {/* Tags (read-only) */}
+        <div className="rounded-2xl border border-gray-200/80 bg-white p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+            Tags
+          </p>
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {tags.length === 0 ? (
+              <span className="text-xs text-gray-400">No tags.</span>
+            ) : (
+              tags.map((tag) => (
+                <span
+                  key={tag}
+                  className="inline-flex items-center gap-1 rounded-full bg-teal-50 px-2.5 py-1 text-xs font-medium text-teal-700 ring-1 ring-teal-200"
+                >
+                  <Tag className="h-3 w-3" />
+                  {tag}
+                </span>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Notes (read-only) */}
+        <div className="rounded-2xl border border-gray-200/80 bg-white p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+            Notes
+          </p>
+          <p className="mt-2 whitespace-pre-wrap text-sm text-gray-700">
+            {notes.trim() || <span className="text-gray-400">No notes.</span>}
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">

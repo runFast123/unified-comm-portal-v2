@@ -8,6 +8,8 @@
 import { useState } from 'react'
 import { Smile, Loader2 } from 'lucide-react'
 import { useToast } from '@/components/ui/toast'
+import { useUser } from '@/context/user-context'
+import { isSupervisor } from '@/lib/roles'
 
 interface Props {
   conversationId: string
@@ -27,10 +29,15 @@ export function CSATSendButton({
   hasParticipantEmail,
 }: Props) {
   const { toast } = useToast()
+  const { role: viewerRole } = useUser()
   const [busy, setBusy] = useState(false)
 
   if (!csatEnabled) return null
   if (!status || !ELIGIBLE_STATUSES.has(status)) return null
+  // Phase 2 gate: sending a customer-facing CSAT survey is supervisor+.
+  // The API enforces the same check — hide the button so members don't
+  // see an action that would 403.
+  if (!isSupervisor(viewerRole)) return null
 
   const disabled = busy || !hasParticipantEmail
 
