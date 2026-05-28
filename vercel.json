@@ -1,5 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
   "crons": [
     { "path": "/api/cron/email-poll?shard=0&total=4", "schedule": "*/2 * * * *" },
     { "path": "/api/cron/email-poll?shard=1&total=4", "schedule": "*/2 * * * *" },
