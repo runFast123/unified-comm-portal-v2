@@ -132,7 +132,7 @@ export function CompanySwitcher({ companies, currentCompanyId }: CompanySwitcher
       {open && (
         <div
           role="listbox"
-          className="absolute right-0 top-full z-50 mt-1 w-72 rounded-lg border border-gray-200 bg-white shadow-lg max-h-[60vh] overflow-y-auto"
+          className="absolute right-0 top-full z-[100] mt-1 w-72 rounded-lg border border-gray-200 bg-white shadow-lg max-h-[60vh] overflow-y-auto"
         >
           <div className="py-1">
             {companies.map((c) => {

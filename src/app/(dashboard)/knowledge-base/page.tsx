@@ -45,7 +45,7 @@ function GapCount() {
         .from('message_classifications')
         .select('message_id, messages!inner(account_id)' as any, { count: 'exact', head: true })
         .lt('confidence', 0.6)
-      if (!isAdmin && companyAccountIds.length > 0) {
+      if (companyAccountIds.length > 0) {
         query = (query as any).in('messages.account_id', companyAccountIds)
       }
       const { count: c } = await query
@@ -102,7 +102,7 @@ function GapAnalysis() {
         .lt('confidence', 0.6)
         .order('classified_at', { ascending: false })
         .limit(20)
-      if (!isAdmin && companyAccountIds.length > 0) {
+      if (companyAccountIds.length > 0) {
         gapQuery = (gapQuery as any).in('messages.account_id', companyAccountIds)
       }
       const { data } = await gapQuery
@@ -257,8 +257,9 @@ export default function KnowledgeBasePage() {
       .select('id, name')
       .eq('is_active', true)
       .order('name')
-    // Non-admins see their company's accounts (including sibling channels)
-    if (!isAdmin && companyAccountIds.length > 0) {
+    // Scope to the active company's accounts (cookie-resolved in layout)
+    // so the switcher actually filters which accounts are listed.
+    if (companyAccountIds.length > 0) {
       query = query.in('id', companyAccountIds)
     }
     const { data } = await query
@@ -274,8 +275,9 @@ export default function KnowledgeBasePage() {
       .select('*')
       .order('updated_at', { ascending: false })
 
-    // Non-admins: see articles for their company (all channels) or shared (account_id IS NULL)
-    if (!isAdmin && companyAccountIds.length > 0) {
+    // Scope to the active company's accounts (cookie-resolved in layout)
+    // OR shared rows (account_id IS NULL). Applies to all users.
+    if (companyAccountIds.length > 0) {
       query = query.or(companyAccountIds.map(id => `account_id.eq.${id}`).concat('account_id.is.null').join(','))
     }
 
@@ -402,7 +404,7 @@ export default function KnowledgeBasePage() {
 
   function handleOpenAdd() {
     setEditingId(null)
-    setEditForm({ title: '', content: '', category: 'General', tags: '', account_id: !isAdmin && companyAccountIds.length > 0 ? companyAccountIds[0] : '' })
+    setEditForm({ title: '', content: '', category: 'General', tags: '', account_id: companyAccountIds.length > 0 ? companyAccountIds[0] : '' })
     setEditModalOpen(true)
   }
 

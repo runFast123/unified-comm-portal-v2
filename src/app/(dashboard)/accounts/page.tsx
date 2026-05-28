@@ -55,12 +55,18 @@ export default function AccountsPage() {
         } catch { /* fallback to supabase */ }
       }
 
-      // Admin or fallback: use Supabase client directly
+      // Admin or fallback: use Supabase client directly. Scope to the active
+      // company's accounts (cookie-resolved in layout) so the super_admin
+      // switcher actually filters the visible accounts.
       if (!accountRows) {
-        const { data, error } = await supabase
+        let q = supabase
           .from('accounts')
           .select('*')
           .order('name')
+        if (companyAccountIds.length > 0) {
+          q = q.in('id', companyAccountIds)
+        }
+        const { data, error } = await q
         if (error) {
           console.error('Error fetching accounts:', error)
           setLoading(false)

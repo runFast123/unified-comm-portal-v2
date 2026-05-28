@@ -92,7 +92,7 @@ export default function SheetsPage() {
         .select('id, name')
         .eq('is_active', true)
         .order('name')
-      if (!isAdmin && companyAccountIds.length > 0) query = query.in('id', companyAccountIds)
+      if (companyAccountIds.length > 0) query = query.in('id', companyAccountIds)
       const { data } = await query
       if (data) setAccounts(data)
     }
@@ -113,8 +113,9 @@ export default function SheetsPage() {
         .from('google_sheets_sync')
         .select('*')
         .order('created_at', { ascending: false })
-      // Non-admins: only see sheets for their company or shared
-      if (!isAdmin && companyAccountIds.length > 0) {
+      // Scope to the active company's accounts (cookie-resolved in layout)
+      // OR shared rows (account_id IS NULL). Applies to all users.
+      if (companyAccountIds.length > 0) {
         query = query.or(companyAccountIds.map(id => `account_id.eq.${id}`).concat('account_id.is.null').join(','))
       }
       const { data, error } = await query
@@ -161,7 +162,7 @@ export default function SheetsPage() {
       sheet_id: sheetId,
       sheet_name: detectedName,
       sheet_url: newSheetUrl,
-      account_id: (!isAdmin && companyAccountIds.length > 0) ? companyAccountIds[0] : (newSheetAccountId || null),
+      account_id: companyAccountIds.length > 0 ? companyAccountIds[0] : (newSheetAccountId || null),
       sync_status: 'paused' as SyncStatus,
       row_count: 0,
       sync_schedule: 'Every 30 minutes',

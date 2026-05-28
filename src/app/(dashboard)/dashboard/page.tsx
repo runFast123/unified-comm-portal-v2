@@ -259,7 +259,7 @@ export default function DashboardPage() {
       if (endDate) aiQuery = aiQuery.lte('created_at', endDate)
       if (selectedAccountIds.size > 0) {
         aiQuery = aiQuery.in('account_id', Array.from(selectedAccountIds))
-      } else if (!isAdmin && companyAccountIds.length > 0) {
+      } else if (companyAccountIds.length > 0) {
         aiQuery = aiQuery.in('account_id', companyAccountIds)
       }
 
@@ -298,7 +298,7 @@ export default function DashboardPage() {
     // Apply account filter if selected, or scope to company for non-admins
     if (selectedAccountIds.size > 0) {
       query = query.in('account_id', Array.from(selectedAccountIds))
-    } else if (!isAdmin && companyAccountIds.length > 0) {
+    } else if (companyAccountIds.length > 0) {
       query = query.in('account_id', companyAccountIds)
     }
 
@@ -413,8 +413,11 @@ export default function DashboardPage() {
       const customToISO = getDateRangeEnd(dateRange, customTo)
 
       try {
-        // Build scoped queries - non-admins see all sibling accounts for their company
-        const accountIdFilter = !isAdmin && companyAccountIds.length > 0 ? companyAccountIds : null
+        // Build scoped queries — always scope to the active company's
+        // accounts (cookie-resolved in layout) so the company switcher
+        // actually drives data. `accountIdFilter` is null only when there
+        // are zero accounts (e.g. a fresh tenant with nothing seeded).
+        const accountIdFilter = companyAccountIds.length > 0 ? companyAccountIds : null
 
         let accountsQuery = supabase
           .from('accounts')
@@ -1440,7 +1443,7 @@ export default function DashboardPage() {
                 if (channelFilter !== 'all' && s.channel_type !== channelFilter) return false
                 return true
               })}
-              companyAccountIds={!isAdmin && companyAccountIds.length > 0 ? companyAccountIds : undefined}
+              companyAccountIds={companyAccountIds.length > 0 ? companyAccountIds : undefined}
             />
           </div>
         </div>

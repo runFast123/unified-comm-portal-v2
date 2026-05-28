@@ -109,7 +109,7 @@ export default function ContactsPage() {
         .select('contact_id, channel, account_id')
         .in('contact_id', ids)
         .limit(10000)
-      if (!isAdmin && companyAccountIds.length > 0) {
+      if (companyAccountIds.length > 0) {
         convQuery = convQuery.in('account_id', companyAccountIds)
       }
       const { data: convRows } = await convQuery
@@ -128,8 +128,10 @@ export default function ContactsPage() {
           ...c,
           channels: Array.from(channelsByContact.get(c.id) || []),
         }))
-        // Non-admins: hide contacts with zero conversations in their company.
-        .filter((c) => isAdmin || c.channels.length > 0)
+        // When scoped to a company (cookie-selected or user's home), hide
+        // contacts that have zero conversations in that company. When
+        // unscoped (super_admin with no active company), show all contacts.
+        .filter((c) => companyAccountIds.length === 0 || c.channels.length > 0)
 
       setContacts(enriched)
     } catch (err) {

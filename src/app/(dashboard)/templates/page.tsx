@@ -95,8 +95,9 @@ export default function TemplatesPage() {
       .select('id, name')
       .eq('is_active', true)
       .order('name')
-    // Non-admins only see their own company
-    if (!isAdmin && companyAccountIds.length > 0) {
+    // Scope to the active company's accounts (cookie-resolved in layout)
+    // so the switcher actually filters which accounts are listed.
+    if (companyAccountIds.length > 0) {
       query = query.in('id', companyAccountIds)
     }
     const { data } = await query
@@ -112,8 +113,9 @@ export default function TemplatesPage() {
       .select('*')
       .order('updated_at', { ascending: false })
 
-    // Non-admins: only see templates for their company or shared (account_id IS NULL)
-    if (!isAdmin && companyAccountIds.length > 0) {
+    // Scope to the active company's accounts (cookie-resolved in layout)
+    // OR shared rows (account_id IS NULL). Applies to all users.
+    if (companyAccountIds.length > 0) {
       query = query.or(companyAccountIds.map(id => `account_id.eq.${id}`).concat('account_id.is.null').join(','))
     }
 
@@ -232,7 +234,7 @@ export default function TemplatesPage() {
       content: '',
       category: 'General',
       shortcut: '',
-      account_id: !isAdmin && companyAccountIds.length > 0 ? companyAccountIds[0] : '',
+      account_id: companyAccountIds.length > 0 ? companyAccountIds[0] : '',
     })
     setEditModalOpen(true)
   }

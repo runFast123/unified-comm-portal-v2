@@ -414,8 +414,9 @@ export default function InboxPage() {
         messagesQuery = messagesQuery.eq('reply_required', true).eq('replied', false)
       }
 
-      // Non-admins: only see messages for their company
-      if (!isAdmin && resolvedAccountIds.length > 0) {
+      // Always scope to the active company's accounts (cookie-resolved in
+      // layout) so the super_admin company switcher actually filters data.
+      if (resolvedAccountIds.length > 0) {
         messagesQuery = messagesQuery.in('account_id', resolvedAccountIds)
       }
 
@@ -429,7 +430,7 @@ export default function InboxPage() {
         .eq('is_spam', true)
         .in('spam_reason', ['newsletter', 'marketing', 'automated_notification', 'ai_classified_newsletter'])
         .is('conversations.merged_into_id', null)
-      if (!isAdmin && resolvedAccountIds.length > 0) {
+      if (resolvedAccountIds.length > 0) {
         newsletterCountQuery = newsletterCountQuery.in('account_id', resolvedAccountIds)
       }
 
@@ -440,7 +441,7 @@ export default function InboxPage() {
         .eq('is_spam', true)
         .not('spam_reason', 'in', '(newsletter,marketing,automated_notification,ai_classified_newsletter)')
         .is('conversations.merged_into_id', null)
-      if (!isAdmin && resolvedAccountIds.length > 0) {
+      if (resolvedAccountIds.length > 0) {
         spamCountQuery = spamCountQuery.in('account_id', resolvedAccountIds)
       }
 
@@ -453,7 +454,7 @@ export default function InboxPage() {
         .eq('direction', 'inbound')
         .eq('is_spam', false)
         .is('conversations.merged_into_id', null)
-      if (!isAdmin && resolvedAccountIds.length > 0) {
+      if (resolvedAccountIds.length > 0) {
         inboxCountQuery = inboxCountQuery.in('account_id', resolvedAccountIds)
       }
 
@@ -599,7 +600,7 @@ export default function InboxPage() {
       else moreQuery = moreQuery.eq('is_spam', true).not('spam_reason', 'in', '(newsletter,marketing,automated_notification,ai_classified_newsletter)')
 
       if (filters.channel !== 'all') moreQuery = moreQuery.eq('channel', filters.channel)
-      if (!isAdmin && companyAccountIds.length > 0) moreQuery = moreQuery.in('account_id', companyAccountIds)
+      if (companyAccountIds.length > 0) moreQuery = moreQuery.in('account_id', companyAccountIds)
 
       const { data: moreMessages } = await moreQuery
 
@@ -669,7 +670,7 @@ export default function InboxPage() {
       }, 3000)
     }, [fetchInboxItems]),
     // Non-admins: scope realtime to accounts they can see
-    accountIds: !isAdmin && companyAccountIds.length > 0 ? companyAccountIds : undefined,
+    accountIds: companyAccountIds.length > 0 ? companyAccountIds : undefined,
   })
 
   // ── Inbox sync (fires IMAP/Graph pollers manually — Vercel Cron only runs

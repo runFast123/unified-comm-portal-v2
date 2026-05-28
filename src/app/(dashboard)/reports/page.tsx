@@ -251,7 +251,9 @@ export default function ReportsPage() {
     const endDate = getDateRangeEnd(dateRange, customTo)
 
     try {
-      const accountIdFilter = !isAdmin && companyAccountIds.length > 0 ? companyAccountIds : null
+      // Always scope to the active company's accounts (cookie-resolved in
+      // layout) so the super_admin company switcher actually filters data.
+      const accountIdFilter = companyAccountIds.length > 0 ? companyAccountIds : null
 
       // 1. Fetch messages for the date range
       let messagesQuery = supabase
