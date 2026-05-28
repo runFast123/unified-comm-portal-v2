@@ -84,6 +84,7 @@ type TabKey = 'overview' | 'accounts' | 'users' | 'audit'
 
 const ROLE_OPTIONS = [
   { value: 'company_admin', label: 'Company admin' },
+  { value: 'supervisor', label: 'Supervisor' },
   { value: 'company_member', label: 'Company member' },
   { value: 'admin', label: 'Admin (legacy)' },
   { value: 'reviewer', label: 'Reviewer (legacy)' },

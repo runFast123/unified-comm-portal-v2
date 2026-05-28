@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase-server'
+import { isSuperAdmin } from '@/lib/auth'
 import {
   getGoogleOAuth,
   getAzureOAuth,
@@ -9,7 +10,15 @@ import {
 
 export const dynamic = 'force-dynamic'
 
-async function requireAdmin() {
+/**
+ * Super_admin-only — see the matching gate in `../route.ts` for the
+ * rationale. The integrations table is platform-wide, so we must not let
+ * any company_admin probe / mutate it.
+ *
+ * TODO(multi-tenant): when integrations become per-tenant, scope this to
+ * company_admin of the matching tenant.
+ */
+async function requireSuperAdmin() {
   const supabase = await createServerSupabaseClient()
   const {
     data: { user },
@@ -21,7 +30,9 @@ async function requireAdmin() {
     .select('role')
     .eq('id', user.id)
     .maybeSingle()
-  if (!['admin','super_admin','company_admin'].includes(profile?.role ?? '')) return { ok: false as const, status: 403, error: 'Admin only' }
+  if (!isSuperAdmin(profile?.role ?? null)) {
+    return { ok: false as const, status: 403, error: 'Super admin only' }
+  }
   return { ok: true as const, userId: user.id }
 }
 
@@ -148,7 +159,7 @@ function isIntegrationKey(v: unknown): v is IntegrationKey {
 }
 
 export async function POST(request: Request) {
-  const gate = await requireAdmin()
+  const gate = await requireSuperAdmin()
   if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: gate.status })
 
   let body: { key?: unknown; config?: unknown }

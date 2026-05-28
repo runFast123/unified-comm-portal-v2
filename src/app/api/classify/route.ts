@@ -20,30 +20,47 @@ Return ONLY the JSON object, no markdown formatting or additional text.`
 
 // ─── auto_resolve_marketing toggle cache ──────────────────────────────
 // Newsletters re-classify often; reading the toggle from DB on every call
-// adds an unnecessary round-trip. Cache the boolean for 60s — long enough to
-// matter under load, short enough that toggling in the admin UI takes effect
-// quickly. Module-level state is per-Lambda instance which is fine: cold
-// starts re-read from DB.
-let autoResolveMarketingCache: { value: boolean; expiresAt: number } | null = null
+// adds an unnecessary round-trip. Cache the boolean per-company for 60s —
+// long enough to matter under load, short enough that toggling in the admin
+// UI takes effect quickly. Module-level state is per-Lambda instance which
+// is fine: cold starts re-read from DB.
+//
+// Multi-tenant: ai_config has a row per company (migration
+// 20260528100000_ai_config_per_company), so this lookup must be scoped by
+// the calling account's company_id, NOT read the first active row globally.
+const autoResolveMarketingCache = new Map<string, { value: boolean; expiresAt: number }>()
 const AUTO_RESOLVE_TTL_MS = 60_000
 
 async function isAutoResolveMarketingEnabled(
-  supabase: Awaited<ReturnType<typeof createServiceRoleClient>>
+  supabase: Awaited<ReturnType<typeof createServiceRoleClient>>,
+  accountId: string
 ): Promise<boolean> {
   const now = Date.now()
-  if (autoResolveMarketingCache && autoResolveMarketingCache.expiresAt > now) {
-    return autoResolveMarketingCache.value
-  }
+  const cached = autoResolveMarketingCache.get(accountId)
+  if (cached && cached.expiresAt > now) return cached.value
   try {
+    // Resolve account → company_id, then read THAT company's active ai_config.
+    const { data: acct } = await supabase
+      .from('accounts')
+      .select('company_id')
+      .eq('id', accountId)
+      .maybeSingle()
+    const companyId = acct?.company_id as string | null | undefined
+    if (!companyId) {
+      // No company context — fail closed (don't auto-resolve).
+      autoResolveMarketingCache.set(accountId, { value: false, expiresAt: now + AUTO_RESOLVE_TTL_MS })
+      return false
+    }
     const { data } = await supabase
       .from('ai_config')
       .select('auto_resolve_marketing')
+      .eq('company_id', companyId)
       .eq('is_active', true)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle()
     const value = !!data?.auto_resolve_marketing
-    autoResolveMarketingCache = { value, expiresAt: now + AUTO_RESOLVE_TTL_MS }
+    autoResolveMarketingCache.set(accountId, { value, expiresAt: now + AUTO_RESOLVE_TTL_MS })
     return value
   } catch {
     return false // fail closed: don't auto-resolve on DB error
@@ -324,7 +341,7 @@ export async function POST(request: Request) {
       // If ai_config.auto_resolve_marketing is enabled, also resolve the
       // conversation so it drops out of the active inbox entirely.
       try {
-        if (routingConversationId && (await isAutoResolveMarketingEnabled(supabase))) {
+        if (routingConversationId && (await isAutoResolveMarketingEnabled(supabase, account_id))) {
           await supabase
             .from('conversations')
             .update({ status: 'resolved' })

@@ -29,6 +29,7 @@ export type UserRole =
   | 'super_admin'
   | 'admin'
   | 'company_admin'
+  | 'supervisor'
   | 'company_member'
   | 'reviewer'
   | 'viewer'

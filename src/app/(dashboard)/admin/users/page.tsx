@@ -63,6 +63,7 @@ function getRoleBadge(role: UserRole) {
 const ROLE_OPTIONS = [
   { value: '', label: 'All Roles' },
   { value: 'admin', label: 'Admin' },
+  { value: 'supervisor', label: 'Supervisor' },
   { value: 'reviewer', label: 'Reviewer' },
   { value: 'viewer', label: 'Viewer' },
 ]
@@ -75,6 +76,7 @@ const STATUS_OPTIONS = [
 
 const ROLE_EDIT_OPTIONS = [
   { value: 'admin', label: 'Admin' },
+  { value: 'supervisor', label: 'Supervisor' },
   { value: 'reviewer', label: 'Reviewer' },
   { value: 'viewer', label: 'Viewer' },
 ]
@@ -634,6 +636,7 @@ export default function UsersPage() {
             onChange={(e) => setInviteRole(e.target.value as UserRole)}
             options={[
               { value: 'admin', label: 'Admin - Full access to all settings' },
+              { value: 'supervisor', label: 'Supervisor - Medium-trust agent operations' },
               { value: 'reviewer', label: 'Reviewer - Can review and approve AI replies' },
               { value: 'viewer', label: 'Viewer - Read-only access to dashboard' },
             ]}

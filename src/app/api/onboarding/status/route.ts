@@ -1,11 +1,27 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase-server'
+import { getCurrentUser, isCompanyAdmin } from '@/lib/auth'
 
 /**
  * GET /api/onboarding/status
  *
- * Admin-only. Returns the completion state of the 4 onboarding steps.
- * Each boolean is derived via a parallel DB query using the service-role client.
+ * Admin-only. Returns the completion state of the 4 onboarding steps,
+ * scoped to the caller's company. Previously every count was
+ * platform-wide, so a brand-new tenant immediately saw "all done"
+ * because some OTHER tenant had already added an account, configured
+ * credentials, invited users, etc. That defeats the entire point of the
+ * onboarding checklist and also leaks the existence of other tenants.
+ *
+ * Scoping:
+ *   - accounts → filtered by company_id directly.
+ *   - channel_configs → has no company_id; joined via the account_id set
+ *     for the caller's company.
+ *   - users → filtered by company_id.
+ *   - messages → has no company_id; joined via the account_id set.
+ *
+ * super_admin is intentionally scoped to their own company too. They
+ * rarely use this endpoint (it's a tenant-onboarding tool), and showing
+ * them platform-wide stats would put us right back where we started.
  */
 export async function GET() {
   // Session check — must be logged in
@@ -15,44 +31,72 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  // Role check — admin only
-  const admin = await createServiceRoleClient()
-  const { data: profile } = await admin
-    .from('users')
-    .select('role')
-    .eq('id', user.id)
-    .maybeSingle()
-
-  if (!['admin','super_admin','company_admin'].includes(profile?.role ?? '')) {
+  // Role + company scoping. We use getCurrentUser() so we have company_id
+  // in one round-trip alongside the role check.
+  const profile = await getCurrentUser(user.id)
+  if (!profile || !isCompanyAdmin(profile.role)) {
     return NextResponse.json({ error: 'Admin only' }, { status: 403 })
   }
 
-  // Run all four detection queries in parallel
-  const [accountsRes, credsRes, usersRes, outboundRes] = await Promise.all([
-    // 1. Any account row exists
-    admin.from('accounts').select('id', { count: 'exact', head: true }).limit(1),
+  const companyId = profile.company_id
+  if (!companyId) {
+    // No company attached → nothing to onboard. Return all-false rather
+    // than 500 so the UI can still render a useful empty state.
+    return NextResponse.json({
+      steps: [
+        { id: 'add_account', complete: false },
+        { id: 'configure_credentials', complete: false },
+        { id: 'invite_teammate', complete: false },
+        { id: 'first_reply', complete: false },
+      ],
+      allComplete: false,
+    })
+  }
 
-    // 2. Any channel_configs row with non-null config_encrypted
+  const admin = await createServiceRoleClient()
+
+  // Resolve the company's accounts up front. We need this for the two
+  // queries that hang off account_id (channel_configs, messages) and for
+  // step 1 (accounts count).
+  const { data: companyAccounts } = await admin
+    .from('accounts')
+    .select('id')
+    .eq('company_id', companyId)
+  const companyAccountIds = (companyAccounts ?? []).map((a) => a.id as string)
+
+  // If the company has zero accounts, the credentials + first-reply
+  // queries would 400 with `in: ()`, so short-circuit them to 0.
+  const hasAccounts = companyAccountIds.length > 0
+
+  const credsPromise = hasAccounts
+    ? admin
+        .from('channel_configs')
+        .select('account_id', { count: 'exact', head: true })
+        .in('account_id', companyAccountIds)
+        .not('config_encrypted', 'is', null)
+    : Promise.resolve({ count: 0 })
+
+  const outboundPromise = hasAccounts
+    ? admin
+        .from('messages')
+        .select('id', { count: 'exact', head: true })
+        .in('account_id', companyAccountIds)
+        .eq('direction', 'outbound')
+        .eq('sender_type', 'agent')
+    : Promise.resolve({ count: 0 })
+
+  // Run all four detection queries in parallel (where possible).
+  const [credsRes, usersRes, outboundRes] = await Promise.all([
+    credsPromise,
     admin
-      .from('channel_configs')
-      .select('account_id', { count: 'exact', head: true })
-      .not('config_encrypted', 'is', null)
-      .limit(1),
-
-    // 3. users count > 1
-    admin.from('users').select('id', { count: 'exact', head: true }),
-
-    // 4. Any outbound agent message
-    admin
-      .from('messages')
+      .from('users')
       .select('id', { count: 'exact', head: true })
-      .eq('direction', 'outbound')
-      .eq('sender_type', 'agent')
-      .limit(1),
+      .eq('company_id', companyId),
+    outboundPromise,
   ])
 
   const steps = [
-    { id: 'add_account', complete: (accountsRes.count ?? 0) > 0 },
+    { id: 'add_account', complete: companyAccountIds.length > 0 },
     { id: 'configure_credentials', complete: (credsRes.count ?? 0) > 0 },
     { id: 'invite_teammate', complete: (usersRes.count ?? 0) > 1 },
     { id: 'first_reply', complete: (outboundRes.count ?? 0) > 0 },

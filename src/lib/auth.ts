@@ -9,6 +9,8 @@
 //   - super_admin   → cross-tenant; bypasses company scope everywhere.
 //   - admin         → legacy; treated as company_admin going forward.
 //   - company_admin → manage their own company.
+//   - supervisor    → medium-trust tier between admin and member (Phase 1
+//                     preparation only; not yet enforced anywhere).
 //   - company_member → read/write within their own company.
 //   - reviewer / viewer → legacy roles, kept for back-compat.
 //
@@ -31,6 +33,17 @@ const COMPANY_ADMIN_ROLES: ReadonlySet<string> = new Set([
 ])
 
 /**
+ * Role values that are supervisor-or-above (super-set of COMPANY_ADMIN_ROLES
+ * plus the new 'supervisor' tier).
+ */
+const SUPERVISOR_ROLES: ReadonlySet<string> = new Set([
+  'super_admin',
+  'admin',
+  'company_admin',
+  'supervisor',
+])
+
+/**
  * Returns true if the role string is super_admin (cross-tenant).
  * Pure function — accepts a string so callers can pass `user.role` from
  * any source without an extra await.
@@ -45,6 +58,17 @@ export function isSuperAdmin(role: string | null | undefined): boolean {
  */
 export function isCompanyAdmin(role: string | null | undefined): boolean {
   return !!role && COMPANY_ADMIN_ROLES.has(role)
+}
+
+// True for supervisor or above. Use to gate medium-trust ops (assign, merge,
+// approve AI) that go beyond agent-level reply but aren't full admin.
+//
+// PHASE 1 PREPARATION ONLY — the supervisor role exists in the schema and the
+// helper is available, but no API endpoints or RLS policies enforce it yet.
+// Phase 2 will gate destructive ops (assign, merge, CSAT send, AI approve)
+// behind isSupervisor().
+export function isSupervisor(role: string | null | undefined): boolean {
+  return !!role && SUPERVISOR_ROLES.has(role)
 }
 
 export interface CurrentUser {

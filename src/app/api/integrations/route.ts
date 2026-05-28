@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase-server'
+import { isSuperAdmin } from '@/lib/auth'
 import {
   getIntegrationStatus,
   saveIntegration,
@@ -15,7 +16,19 @@ type Gate =
   | { ok: true; userId: string }
   | { ok: false; status: number; error: string }
 
-async function requireAdmin(): Promise<Gate> {
+/**
+ * Super_admin-only gate. The integrations table stores PLATFORM-WIDE OAuth
+ * client credentials (one Google client + one Azure client for the entire
+ * deploy), so allowing any company_admin to read/rotate them would let one
+ * tenant break sign-in for everyone else. The matching UI layout at
+ * `src/app/(dashboard)/admin/integrations/layout.tsx` enforces the same
+ * gate at the page level.
+ *
+ * TODO(multi-tenant): if we ever make integrations per-tenant (add a
+ * company_id column and scope reads/writes), relax this to company_admin
+ * of the matching tenant.
+ */
+async function requireSuperAdmin(): Promise<Gate> {
   const supabase = await createServerSupabaseClient()
   const {
     data: { user },
@@ -27,7 +40,9 @@ async function requireAdmin(): Promise<Gate> {
     .select('role')
     .eq('id', user.id)
     .maybeSingle()
-  if (!['admin','super_admin','company_admin'].includes(profile?.role ?? '')) return { ok: false, status: 403, error: 'Admin only' }
+  if (!isSuperAdmin(profile?.role ?? null)) {
+    return { ok: false, status: 403, error: 'Super admin only' }
+  }
   return { ok: true, userId: user.id }
 }
 
@@ -68,7 +83,7 @@ function validateConfig(
 
 export async function GET() {
   const requestId = await getRequestId()
-  const gate = await requireAdmin()
+  const gate = await requireSuperAdmin()
   if (!gate.ok) return NextResponse.json({ error: gate.error, request_id: requestId }, { status: gate.status })
 
   try {
@@ -93,7 +108,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const requestId = await getRequestId()
-  const gate = await requireAdmin()
+  const gate = await requireSuperAdmin()
   if (!gate.ok) return NextResponse.json({ error: gate.error, request_id: requestId }, { status: gate.status })
 
   try {
@@ -149,7 +164,7 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   const requestId = await getRequestId()
-  const gate = await requireAdmin()
+  const gate = await requireSuperAdmin()
   if (!gate.ok) return NextResponse.json({ error: gate.error, request_id: requestId }, { status: gate.status })
 
   const url = new URL(request.url)

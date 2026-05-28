@@ -45,5 +45,13 @@ export default async function AISettingsPage() {
     }
   }
 
-  return <AISettingsClient companyAccountIds={companyAccountIds} />
+  // Resolve the company_id used to scope ai_config reads/writes.
+  //   - super_admin → scope to their own company by default. They can still
+  //     edit other tenants via SQL or a future tenant picker.
+  //   - company_admin → their company_id (guaranteed non-null by the access
+  //     check above + RLS, but we pass null when missing to keep the client
+  //     defensive).
+  const companyId: string | null = profile?.company_id ?? null
+
+  return <AISettingsClient companyAccountIds={companyAccountIds} companyId={companyId} />
 }

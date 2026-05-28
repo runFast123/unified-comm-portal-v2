@@ -239,24 +239,76 @@ interface AIConfig {
   temperature: number
 }
 
-async function getAIConfig(): Promise<AIConfig> {
+/**
+ * Resolves the active AI provider config for the account's company.
+ *
+ * Lookup order:
+ *   1. `ai_config` row scoped to the account's `company_id` with `is_active=true`.
+ *   2. Legacy global `ai_config` row (`company_id IS NULL AND is_active=true`)
+ *      — kept as a read-only fallback for callers without a company context.
+ *   3. Environment variables (`AI_API_KEY`, `AI_BASE_URL`, …).
+ *
+ * Any DB error is swallowed so the call falls through to env vars and the
+ * caller still gets a usable config. Throws only when neither DB nor env
+ * provides an API key.
+ */
+async function getAIConfig(accountId?: string): Promise<AIConfig> {
   try {
     const supabase = await createServiceRoleClient()
-    const { data } = await supabase
+
+    // 1. Per-company row — only attempted when we can resolve a company_id
+    // from the supplied account. Callers without an accountId fall straight
+    // through to step 2 (legacy global fallback).
+    let companyId: string | null = null
+    if (accountId) {
+      const { data: account } = await supabase
+        .from('accounts')
+        .select('company_id')
+        .eq('id', accountId)
+        .maybeSingle()
+      companyId = (account as { company_id?: string | null } | null)?.company_id ?? null
+    }
+
+    if (companyId) {
+      const { data: scoped } = await supabase
+        .from('ai_config')
+        .select('base_url, api_key, model, max_tokens, temperature')
+        .eq('company_id', companyId)
+        .eq('is_active', true)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (scoped?.api_key) {
+        return {
+          base_url: scoped.base_url,
+          api_key: scoped.api_key,
+          model: scoped.model,
+          max_tokens: scoped.max_tokens,
+          temperature: Number(scoped.temperature),
+        }
+      }
+    }
+
+    // 2. Legacy global fallback. We use `.is('company_id', null)` so the
+    // result excludes per-company rows — important because the partial
+    // unique index allows exactly ONE active global row.
+    const { data: legacy } = await supabase
       .from('ai_config')
       .select('base_url, api_key, model, max_tokens, temperature')
+      .is('company_id', null)
       .eq('is_active', true)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle()
 
-    if (data?.api_key) {
+    if (legacy?.api_key) {
       return {
-        base_url: data.base_url,
-        api_key: data.api_key,
-        model: data.model,
-        max_tokens: data.max_tokens,
-        temperature: Number(data.temperature),
+        base_url: legacy.base_url,
+        api_key: legacy.api_key,
+        model: legacy.model,
+        max_tokens: legacy.max_tokens,
+        temperature: Number(legacy.temperature),
       }
     }
   } catch {
@@ -317,7 +369,7 @@ export async function callAI(
     await assertWithinBudget(ctx.account_id)
   }
 
-  const config = await getAIConfig()
+  const config = await getAIConfig(ctx.account_id)
   let lastError: Error | null = null
   // Metrics envelope around the retry loop. We measure END-TO-END duration
   // (including retries + backoff sleeps) so the operational dashboard reflects

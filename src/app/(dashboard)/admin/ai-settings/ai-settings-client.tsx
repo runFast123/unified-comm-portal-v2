@@ -51,9 +51,19 @@ interface AISettingsClientProps {
    * skipped to avoid the "no .in() filter = update everything" footgun).
    */
   companyAccountIds: string[] | null
+  /**
+   * Company ID used to scope every `ai_config` read/write to a single tenant
+   * row. Resolved server-side from the caller's profile.
+   *
+   * `null` indicates the caller is a super_admin or otherwise has no
+   * company_id on file — in that case we skip ai_config writes entirely
+   * to avoid mutating the legacy global row by accident. Super-admins can
+   * use SQL or a future tenant picker for cross-tenant edits.
+   */
+  companyId: string | null
 }
 
-export default function AISettingsClient({ companyAccountIds }: AISettingsClientProps) {
+export default function AISettingsClient({ companyAccountIds, companyId }: AISettingsClientProps) {
   const supabase = createClient()
   const [enabledCategories, setEnabledCategories] = useState<Set<Category>>(
     new Set(allCategories)
@@ -129,11 +139,19 @@ export default function AISettingsClient({ companyAccountIds }: AISettingsClient
     async function loadData() {
       setLoading(true)
 
-      // Load AI config
-      const { data: aiConfig } = await supabase
+      // Load AI config scoped to the caller's company. Without a company_id
+      // we fall back to the legacy global row (company_id IS NULL) so the
+      // form still hydrates for super_admins / misconfigured users.
+      let aiConfigQuery = supabase
         .from('ai_config')
         .select('*')
         .eq('is_active', true)
+      if (companyId) {
+        aiConfigQuery = aiConfigQuery.eq('company_id', companyId)
+      } else {
+        aiConfigQuery = aiConfigQuery.is('company_id', null)
+      }
+      const { data: aiConfig } = await aiConfigQuery
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle()
@@ -187,17 +205,37 @@ export default function AISettingsClient({ companyAccountIds }: AISettingsClient
       setLoading(false)
     }
     loadData()
-  }, [])
+    // companyId is server-resolved and stable for the lifetime of the page,
+    // but we list it as a dep so a future tenant-picker would re-fetch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyId])
 
   const handleSaveProvider = useCallback(async () => {
     setProviderSaving(true)
     setProviderResult(null)
 
     try {
-      // Upsert: deactivate old, insert new with current prompts preserved
-      await supabase.from('ai_config').update({ is_active: false }).eq('is_active', true)
+      // Refuse to write without a company_id — would otherwise create
+      // either an orphan row or mutate the legacy global fallback, both
+      // of which were the source of the cross-tenant leak this scoping
+      // closes.
+      if (!companyId) {
+        console.error('Cannot save AI provider without a company_id')
+        setProviderResult('error')
+        return
+      }
+
+      // Upsert: deactivate this company's old active row, then insert a
+      // fresh active row. Scoping the deactivate by company_id is critical
+      // — without it, saving here would deactivate every tenant's row.
+      await supabase
+        .from('ai_config')
+        .update({ is_active: false })
+        .eq('is_active', true)
+        .eq('company_id', companyId)
 
       const { error } = await supabase.from('ai_config').insert({
+        company_id: companyId,
         provider_name: providerName,
         base_url: baseUrl,
         api_key: apiKey,
@@ -227,7 +265,7 @@ export default function AISettingsClient({ companyAccountIds }: AISettingsClient
       setProviderSaving(false)
       setTimeout(() => setProviderResult(null), 4000)
     }
-  }, [providerName, baseUrl, apiKey, model, maxTokens, temperature, prompts, confidenceThreshold, trustThreshold, fallbackBehavior, autoResolveMarketing])
+  }, [companyId, providerName, baseUrl, apiKey, model, maxTokens, temperature, prompts, confidenceThreshold, trustThreshold, fallbackBehavior, autoResolveMarketing])
 
   const handleTestConnection = useCallback(async () => {
     setTesting(true)
@@ -279,27 +317,37 @@ export default function AISettingsClient({ companyAccountIds }: AISettingsClient
       const errors: string[] = []
 
       // 1. Save ALL settings to ai_config (provider + prompts + thresholds)
-      const { error: configError } = await supabase
-        .from('ai_config')
-        .update({
-          provider_name: providerName,
-          base_url: baseUrl,
-          api_key: apiKey,
-          model,
-          max_tokens: maxTokens,
-          temperature,
-          email_prompt: prompts.email,
-          teams_prompt: prompts.teams,
-          whatsapp_prompt: prompts.whatsapp,
-          confidence_threshold: thresholdDecimal,
-          trust_threshold: trustThreshold,
-          fallback_behavior: fallbackBehavior,
-          auto_resolve_marketing: autoResolveMarketing,
-        })
-        .eq('is_active', true)
+      //
+      // SECURITY: scope the update by company_id to avoid mutating every
+      // tenant's row. When no company_id is available (super_admin without
+      // a company), skip the ai_config write entirely — they can use a
+      // future tenant picker / SQL for cross-tenant edits.
+      if (!companyId) {
+        errors.push('ai_config: no company_id resolved for caller; ai_config write skipped')
+      } else {
+        const { error: configError } = await supabase
+          .from('ai_config')
+          .update({
+            provider_name: providerName,
+            base_url: baseUrl,
+            api_key: apiKey,
+            model,
+            max_tokens: maxTokens,
+            temperature,
+            email_prompt: prompts.email,
+            teams_prompt: prompts.teams,
+            whatsapp_prompt: prompts.whatsapp,
+            confidence_threshold: thresholdDecimal,
+            trust_threshold: trustThreshold,
+            fallback_behavior: fallbackBehavior,
+            auto_resolve_marketing: autoResolveMarketing,
+          })
+          .eq('is_active', true)
+          .eq('company_id', companyId)
 
-      if (configError) {
-        errors.push(`ai_config: ${configError.message}`)
+        if (configError) {
+          errors.push(`ai_config: ${configError.message}`)
+        }
       }
 
       // 2. Sync prompts to accounts table for API routes to read.
@@ -375,7 +423,7 @@ export default function AISettingsClient({ companyAccountIds }: AISettingsClient
       setSaving(false)
       setTimeout(() => setSaveResult(null), 4000)
     }
-  }, [confidenceThreshold, trustThreshold, prompts, fallbackBehavior, providerName, baseUrl, apiKey, model, maxTokens, temperature, autoResolveMarketing, companyAccountIds])
+  }, [confidenceThreshold, trustThreshold, prompts, fallbackBehavior, providerName, baseUrl, apiKey, model, maxTokens, temperature, autoResolveMarketing, companyAccountIds, companyId])
 
   // Discard reverts in-memory state by re-pulling the persisted ai_config row.
   // We re-set every field the load effect originally set so the form snaps
@@ -384,10 +432,18 @@ export default function AISettingsClient({ companyAccountIds }: AISettingsClient
     // Tell the watched-state effect to ignore the cascade of setters below —
     // we want the form to snap back to clean state, not re-flag as dirty.
     skipNextDirtyRef.current = true
-    const { data: aiConfig } = await supabase
+    // Mirror the load path: scope by company_id when available, else use the
+    // legacy global fallback row.
+    let q = supabase
       .from('ai_config')
       .select('*')
       .eq('is_active', true)
+    if (companyId) {
+      q = q.eq('company_id', companyId)
+    } else {
+      q = q.is('company_id', null)
+    }
+    const { data: aiConfig } = await q
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle()
@@ -415,7 +471,7 @@ export default function AISettingsClient({ companyAccountIds }: AISettingsClient
       }
     }
     setDirty(false)
-  }, [supabase])
+  }, [supabase, companyId])
 
   function AIUsageCard() {
     const [usageStats, setUsageStats] = useState({ classifications: 0, replies: 0, sent: 0 })

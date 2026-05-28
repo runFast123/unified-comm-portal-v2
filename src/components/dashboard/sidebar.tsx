@@ -113,7 +113,10 @@ const ADMIN_ITEMS: NavItem[] = [
   { label: 'Statuses & Tags', href: '/admin/taxonomy', icon: Tags },
   { label: 'Company Signatures', href: '/admin/company-signatures', icon: FileText },
   { label: 'CSAT', href: '/admin/csat', icon: Smile },
-  { label: 'Integrations', href: '/admin/integrations', icon: KeyRound },
+  // Super_admin only — manages platform-wide OAuth client credentials shared
+  // by every tenant. See `src/app/(dashboard)/admin/integrations/layout.tsx`
+  // and `src/app/api/integrations/**` for the matching server-side gates.
+  { label: 'Integrations', href: '/admin/integrations', icon: KeyRound, roles: ['super_admin'] },
   { label: 'AI Settings', href: '/admin/ai-settings', icon: Brain },
   { label: 'Notifications', href: '/admin/notifications', icon: Bell },
   { label: 'API Tokens', href: '/admin/api-tokens', icon: KeyRound },
