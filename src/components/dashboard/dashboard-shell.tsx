@@ -376,6 +376,8 @@ export function DashboardShell({
             <CompanySwitcher
               companies={accessibleCompanies}
               currentCompanyId={currentCompanyId}
+              activeCompanyId={activeCompanyId}
+              canSeeAllCompanies={canSeeAllCompanies}
             />
             <MentionsBell />
             <NotificationCenter />
