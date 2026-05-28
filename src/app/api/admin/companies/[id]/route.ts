@@ -27,6 +27,9 @@ interface UpdateBody {
   monthly_ai_budget_usd?: number | null
   settings?: Record<string, unknown> | null
   default_email_signature?: string | null
+  // Phase 3 soft-archive. true → archive (sets archived_at = now()),
+  // false → restore (clears archived_at). Super-admin only.
+  archived?: boolean
 }
 
 async function requireCompanyAdminFor(companyId: string) {
@@ -194,6 +197,29 @@ export async function PATCH(
     patch.default_email_signature = body.default_email_signature
   }
 
+  // Phase 3: soft-archive / restore. This is destructive-ish (members lose
+  // access while archived) so we gate it to super_admin even though the
+  // rest of the PATCH allows company_admin of the target.
+  let archiveAction: 'archive' | 'restore' | null = null
+  if (body.archived !== undefined) {
+    if (typeof body.archived !== 'boolean') {
+      return NextResponse.json({ error: 'archived must be a boolean' }, { status: 400 })
+    }
+    if (!gate.isSuper) {
+      return NextResponse.json(
+        { error: 'Only super_admin can archive or restore companies' },
+        { status: 403 },
+      )
+    }
+    if (body.archived) {
+      patch.archived_at = new Date().toISOString()
+      archiveAction = 'archive'
+    } else {
+      patch.archived_at = null
+      archiveAction = 'restore'
+    }
+  }
+
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: 'No fields provided to update' }, { status: 400 })
   }
@@ -217,7 +243,7 @@ export async function PATCH(
     .update(patch)
     .eq('id', id)
     .select(
-      'id, name, slug, logo_url, accent_color, monthly_ai_budget_usd, settings, default_email_signature, created_at, updated_at',
+      'id, name, slug, logo_url, accent_color, monthly_ai_budget_usd, settings, default_email_signature, archived_at, created_at, updated_at',
     )
     .single()
 
@@ -229,13 +255,32 @@ export async function PATCH(
   }
 
   try {
-    await admin.from('audit_log').insert({
-      user_id: gate.userId,
-      action: 'company.update',
-      entity_type: 'company',
-      entity_id: id,
-      details: { changed: Object.keys(patch) },
-    })
+    // When the patch was purely an archive/restore, emit a dedicated audit
+    // action so it stands out in the log feed instead of being lost in a
+    // generic "company.update changed=[archived_at]" row.
+    const onlyArchiveChange =
+      archiveAction !== null && Object.keys(patch).length === 1 && 'archived_at' in patch
+
+    if (onlyArchiveChange) {
+      await admin.from('audit_log').insert({
+        user_id: gate.userId,
+        action: archiveAction === 'archive' ? 'company.archive' : 'company.restore',
+        entity_type: 'company',
+        entity_id: id,
+        details: { name: updated.name, archived_at: updated.archived_at },
+      })
+    } else {
+      await admin.from('audit_log').insert({
+        user_id: gate.userId,
+        action: 'company.update',
+        entity_type: 'company',
+        entity_id: id,
+        details: {
+          changed: Object.keys(patch),
+          ...(archiveAction ? { archive_action: archiveAction } : {}),
+        },
+      })
+    }
   } catch { /* non-fatal */ }
 
   return NextResponse.json({ company: updated })

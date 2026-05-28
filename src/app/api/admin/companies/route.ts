@@ -30,17 +30,28 @@ async function requireSuperAdmin() {
   return { ok: true as const, userId: user.id }
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const gate = await requireSuperAdmin()
   if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: gate.status })
 
+  const url = new URL(request.url)
+  const includeArchived = url.searchParams.get('include_archived') === 'true'
+
   const admin = await createServiceRoleClient()
-  const { data, error } = await admin
+  let query = admin
     .from('companies')
     .select(
-      'id, name, slug, logo_url, accent_color, monthly_ai_budget_usd, created_at, updated_at'
+      'id, name, slug, logo_url, accent_color, monthly_ai_budget_usd, archived_at, created_at, updated_at'
     )
     .order('name', { ascending: true })
+
+  // Default: hide archived. Phase 3 introduced soft-archive; tooling should
+  // opt-in with ?include_archived=true to see them.
+  if (!includeArchived) {
+    query = query.is('archived_at', null)
+  }
+
+  const { data, error } = await query
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ companies: data ?? [] })
@@ -102,15 +113,41 @@ export async function POST(request: Request) {
     )
   }
 
+  // Phase 3 auto-provisioning: seed default ai_config, statuses, and tags so
+  // the company is immediately usable from the detail page. The RPC is
+  // idempotent — if it fails (e.g. migration not yet applied) we log a
+  // warning but DO NOT roll back the company insert; an admin can re-run
+  // the seed manually later.
+  let seeded = false
+  let seedError: string | null = null
+  try {
+    const { error: seedErr } = await admin.rpc('seed_company_defaults', {
+      p_company_id: created.id,
+    })
+    if (seedErr) {
+      seedError = seedErr.message
+      console.warn(
+        `[companies POST] seed_company_defaults failed for ${created.id}: ${seedErr.message}`,
+      )
+    } else {
+      seeded = true
+    }
+  } catch (err) {
+    seedError = err instanceof Error ? err.message : String(err)
+    console.warn(
+      `[companies POST] seed_company_defaults threw for ${created.id}: ${seedError}`,
+    )
+  }
+
   try {
     await admin.from('audit_log').insert({
       user_id: gate.userId,
       action: 'company.create',
       entity_type: 'company',
       entity_id: created.id,
-      details: { name, slug },
+      details: { name, slug, seeded, seed_error: seedError },
     })
   } catch { /* non-fatal */ }
 
-  return NextResponse.json({ company: created }, { status: 201 })
+  return NextResponse.json({ company: created, seeded }, { status: 201 })
 }

@@ -5,6 +5,8 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
   ArrowLeft,
+  Archive,
+  ArchiveRestore,
   Building2,
   Users as UsersIcon,
   Briefcase,
@@ -27,6 +29,7 @@ import { Badge } from '@/components/ui/badge'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
 import { useToast } from '@/components/ui/toast'
 import { timeAgo } from '@/lib/utils'
+import { TenantSettingsLinks } from '@/components/dashboard/tenant-settings-links'
 
 interface AccountRow {
   id: string
@@ -67,6 +70,7 @@ interface Company {
   monthly_ai_budget_usd: number | null
   settings: Record<string, unknown> | null
   default_email_signature: string | null
+  archived_at: string | null
   created_at: string
   updated_at: string | null
 }
@@ -95,6 +99,8 @@ export function CompanyDetailClient({ data }: { data: CompanyDetailData }) {
   const router = useRouter()
   const { toast } = useToast()
   const [tab, setTab] = useState<TabKey>('overview')
+  const [archiveOpen, setArchiveOpen] = useState(false)
+  const [archiveBusy, setArchiveBusy] = useState(false)
 
   const tabs: { key: TabKey; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
     { key: 'overview', label: 'Overview', icon: Building2 },
@@ -102,6 +108,31 @@ export function CompanyDetailClient({ data }: { data: CompanyDetailData }) {
     { key: 'users', label: 'Users', icon: UsersIcon },
     { key: 'audit', label: 'Audit log', icon: ScrollText },
   ]
+
+  const isArchived = data.company.archived_at !== null
+
+  const toggleArchive = useCallback(async () => {
+    setArchiveBusy(true)
+    try {
+      const res = await fetch(`/api/admin/companies/${data.company.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ archived: !isArchived }),
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast.error(body?.error ?? (isArchived ? 'Restore failed' : 'Archive failed'))
+        return
+      }
+      toast.success(isArchived ? 'Company restored' : 'Company archived')
+      setArchiveOpen(false)
+      router.refresh()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Network error')
+    } finally {
+      setArchiveBusy(false)
+    }
+  }, [data.company.id, isArchived, router, toast])
 
   return (
     <div className="space-y-6">
@@ -135,13 +166,49 @@ export function CompanyDetailClient({ data }: { data: CompanyDetailData }) {
               <span>{data.users.length} users</span>
             </p>
           </div>
-          {data.canSuper && (
-            <Badge variant="info" className="ml-auto">
-              <ShieldCheck className="mr-1 h-3 w-3" /> Super-admin view
-            </Badge>
-          )}
+          <div className="ml-auto flex items-center gap-2">
+            {isArchived && (
+              <Badge variant="warning">
+                <Archive className="mr-1 h-3 w-3" /> Archived
+              </Badge>
+            )}
+            {data.canSuper && (
+              <Badge variant="info">
+                <ShieldCheck className="mr-1 h-3 w-3" /> Super-admin view
+              </Badge>
+            )}
+            {data.canSuper && (
+              <Button
+                variant={isArchived ? 'secondary' : 'danger'}
+                size="sm"
+                onClick={() => setArchiveOpen(true)}
+              >
+                {isArchived ? (
+                  <>
+                    <ArchiveRestore className="h-4 w-4" /> Restore
+                  </>
+                ) : (
+                  <>
+                    <Archive className="h-4 w-4" /> Archive
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
         </div>
       </div>
+
+      {isArchived && (
+        <div className="flex items-start gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
+          <Archive className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
+          <div className="text-sm">
+            <p className="font-medium text-amber-900">This company is archived.</p>
+            <p className="text-amber-800">
+              Members are locked out. Restore to re-enable.
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="border-b border-gray-200">
         <nav className="-mb-px flex flex-wrap gap-2" aria-label="Tabs">
@@ -169,14 +236,21 @@ export function CompanyDetailClient({ data }: { data: CompanyDetailData }) {
       </div>
 
       {tab === 'overview' && (
-        <OverviewTab
-          company={data.company}
-          onSaved={(c) => {
-            // Re-fetch the page so all tabs see the latest state.
-            router.refresh()
-            toast.success(`Saved ${c.name}`)
-          }}
-        />
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+          <div className="xl:col-span-2">
+            <OverviewTab
+              company={data.company}
+              onSaved={(c) => {
+                // Re-fetch the page so all tabs see the latest state.
+                router.refresh()
+                toast.success(`Saved ${c.name}`)
+              }}
+            />
+          </div>
+          <div>
+            <TenantSettingsLinks companyId={data.company.id} />
+          </div>
+        </div>
       )}
 
       {tab === 'accounts' && (
@@ -199,6 +273,54 @@ export function CompanyDetailClient({ data }: { data: CompanyDetailData }) {
       )}
 
       {tab === 'audit' && <AuditTab audit={data.audit} />}
+
+      <Modal
+        open={archiveOpen}
+        onClose={() => !archiveBusy && setArchiveOpen(false)}
+        title={isArchived ? 'Restore company?' : 'Archive company?'}
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => setArchiveOpen(false)}
+              disabled={archiveBusy}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant={isArchived ? 'primary' : 'danger'}
+              onClick={toggleArchive}
+              loading={archiveBusy}
+              disabled={archiveBusy}
+            >
+              {isArchived ? (
+                <>
+                  <ArchiveRestore className="h-4 w-4" /> Restore
+                </>
+              ) : (
+                <>
+                  <Archive className="h-4 w-4" /> Archive
+                </>
+              )}
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-gray-600">
+          {isArchived ? (
+            <>
+              Restoring <strong>{data.company.name}</strong> will re-enable access for
+              all members and unhide the company from the default list view.
+            </>
+          ) : (
+            <>
+              Archiving <strong>{data.company.name}</strong> will lock all members out
+              and hide the company from the default list view. Accounts, conversations,
+              and audit history are preserved. You can restore the company at any time.
+            </>
+          )}
+        </p>
+      </Modal>
     </div>
   )
 }
@@ -449,7 +571,7 @@ function AccountsTab({
               <PlugZap className="h-4 w-4" /> Attach existing account
             </Button>
           )}
-          <Link href="/admin/accounts" className="inline-flex">
+          <Link href={`/admin/accounts?company_id=${companyId}`} className="inline-flex">
             <Button variant="secondary">
               <Plug className="h-4 w-4" /> Add account
             </Button>

@@ -12,8 +12,15 @@ export const dynamic = 'force-dynamic'
  *
  * Privilege check happens here (server-side); page redirects non-super
  * admins to /dashboard.
+ *
+ * Phase 3: supports `?include_archived=true` to surface soft-archived
+ * companies (the client UI also has a toggle that refetches the list).
  */
-export default async function CompaniesAdminPage() {
+export default async function CompaniesAdminPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ include_archived?: string }>
+}) {
   const supabase = await createServerSupabaseClient()
   const { data: { user: authUser } } = await supabase.auth.getUser()
   if (!authUser) redirect('/login')
@@ -23,13 +30,21 @@ export default async function CompaniesAdminPage() {
     redirect('/dashboard')
   }
 
+  const sp = (await searchParams) ?? {}
+  const includeArchived = sp.include_archived === 'true'
+
   const admin = await createServiceRoleClient()
 
-  // Companies + the few fields we render in the table.
-  const { data: companies } = await admin
+  // Companies + the few fields we render in the table. Hide archived by
+  // default; opt-in with ?include_archived=true.
+  let companiesQuery = admin
     .from('companies')
-    .select('id, name, slug, logo_url, accent_color, monthly_ai_budget_usd, created_at')
+    .select('id, name, slug, logo_url, accent_color, monthly_ai_budget_usd, archived_at, created_at')
     .order('name', { ascending: true })
+  if (!includeArchived) {
+    companiesQuery = companiesQuery.is('archived_at', null)
+  }
+  const { data: companies } = await companiesQuery
 
   const list = (companies as Array<{
     id: string
@@ -38,6 +53,7 @@ export default async function CompaniesAdminPage() {
     logo_url: string | null
     accent_color: string | null
     monthly_ai_budget_usd: number | null
+    archived_at: string | null
     created_at: string
   }> | null) ?? []
 
@@ -102,11 +118,17 @@ export default async function CompaniesAdminPage() {
     logo_url: c.logo_url,
     accent_color: c.accent_color,
     monthly_ai_budget_usd: c.monthly_ai_budget_usd,
+    archived_at: c.archived_at,
     created_at: c.created_at,
     accounts_count: accountsByCompany[c.id] ?? 0,
     users_count: usersByCompany[c.id] ?? 0,
     monthly_ai_spend_usd: spendByCompany[c.id] ?? 0,
   }))
 
-  return <CompaniesAdminClient initialCompanies={rows} />
+  return (
+    <CompaniesAdminClient
+      initialCompanies={rows}
+      initialIncludeArchived={includeArchived}
+    />
+  )
 }
