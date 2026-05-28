@@ -75,7 +75,7 @@ export async function GET(request: Request) {
   // returned on creation. If a customer loses it they must rotate.
   let query = admin
     .from('webhook_subscriptions')
-    .select('id, company_id, url, events, is_active, created_at, last_delivery_at, consecutive_failures')
+    .select('id, company_id, url, events, is_active, created_at, last_delivery_at, consecutive_failures, secret_rotated_at')
     .order('created_at', { ascending: false })
 
   if (isSuperAdmin(gate.role)) {

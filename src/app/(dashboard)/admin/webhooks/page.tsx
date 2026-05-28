@@ -24,7 +24,7 @@ export default async function WebhooksAdminPage() {
   const admin = await createServiceRoleClient()
   let query = admin
     .from('webhook_subscriptions')
-    .select('id, company_id, url, events, is_active, created_at, last_delivery_at, consecutive_failures')
+    .select('id, company_id, url, events, is_active, created_at, last_delivery_at, consecutive_failures, secret_rotated_at')
     .order('created_at', { ascending: false })
   if (!isSuperAdmin(profile!.role) && profile?.company_id) {
     query = query.eq('company_id', profile.company_id)

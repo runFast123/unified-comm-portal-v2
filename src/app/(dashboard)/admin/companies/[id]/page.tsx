@@ -151,6 +151,42 @@ export default async function CompanyDetailPage({
     actor_email: r.user_id ? actorMap[r.user_id] ?? null : null,
   }))
 
+  // Phase 4: Tenant-onboarding banner. We compute the same signals the
+  // /api/onboarding/status route exposes, but server-side so the banner
+  // renders without an extra client round-trip and so a super_admin
+  // viewing a tenant they don't belong to still sees that tenant's
+  // status (the API route is intentionally scoped to the caller's own
+  // company and would otherwise return the WRONG tenant's data here).
+  const companyAccountIds = ((accountsRows as AccountRow[] | null) ?? []).map((a) => a.id)
+  const hasAccounts = companyAccountIds.length > 0
+
+  const credsPromise = hasAccounts
+    ? admin
+        .from('channel_configs')
+        .select('account_id', { count: 'exact', head: true })
+        .in('account_id', companyAccountIds)
+        .not('config_encrypted', 'is', null)
+    : Promise.resolve({ count: 0 })
+
+  const outboundPromise = hasAccounts
+    ? admin
+        .from('messages')
+        .select('id', { count: 'exact', head: true })
+        .in('account_id', companyAccountIds)
+        .eq('direction', 'outbound')
+        .eq('sender_type', 'agent')
+    : Promise.resolve({ count: 0 })
+
+  const [credsRes, outboundRes] = await Promise.all([credsPromise, outboundPromise])
+
+  const onboardingSteps = [
+    { id: 'add_account' as const, complete: hasAccounts },
+    { id: 'configure_credentials' as const, complete: (credsRes.count ?? 0) > 0 },
+    { id: 'invite_teammate' as const, complete: ((usersRows as UserRow[] | null) ?? []).length > 1 },
+    { id: 'first_reply' as const, complete: (outboundRes.count ?? 0) > 0 },
+  ]
+  const onboardingComplete = onboardingSteps.every((s) => s.complete)
+
   const data: CompanyDetailData = {
     company: companyRow as CompanyDetailData['company'],
     accounts: ((accountsRows as AccountRow[] | null) ?? []),
@@ -158,6 +194,10 @@ export default async function CompanyDetailPage({
     users: ((usersRows as UserRow[] | null) ?? []),
     audit,
     canSuper: isSuper,
+    onboarding: {
+      steps: onboardingSteps,
+      allComplete: onboardingComplete,
+    },
   }
 
   return <CompanyDetailClient data={data} />

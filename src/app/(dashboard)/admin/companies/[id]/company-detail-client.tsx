@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
@@ -18,6 +18,14 @@ import {
   PlugZap,
   ShieldCheck,
   ExternalLink,
+  CheckCircle2,
+  Circle,
+  Upload,
+  Trash2,
+  ChevronDown,
+  ChevronRight,
+  Loader2,
+  Sparkles,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -75,6 +83,22 @@ interface Company {
   updated_at: string | null
 }
 
+export type OnboardingStepId =
+  | 'add_account'
+  | 'configure_credentials'
+  | 'invite_teammate'
+  | 'first_reply'
+
+export interface OnboardingStep {
+  id: OnboardingStepId
+  complete: boolean
+}
+
+export interface OnboardingStatus {
+  steps: OnboardingStep[]
+  allComplete: boolean
+}
+
 export interface CompanyDetailData {
   company: Company
   accounts: AccountRow[]
@@ -82,6 +106,14 @@ export interface CompanyDetailData {
   users: UserRow[]
   audit: AuditRow[]
   canSuper: boolean
+  onboarding: OnboardingStatus
+}
+
+const ONBOARDING_LABELS: Record<OnboardingStepId, string> = {
+  add_account: 'At least one channel connected',
+  configure_credentials: 'Channel credentials configured',
+  invite_teammate: 'At least one company_admin user',
+  first_reply: 'At least one outbound message sent',
 }
 
 type TabKey = 'overview' | 'accounts' | 'users' | 'audit'
@@ -172,6 +204,11 @@ export function CompanyDetailClient({ data }: { data: CompanyDetailData }) {
                 <Archive className="mr-1 h-3 w-3" /> Archived
               </Badge>
             )}
+            {!isArchived && !data.onboarding.allComplete && (
+              <Badge variant="warning">
+                <Sparkles className="mr-1 h-3 w-3" /> Setup in progress
+              </Badge>
+            )}
             {data.canSuper && (
               <Badge variant="info">
                 <ShieldCheck className="mr-1 h-3 w-3" /> Super-admin view
@@ -237,9 +274,13 @@ export function CompanyDetailClient({ data }: { data: CompanyDetailData }) {
 
       {tab === 'overview' && (
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-          <div className="xl:col-span-2">
+          <div className="xl:col-span-2 space-y-6">
+            {!data.onboarding.allComplete && (
+              <OnboardingBanner status={data.onboarding} />
+            )}
             <OverviewTab
               company={data.company}
+              canSuper={data.canSuper}
               onSaved={(c) => {
                 // Re-fetch the page so all tabs see the latest state.
                 router.refresh()
@@ -329,15 +370,19 @@ export function CompanyDetailClient({ data }: { data: CompanyDetailData }) {
 
 function OverviewTab({
   company,
+  canSuper,
   onSaved,
 }: {
   company: Company
+  canSuper: boolean
   onSaved: (c: Company) => void
 }) {
+  const router = useRouter()
   const { toast } = useToast()
   const [name, setName] = useState(company.name)
   const [slug, setSlug] = useState(company.slug ?? '')
   const [logoUrl, setLogoUrl] = useState(company.logo_url ?? '')
+  const [showAdvancedLogo, setShowAdvancedLogo] = useState(false)
   const [accentColor, setAccentColor] = useState(company.accent_color ?? '')
   const [budget, setBudget] = useState(
     company.monthly_ai_budget_usd != null ? String(company.monthly_ai_budget_usd) : '',
@@ -421,12 +466,46 @@ function OverviewTab({
             placeholder="acme"
           />
         </div>
-        <Input
-          label="Logo URL"
-          value={logoUrl}
-          onChange={(e) => setLogoUrl(e.target.value)}
-          placeholder="https://..."
+        <LogoUploader
+          companyId={company.id}
+          companyName={company.name}
+          currentLogoUrl={company.logo_url}
+          canSuper={canSuper}
+          onChanged={(next) => {
+            // Keep the visible URL field in sync so a follow-up "Save"
+            // doesn't clobber the uploaded logo with the previous text.
+            setLogoUrl(next ?? '')
+            router.refresh()
+          }}
         />
+
+        <div>
+          <button
+            type="button"
+            onClick={() => setShowAdvancedLogo((v) => !v)}
+            className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700"
+          >
+            {showAdvancedLogo ? (
+              <ChevronDown className="h-3.5 w-3.5" />
+            ) : (
+              <ChevronRight className="h-3.5 w-3.5" />
+            )}
+            Advanced: use external URL
+          </button>
+          {showAdvancedLogo && (
+            <div className="mt-2">
+              <Input
+                label="Logo URL"
+                value={logoUrl}
+                onChange={(e) => setLogoUrl(e.target.value)}
+                placeholder="https://..."
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                Overrides the uploaded logo on save. Leave blank to use the upload above.
+              </p>
+            </div>
+          )}
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="mb-1.5 block text-sm font-medium text-gray-700">Accent color</label>
@@ -951,5 +1030,192 @@ function AuditTab({ audit }: { audit: AuditRow[] }) {
         </TableBody>
       </Table>
     </Card>
+  )
+}
+
+// ─── Onboarding banner ───────────────────────────────────────────────
+
+function OnboardingBanner({ status }: { status: OnboardingStatus }) {
+  return (
+    <Card className="border-amber-200 bg-amber-50/60 p-4">
+      <div className="flex items-start gap-3">
+        <Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+        <div className="flex-1">
+          <p className="text-sm font-semibold text-amber-900">
+            Tenant setup checklist
+          </p>
+          <p className="mt-0.5 text-xs text-amber-800">
+            Finish these steps to fully activate this tenant.
+          </p>
+          <ul className="mt-3 space-y-1.5">
+            {status.steps.map((step) => (
+              <li key={step.id} className="flex items-center gap-2 text-sm">
+                {step.complete ? (
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+                ) : (
+                  <Circle className="h-4 w-4 shrink-0 text-gray-400" />
+                )}
+                <span
+                  className={
+                    step.complete
+                      ? 'text-gray-600 line-through decoration-emerald-600/60'
+                      : 'text-gray-800'
+                  }
+                >
+                  {ONBOARDING_LABELS[step.id]}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </Card>
+  )
+}
+
+// ─── Logo uploader ───────────────────────────────────────────────────
+
+function LogoUploader({
+  companyId,
+  companyName,
+  currentLogoUrl,
+  canSuper,
+  onChanged,
+}: {
+  companyId: string
+  companyName: string
+  currentLogoUrl: string | null
+  canSuper: boolean
+  onChanged: (nextUrl: string | null) => void
+}) {
+  const { toast } = useToast()
+  const inputRef = useRef<HTMLInputElement | null>(null)
+  const [busy, setBusy] = useState<'upload' | 'delete' | null>(null)
+
+  const handlePick = useCallback(() => {
+    inputRef.current?.click()
+  }, [])
+
+  const handleFile = useCallback(
+    async (file: File) => {
+      setBusy('upload')
+      try {
+        const form = new FormData()
+        form.append('file', file)
+        const res = await fetch(`/api/admin/companies/${companyId}/logo`, {
+          method: 'POST',
+          body: form,
+        })
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          toast.error(data?.error ?? 'Upload failed')
+          return
+        }
+        toast.success('Logo uploaded')
+        onChanged((data as { logo_url?: string | null }).logo_url ?? null)
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Network error')
+      } finally {
+        setBusy(null)
+        // Reset the input so picking the SAME file again re-fires onChange.
+        if (inputRef.current) inputRef.current.value = ''
+      }
+    },
+    [companyId, onChanged, toast],
+  )
+
+  const handleRemove = useCallback(async () => {
+    if (!confirm('Remove the logo for this company?')) return
+    setBusy('delete')
+    try {
+      const res = await fetch(`/api/admin/companies/${companyId}/logo`, {
+        method: 'DELETE',
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast.error(data?.error ?? 'Remove failed')
+        return
+      }
+      toast.success('Logo removed')
+      onChanged(null)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Network error')
+    } finally {
+      setBusy(null)
+    }
+  }, [companyId, onChanged, toast])
+
+  return (
+    <div className="rounded-lg border border-gray-200 bg-gray-50/60 p-4">
+      <div className="flex items-start gap-4">
+        {currentLogoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={currentLogoUrl}
+            alt={`${companyName} logo`}
+            className="h-16 w-16 rounded-md bg-white object-contain ring-1 ring-gray-200"
+          />
+        ) : (
+          <div className="flex h-16 w-16 items-center justify-center rounded-md bg-white ring-1 ring-gray-200 text-base font-semibold text-gray-500">
+            {companyName.slice(0, 2).toUpperCase()}
+          </div>
+        )}
+        <div className="flex-1">
+          <p className="text-sm font-medium text-gray-800">Company logo</p>
+          <p className="mt-0.5 text-xs text-gray-500">
+            PNG, JPEG, WebP, or SVG. Max 512 KB.
+            {!canSuper && ' Only super-admins can change the logo.'}
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={handlePick}
+              disabled={!canSuper || busy !== null}
+            >
+              {busy === 'upload' ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" /> Uploading…
+                </>
+              ) : (
+                <>
+                  <Upload className="h-4 w-4" /> {currentLogoUrl ? 'Replace logo' : 'Upload logo'}
+                </>
+              )}
+            </Button>
+            {currentLogoUrl && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={handleRemove}
+                disabled={!canSuper || busy !== null}
+              >
+                {busy === 'delete' ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" /> Removing…
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="h-4 w-4" /> Remove
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
+          <input
+            ref={inputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/jpg,image/webp,image/svg+xml"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0]
+              if (f) void handleFile(f)
+            }}
+          />
+        </div>
+      </div>
+    </div>
   )
 }

@@ -69,15 +69,29 @@ const mobileNavItems = [
   { label: 'Reports', href: '/reports', icon: BarChart3 },
 ]
 
-const moreNavItems = [
+// Mirrors the sidebar's `roles?: string[]` gating so the mobile More sheet
+// doesn't leak the existence of admin-only routes to plain company_member /
+// viewer users. Server-side gates on each admin page still redirect non-
+// admins, but hiding the entry point removes the cosmetic leak.
+interface MoreNavItem {
+  label: string
+  href: string
+  icon: typeof BookOpen
+  /** Limit visibility to specific roles. When omitted, visible to everyone. */
+  roles?: string[]
+}
+
+const ADMIN_ROLES = ['super_admin', 'company_admin']
+
+const moreNavItems: MoreNavItem[] = [
   { label: 'Knowledge Base', href: '/knowledge-base', icon: BookOpen },
-  { label: 'Admin Accounts', href: '/admin/accounts', icon: Settings },
-  { label: 'Channels', href: '/admin/channels', icon: Plug },
-  { label: 'Sheets Sync', href: '/admin/sheets', icon: Sheet },
-  { label: 'AI Settings', href: '/admin/ai-settings', icon: Brain },
-  { label: 'Notifications', href: '/admin/notifications', icon: BellIcon },
-  { label: 'System Health', href: '/admin/health', icon: Activity },
-  { label: 'Users', href: '/admin/users', icon: UserCog },
+  { label: 'Admin Accounts', href: '/admin/accounts', icon: Settings, roles: ADMIN_ROLES },
+  { label: 'Channels', href: '/admin/channels', icon: Plug, roles: ADMIN_ROLES },
+  { label: 'Sheets Sync', href: '/admin/sheets', icon: Sheet, roles: ADMIN_ROLES },
+  { label: 'AI Settings', href: '/admin/ai-settings', icon: Brain, roles: ADMIN_ROLES },
+  { label: 'Notifications', href: '/admin/notifications', icon: BellIcon, roles: ADMIN_ROLES },
+  { label: 'System Health', href: '/admin/health', icon: Activity, roles: ADMIN_ROLES },
+  { label: 'Users', href: '/admin/users', icon: UserCog, roles: ADMIN_ROLES },
 ]
 
 // Convert a URL slug ("time-reports") into a Title-Case label ("Time Reports").
@@ -418,7 +432,9 @@ export function DashboardShell({
               </button>
             </div>
             <div className="max-h-80 overflow-y-auto px-3 py-2 space-y-0.5">
-              {moreNavItems.map((item) => (
+              {moreNavItems
+                .filter((item) => !item.roles || item.roles.includes(user.role))
+                .map((item) => (
                 <Link
                   key={item.href}
                   href={item.href}

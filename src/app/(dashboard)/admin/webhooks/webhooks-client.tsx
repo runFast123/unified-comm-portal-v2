@@ -14,6 +14,7 @@ import {
   PlayCircle,
   XCircle,
   Activity,
+  RefreshCw,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -34,6 +35,7 @@ export interface WebhookRow {
   created_at: string
   last_delivery_at: string | null
   consecutive_failures: number
+  secret_rotated_at?: string | null
 }
 
 interface DeliveryRow {
@@ -84,6 +86,16 @@ export function WebhooksClient({ initialWebhooks, knownEvents, canCreate }: Prop
   const [deliveriesFor, setDeliveriesFor] = useState<WebhookRow | null>(null)
   const [deliveries, setDeliveries] = useState<DeliveryRow[]>([])
   const [deliveriesLoading, setDeliveriesLoading] = useState(false)
+
+  // Rotate-secret flow: confirm modal → POST → one-time new-secret modal.
+  // `rotatedSecret` is held in component state only — never re-fetched —
+  // so once the user closes the modal, the plaintext is gone for good.
+  const [rotateConfirm, setRotateConfirm] = useState<WebhookRow | null>(null)
+  const [rotating, setRotating] = useState(false)
+  const [rotatedSecret, setRotatedSecret] = useState<
+    | { url: string; new_secret: string; previous_valid_until: string }
+    | null
+  >(null)
 
   const toggleEvent = useCallback((event: string) => {
     setCreateEvents((prev) =>
@@ -207,6 +219,44 @@ export function WebhooksClient({ initialWebhooks, knownEvents, canCreate }: Prop
     [toast],
   )
 
+  const handleRotateSecret = useCallback(
+    async (w: WebhookRow) => {
+      setRotating(true)
+      try {
+        const res = await fetch(`/api/admin/webhooks/${w.id}/rotate-secret`, {
+          method: 'POST',
+        })
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          toast.error(data?.error ?? 'Failed to rotate secret')
+          return
+        }
+        // Stamp the row so the UI shows the rotation timestamp without a refresh.
+        setWebhooks((prev) =>
+          prev.map((row) =>
+            row.id === w.id
+              ? { ...row, secret_rotated_at: data.rotated_at ?? new Date().toISOString() }
+              : row,
+          ),
+        )
+        setRotateConfirm(null)
+        // Hand the plaintext to the one-time display modal. We never store it
+        // anywhere else — closing the modal evicts it from the closure.
+        setRotatedSecret({
+          url: w.url,
+          new_secret: data.new_secret,
+          previous_valid_until: data.previous_valid_until,
+        })
+        toast.success('Secret rotated. Save the new value now.')
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Network error')
+      } finally {
+        setRotating(false)
+      }
+    },
+    [toast],
+  )
+
   const openDeliveries = useCallback(
     async (w: WebhookRow) => {
       setDeliveriesFor(w)
@@ -313,6 +363,11 @@ export function WebhooksClient({ initialWebhooks, knownEvents, canCreate }: Prop
                           ({w.consecutive_failures} failures)
                         </span>
                       )}
+                      {w.secret_rotated_at && (
+                        <div className="mt-0.5 text-xs text-gray-500">
+                          Secret rotated {formatDate(w.secret_rotated_at)}
+                        </div>
+                      )}
                     </TableCell>
                     <TableCell className="text-right">
                       <Badge variant={status.variant}>{status.label}</Badge>
@@ -338,6 +393,14 @@ export function WebhooksClient({ initialWebhooks, knownEvents, canCreate }: Prop
                           ) : (
                             <PlayCircle className="h-4 w-4" />
                           )}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setRotateConfirm(w)}
+                          title="Rotate signing secret"
+                        >
+                          <RefreshCw className="h-4 w-4" />
                         </Button>
                         <Button
                           variant="ghost"
@@ -457,6 +520,87 @@ export function WebhooksClient({ initialWebhooks, knownEvents, canCreate }: Prop
               label="Signing secret"
               value={secretModal.signing_secret}
               helpText="HMAC-SHA256(secret, raw_body) === signature_header_value (after stripping the 'sha256=' prefix)."
+            />
+          </div>
+        )}
+      </Modal>
+
+      {/* ── Rotate secret confirm modal ────────────────────────────── */}
+      <Modal
+        open={rotateConfirm !== null}
+        onClose={() => {
+          if (!rotating) setRotateConfirm(null)
+        }}
+        title="Rotate signing secret?"
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => setRotateConfirm(null)}
+              disabled={rotating}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => rotateConfirm && handleRotateSecret(rotateConfirm)}
+              disabled={rotating}
+              loading={rotating}
+            >
+              <RefreshCw className="h-4 w-4" /> Rotate secret
+            </Button>
+          </>
+        }
+      >
+        {rotateConfirm && (
+          <div className="space-y-3">
+            <p className="text-sm text-gray-700">
+              Generate a new signing secret for{' '}
+              <strong className="font-mono text-xs">{rotateConfirm.url}</strong>?
+            </p>
+            <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
+              <ShieldAlert className="mt-0.5 h-5 w-5 text-amber-700 flex-shrink-0" />
+              <div className="text-sm text-amber-800">
+                <p className="font-semibold">The old secret will keep working for 24 hours.</p>
+                <p className="mt-1">
+                  Update your endpoint to verify the new secret before the grace period ends —
+                  after that, deliveries signed with the new secret will fail your check.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* ── Rotated secret one-time modal ──────────────────────────── */}
+      <Modal
+        open={rotatedSecret !== null}
+        onClose={() => setRotatedSecret(null)}
+        title="Save your new signing secret"
+        footer={
+          <Button onClick={() => setRotatedSecret(null)}>
+            <CheckCircle2 className="h-4 w-4" /> I have saved the secret
+          </Button>
+        }
+      >
+        {rotatedSecret && (
+          <div className="space-y-4">
+            <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
+              <ShieldAlert className="mt-0.5 h-5 w-5 text-amber-700 flex-shrink-0" />
+              <div className="text-sm text-amber-800">
+                <p className="font-semibold">This secret will not be shown again.</p>
+                <p className="mt-1">
+                  Copy it now and update your endpoint. The previous secret remains valid until{' '}
+                  <strong>{formatDate(rotatedSecret.previous_valid_until)}</strong>.
+                </p>
+              </div>
+            </div>
+            <p className="text-sm text-gray-700">
+              Webhook for <strong className="font-mono text-xs">{rotatedSecret.url}</strong>:
+            </p>
+            <CopyField
+              label="New signing secret"
+              value={rotatedSecret.new_secret}
+              helpText="Outgoing deliveries are signed with this secret starting now."
             />
           </div>
         )}

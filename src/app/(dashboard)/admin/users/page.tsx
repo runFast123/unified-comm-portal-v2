@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase-client'
+import { useUser } from '@/context/user-context'
+import { isSuperAdmin } from '@/lib/roles'
 import { Card } from '@/components/ui/card'
 import { KPICard } from '@/components/dashboard/kpi-card'
 import { Button } from '@/components/ui/button'
@@ -60,13 +62,30 @@ function getRoleBadge(role: UserRole) {
   }
 }
 
+// Page-level filter dropdown — keeps legacy roles for back-compat with
+// existing user rows AND lists the new roles so admins can filter to them.
 const ROLE_OPTIONS = [
   { value: '', label: 'All Roles' },
-  { value: 'admin', label: 'Admin' },
+  { value: 'super_admin', label: 'Super Admin' },
+  { value: 'company_admin', label: 'Company Admin' },
   { value: 'supervisor', label: 'Supervisor' },
-  { value: 'reviewer', label: 'Reviewer' },
-  { value: 'viewer', label: 'Viewer' },
+  { value: 'company_member', label: 'Member' },
+  { value: 'admin', label: 'Admin (legacy)' },
+  { value: 'reviewer', label: 'Reviewer (legacy)' },
+  { value: 'viewer', label: 'Viewer (legacy)' },
 ]
+
+// New-invite dropdown — mirrors `/admin/companies/[id]` ROLE_OPTIONS so the
+// two invite flows offer the same canonical roles. Legacy admin/reviewer/
+// viewer are intentionally excluded from NEW invites (still allowed in the
+// filter above for existing rows). `super_admin` is appended only when the
+// inviter is themselves a super_admin (mirrors the detail-page gating).
+const INVITE_ROLE_OPTIONS_BASE = [
+  { value: 'company_admin', label: 'Company Admin' },
+  { value: 'supervisor', label: 'Supervisor' },
+  { value: 'company_member', label: 'Member' },
+]
+const INVITE_ROLE_OPTION_SUPER = { value: 'super_admin', label: 'Super Admin' }
 
 const STATUS_OPTIONS = [
   { value: '', label: 'All Status' },
@@ -98,6 +117,18 @@ function isDirty(u: User, draft: RowDraft): boolean {
 export default function UsersPage() {
   const supabase = createClient()
   const { toast } = useToast()
+  const currentUser = useUser()
+  const canInviteSuperAdmin = isSuperAdmin(currentUser.role)
+
+  // Invite-modal role options — append super_admin only for super_admin
+  // inviters. Memoized so the Select's `options` identity is stable.
+  const inviteRoleOptions = useMemo(
+    () =>
+      canInviteSuperAdmin
+        ? [...INVITE_ROLE_OPTIONS_BASE, INVITE_ROLE_OPTION_SUPER]
+        : INVITE_ROLE_OPTIONS_BASE,
+    [canInviteSuperAdmin]
+  )
 
   const [users, setUsers] = useState<User[]>([])
   const [accounts, setAccounts] = useState<Account[]>([])
@@ -118,7 +149,7 @@ export default function UsersPage() {
   const [showInvite, setShowInvite] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteName, setInviteName] = useState('')
-  const [inviteRole, setInviteRole] = useState<UserRole>('viewer')
+  const [inviteRole, setInviteRole] = useState<UserRole>('company_member')
   const [inviteAccountId, setInviteAccountId] = useState('')
   const [inviting, setInviting] = useState(false)
   const [inviteError, setInviteError] = useState<string | null>(null)
@@ -330,7 +361,7 @@ export default function UsersPage() {
       }))
       setInviteEmail('')
       setInviteName('')
-      setInviteRole('viewer')
+      setInviteRole('company_member')
       setInviteAccountId('')
       setInviteError(null)
       setShowInvite(false)
@@ -634,12 +665,7 @@ export default function UsersPage() {
             label="Role"
             value={inviteRole}
             onChange={(e) => setInviteRole(e.target.value as UserRole)}
-            options={[
-              { value: 'admin', label: 'Admin - Full access to all settings' },
-              { value: 'supervisor', label: 'Supervisor - Medium-trust agent operations' },
-              { value: 'reviewer', label: 'Reviewer - Can review and approve AI replies' },
-              { value: 'viewer', label: 'Viewer - Read-only access to dashboard' },
-            ]}
+            options={inviteRoleOptions}
           />
           <Select
             label="Account"
