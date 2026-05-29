@@ -31,6 +31,8 @@ import {
   UserCheck,
   Info,
   Save,
+  Copy,
+  X,
 } from 'lucide-react'
 
 interface Account {
@@ -241,6 +243,14 @@ export default function UsersPage() {
   const [inviteAccountId, setInviteAccountId] = useState('')
   const [inviting, setInviting] = useState(false)
   const [inviteError, setInviteError] = useState<string | null>(null)
+
+  // Fallback notice shown above the table when the invite email could NOT be
+  // sent (Supabase SMTP not configured). Holds the email + shareable signup
+  // link so the admin can copy it; null when there's nothing to show.
+  const [inviteFallbackLink, setInviteFallbackLink] = useState<
+    { email: string; url: string } | null
+  >(null)
+  const [fallbackCopied, setFallbackCopied] = useState(false)
 
   // Fetch users and accounts.
   //
@@ -480,9 +490,10 @@ export default function UsersPage() {
         return
       }
 
-      // The endpoint returns one of two shapes:
-      //   { status: 'updated',  user }       — email already a real user, updated in place
-      //   { status: 'invited',  invitation } — pre-registered; inherits on signup
+      // The endpoint returns one of these shapes:
+      //   { status:'updated', user }                          — email already a real user, updated in place
+      //   { status:'invited', email_sent:true }               — invite email sent; auth user created
+      //   { status:'invited', email_sent:false, signup_url }  — SMTP off; pre-registered + share-link fallback
       const invitedEmail = inviteEmail.trim().toLowerCase()
       setInviteEmail('')
       setInviteName('')
@@ -493,10 +504,23 @@ export default function UsersPage() {
 
       if (data.status === 'updated') {
         toast.success(`${invitedEmail} updated with the new role and assignment.`)
+        setInviteFallbackLink(null)
+      } else if (data.email_sent === true) {
+        toast.success(data.message || `Invite email sent to ${invitedEmail}.`)
+        setInviteFallbackLink(null)
       } else {
-        toast.success(
-          `${invitedEmail} pre-registered. They'll inherit this role when they sign up with this email.`
+        // email_sent === false (or absent on a legacy response): pre-registered,
+        // but the email couldn't go out. Warn + surface the signup link so the
+        // admin can share it manually.
+        toast.warning(
+          data.warning ||
+            `Couldn't send the invite email. Share the signup link with ${invitedEmail}.`,
+          8000
         )
+        if (data.signup_url) {
+          setInviteFallbackLink({ email: invitedEmail, url: data.signup_url })
+          setFallbackCopied(false)
+        }
       }
       // Refresh from the server so the users list AND the pending-invitations
       // list both reflect the change (the pre-registered user has no
@@ -657,6 +681,58 @@ export default function UsersPage() {
             ))}
           </div>
         </Card>
+      )}
+
+      {/* Email-fallback notice — shown when the invite email couldn't be sent
+          (Supabase SMTP not configured). Gives the admin the shareable signup
+          link to pass along manually. Dismissible. */}
+      {inviteFallbackLink && (
+        <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4">
+          <Mail className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-amber-900">
+              Email couldn&apos;t be sent. Share this signup link with{' '}
+              <span className="font-semibold">{inviteFallbackLink.email}</span>:
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <code className="max-w-full truncate rounded border border-amber-200 bg-white px-2 py-1 text-xs text-amber-900">
+                {inviteFallbackLink.url}
+              </code>
+              <Button
+                variant="secondary"
+                className="!py-1.5 !px-3"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(inviteFallbackLink.url)
+                    setFallbackCopied(true)
+                    toast.success('Signup link copied to clipboard.')
+                    setTimeout(() => setFallbackCopied(false), 2000)
+                  } catch {
+                    toast.error('Could not copy — select and copy the link manually.')
+                  }
+                }}
+              >
+                {fallbackCopied ? (
+                  <Check className="h-3.5 w-3.5" />
+                ) : (
+                  <Copy className="h-3.5 w-3.5" />
+                )}
+                {fallbackCopied ? 'Copied' : 'Copy'}
+              </Button>
+            </div>
+            <p className="mt-2 text-xs text-amber-800">
+              They&apos;ll inherit the assigned role &amp; account when they sign up with this email.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setInviteFallbackLink(null)}
+            aria-label="Dismiss"
+            className="shrink-0 rounded p-0.5 text-amber-500 transition-colors hover:bg-amber-100 hover:text-amber-700"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
       )}
 
       {/* Users table */}

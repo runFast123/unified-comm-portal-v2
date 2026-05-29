@@ -106,7 +106,13 @@ export async function middleware(request: NextRequest) {
     !pathname.startsWith('/_next/') &&
     // Public CSAT survey landing — customers click these from email and
     // never authenticate. The token in the URL is the auth.
-    !pathname.startsWith('/csat/')
+    !pathname.startsWith('/csat/') &&
+    // Invite set-password landing — the Supabase invite link carries its
+    // token in the URL *hash*, which the server (and therefore this
+    // middleware) can't see, so getUser() finds no session here. Without
+    // this allow-list the invitee would be bounced to /login before the
+    // client can exchange the hash token for a session. The token is the auth.
+    pathname !== '/accept-invite'
   ) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'

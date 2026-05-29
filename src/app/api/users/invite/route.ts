@@ -268,41 +268,130 @@ export async function POST(request: Request) {
     })
   }
 
-  // Case B — pre-register. Upsert by email so re-inviting just refreshes the
-  // pending settings rather than erroring on the PK.
-  const { data: invitation, error: inviteErr } = await admin
-    .from('user_invitations')
-    .upsert(
-      {
-        email,
+  // Case B — brand-new email. We try, in order:
+  //
+  //   1. Supabase Auth admin invite — sends a "set your password" email AND
+  //      creates the auth user. The `handle_new_auth_user` trigger fires and
+  //      makes a public.users row immediately, but with DEFAULT role (the
+  //      invitation row doesn't exist at that instant), so we then UPDATE that
+  //      row to the intended role/account/company. → email_sent:true.
+  //
+  //   2. If the invite email can't be sent (SMTP not configured, rate limited,
+  //      user already exists in auth, or the call throws) we FALL BACK to the
+  //      original behaviour: upsert a pending user_invitations row so the
+  //      signup trigger still applies the role when the person self-signs-up,
+  //      and hand the admin a shareable signup link. → email_sent:false.
+
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://project-0stjf.vercel.app'
+
+  // Narrow the service-role client to the admin-invite surface. The runtime
+  // object is a full @supabase/supabase-js client (see createServiceRoleClient)
+  // which exposes auth.admin.inviteUserByEmail; we type just what we touch.
+  const adminAny = admin as unknown as {
+    auth: {
+      admin: {
+        inviteUserByEmail: (
+          e: string,
+          opts?: { data?: Record<string, unknown>; redirectTo?: string }
+        ) => Promise<{ data: { user: { id: string } | null }; error: { message: string } | null }>
+      }
+    }
+  }
+
+  // Capture the (already-narrowed) caller context in a stable local so the
+  // closure below doesn't re-trigger the discriminated-union narrowing on
+  // `gate` (which TS can't carry across a nested function boundary).
+  const ctx = gate.ctx
+
+  // Pre-register fallback (shared by every non-happy path below). Upsert by
+  // email so re-inviting just refreshes the pending settings rather than
+  // erroring on the PK — identical to the previous Case B behaviour.
+  async function preregisterFallback() {
+    const { data: invitation, error: inviteErr } = await admin
+      .from('user_invitations')
+      .upsert(
+        {
+          email,
+          role,
+          account_id: accountId,
+          company_id: targetCompanyId,
+          full_name: fullName,
+          invited_by: ctx.userId,
+        },
+        { onConflict: 'email' }
+      )
+      .select()
+      .single()
+
+    if (inviteErr) {
+      return NextResponse.json({ error: inviteErr.message }, { status: 500 })
+    }
+
+    await admin.from('audit_log').insert({
+      user_id: ctx.userId,
+      action: 'user.invite.preregister',
+      entity_type: 'user_invitation',
+      entity_id: null,
+      details: { email, role, account_id: accountId, company_id: targetCompanyId, actor_id: ctx.userId },
+    })
+
+    return NextResponse.json({
+      success: true,
+      status: 'invited',
+      email_sent: false,
+      signup_url: `${siteUrl}/signup`,
+      warning:
+        'Invite email could not be sent (email/SMTP not configured in Supabase). Share the signup link with the user — they will inherit this role when they sign up with this email.',
+      message: 'User pre-registered.',
+      invitation,
+    })
+  }
+
+  // Step 1 — attempt the auth admin invite. A thrown exception (network, SDK,
+  // unexpected shape) must behave exactly like a returned error: fall back.
+  let inv: { data: { user: { id: string } | null }; error: { message: string } | null }
+  try {
+    inv = await adminAny.auth.admin.inviteUserByEmail(email, {
+      data: fullName ? { full_name: fullName } : undefined,
+      redirectTo: `${siteUrl}/accept-invite`,
+    })
+  } catch {
+    return preregisterFallback()
+  }
+
+  // Step 2a — email sent + auth user created. Promote the trigger-created row
+  // to the intended values. If this UPDATE fails it's non-fatal: the email is
+  // already out and the user exists; we still report success so the admin
+  // isn't told the invite failed when it didn't.
+  if (!inv.error && inv.data.user?.id) {
+    await admin
+      .from('users')
+      .update({
         role,
         account_id: accountId,
         company_id: targetCompanyId,
-        full_name: fullName,
-        invited_by: gate.ctx.userId,
-      },
-      { onConflict: 'email' }
-    )
-    .select()
-    .single()
+        full_name: fullName ?? undefined,
+        is_active: true,
+      })
+      .eq('id', inv.data.user.id)
 
-  if (inviteErr) {
-    return NextResponse.json({ error: inviteErr.message }, { status: 500 })
+    await admin.from('audit_log').insert({
+      user_id: ctx.userId,
+      action: 'user.invite.email',
+      entity_type: 'user',
+      entity_id: inv.data.user.id,
+      details: { email, role, account_id: accountId, company_id: targetCompanyId, actor_id: ctx.userId },
+    })
+
+    return NextResponse.json({
+      success: true,
+      status: 'invited',
+      email_sent: true,
+      message: `Invite email sent to ${email}.`,
+    })
   }
 
-  await admin.from('audit_log').insert({
-    user_id: gate.ctx.userId,
-    action: 'user.invite.preregister',
-    entity_type: 'user_invitation',
-    entity_id: null,
-    details: { email, role, account_id: accountId, company_id: targetCompanyId, actor_id: gate.ctx.userId },
-  })
-
-  return NextResponse.json({
-    success: true,
-    status: 'invited',
-    message:
-      'User pre-registered. They will inherit this role and assignment when they sign up with this email.',
-    invitation,
-  })
+  // Step 2b — inviteUserByEmail returned an error (SMTP missing, rate limited,
+  // already-registered auth user, etc.). Fall back to pre-registration.
+  return preregisterFallback()
 }
