@@ -284,23 +284,9 @@ export async function POST(request: Request) {
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://project-0stjf.vercel.app'
 
-  // Narrow the service-role client to the admin-invite surface. The runtime
-  // object is a full @supabase/supabase-js client (see createServiceRoleClient)
-  // which exposes auth.admin.inviteUserByEmail; we type just what we touch.
-  const adminAny = admin as unknown as {
-    auth: {
-      admin: {
-        inviteUserByEmail: (
-          e: string,
-          opts?: { data?: Record<string, unknown>; redirectTo?: string }
-        ) => Promise<{ data: { user: { id: string } | null }; error: { message: string } | null }>
-      }
-    }
-  }
-
-  // Capture the (already-narrowed) caller context in a stable local so the
-  // closure below doesn't re-trigger the discriminated-union narrowing on
-  // `gate` (which TS can't carry across a nested function boundary).
+  // Capture the caller context in a stable local so the closure below doesn't
+  // re-trigger the discriminated-union narrowing on `gate` (which TS can't
+  // carry across a nested function boundary).
   const ctx = gate.ctx
 
   // Pre-register fallback (used when no invite EMAIL could be sent — i.e.
@@ -425,51 +411,14 @@ export async function POST(request: Request) {
     })
   }
 
-  // Step 1 — attempt the auth admin invite. A thrown exception (network, SDK,
-  // unexpected shape) must behave exactly like a returned error: fall back.
-  let inv: { data: { user: { id: string } | null }; error: { message: string } | null }
-  try {
-    inv = await adminAny.auth.admin.inviteUserByEmail(email, {
-      data: fullName ? { full_name: fullName } : undefined,
-      redirectTo: `${siteUrl}/accept-invite`,
-    })
-  } catch {
-    return preregisterFallback()
-  }
-
-  // Step 2a — email sent + auth user created. Promote the trigger-created row
-  // to the intended values. If this UPDATE fails it's non-fatal: the email is
-  // already out and the user exists; we still report success so the admin
-  // isn't told the invite failed when it didn't.
-  if (!inv.error && inv.data.user?.id) {
-    await admin
-      .from('users')
-      .update({
-        role,
-        account_id: accountId,
-        company_id: targetCompanyId,
-        full_name: fullName ?? undefined,
-        is_active: true,
-      })
-      .eq('id', inv.data.user.id)
-
-    await admin.from('audit_log').insert({
-      user_id: ctx.userId,
-      action: 'user.invite.email',
-      entity_type: 'user',
-      entity_id: inv.data.user.id,
-      details: { email, role, account_id: accountId, company_id: targetCompanyId, actor_id: ctx.userId },
-    })
-
-    return NextResponse.json({
-      success: true,
-      status: 'invited',
-      email_sent: true,
-      message: `Invite email sent to ${email}.`,
-    })
-  }
-
-  // Step 2b — inviteUserByEmail returned an error (SMTP missing, rate limited,
-  // already-registered auth user, etc.). Fall back to pre-registration.
+  // Generate a set-password link and hand it to the admin to share. We
+  // deliberately do NOT call inviteUserByEmail here: that sends mail through
+  // Supabase's built-in email sender, which is severely rate-limited
+  // ("email rate limit exceeded") and, without a verified Site URL, produced
+  // links pointing at localhost. generate_link returns the actionable link
+  // directly (no email sent, no quota consumed) and auto-confirms the user's
+  // email when clicked. Once the project has real SMTP + Site URL configured,
+  // this can be swapped back to an emailed invite — but the copy-link path
+  // works today with zero email infrastructure.
   return preregisterFallback()
 }
