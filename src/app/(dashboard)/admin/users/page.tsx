@@ -33,6 +33,7 @@ import {
   Save,
   Copy,
   X,
+  Trash2,
 } from 'lucide-react'
 
 interface Account {
@@ -252,6 +253,13 @@ export default function UsersPage() {
   >(null)
   const [fallbackCopied, setFallbackCopied] = useState(false)
 
+  // Delete-user flow. `deleteTarget` drives the confirm modal (null = closed);
+  // `deletingId` tracks the in-flight request (a user id, an `invitation:<email>`
+  // marker for revokes, or null) so the relevant button shows a spinner and all
+  // delete/revoke buttons disable while any one request is in flight.
+  const [deleteTarget, setDeleteTarget] = useState<User | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+
   // Fetch users and accounts.
   //
   // Users now come from `/api/admin/users` instead of a client-scoped
@@ -375,6 +383,43 @@ export default function UsersPage() {
   const viewersWithoutAccount = users.filter(
     (u) => u.role === 'viewer' && !u.account_id
   ).length
+
+  // Count of super_admins currently loaded — used to hide the Delete button on
+  // the last remaining super_admin so the UI can't even attempt the action the
+  // API blocks (409 "Cannot delete the last super admin"). The API is still the
+  // source of truth; this is purely to avoid offering a doomed action.
+  const superAdminCount = useMemo(
+    () => users.filter((u) => isSuperAdmin(u.role)).length,
+    [users]
+  )
+
+  // Whether the current viewer may delete a given user row. Mirrors the API's
+  // role rules so the button only shows when the request would actually be
+  // allowed. NOTE: the user-context does NOT expose the current user's id, so
+  // "is self" is detected by comparing emails (case-insensitive).
+  const isSelf = useCallback(
+    (u: User) =>
+      !!currentUser.email &&
+      u.email.toLowerCase() === currentUser.email.toLowerCase(),
+    [currentUser.email]
+  )
+  const canDeleteUser = useCallback(
+    (u: User): boolean => {
+      // Never the caller's own row.
+      if (isSelf(u)) return false
+      if (isSuperAdmin(currentUser.role)) {
+        // super_admin may delete anyone EXCEPT the last remaining super_admin.
+        if (isSuperAdmin(u.role) && superAdminCount <= 1) return false
+        return true
+      }
+      // company_admin / legacy admin: cannot delete a super_admin or a legacy
+      // 'admin'. (Cross-company rows aren't shown to them by /api/admin/users,
+      // so a same-company check would be redundant here.)
+      if (isSuperAdmin(u.role) || u.role === 'admin') return false
+      return true
+    },
+    [currentUser.role, isSelf, superAdminCount]
+  )
 
   // Account options for the inline dropdown (active accounts + no-account)
   const accountDropdownOptions = useMemo(
@@ -540,6 +585,62 @@ export default function UsersPage() {
     }
   }, [inviteEmail, inviteName, inviteRole, inviteAccountId, toast, fetchData])
 
+  // Delete a real user. Called from the confirm modal. The server enforces all
+  // the hard guards (self-delete, tenant/privilege bound, last-super-admin);
+  // we just relay the result.
+  const confirmDeleteUser = useCallback(async () => {
+    const target = deleteTarget
+    if (!target) return
+    setDeletingId(target.id)
+    try {
+      const res = await fetch('/api/users/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: target.id }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        toast.error(data?.error || 'Failed to delete user')
+        return
+      }
+      toast.success(`Deleted ${target.email}`)
+      setDeleteTarget(null)
+      await fetchData()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete user')
+    } finally {
+      setDeletingId(null)
+    }
+  }, [deleteTarget, toast, fetchData])
+
+  // Revoke a pending pre-registration. Lighter than a real delete (the person
+  // never signed up), so it skips the confirm modal and just acts + refetches.
+  const revokeInvitation = useCallback(
+    async (email: string) => {
+      const marker = `invitation:${email}`
+      setDeletingId(marker)
+      try {
+        const res = await fetch('/api/users/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ invitation_email: email }),
+        })
+        const data = await res.json()
+        if (!res.ok) {
+          toast.error(data?.error || 'Failed to revoke invitation')
+          return
+        }
+        toast.success(`Revoked invitation for ${email}`)
+        await fetchData()
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed to revoke invitation')
+      } finally {
+        setDeletingId(null)
+      }
+    },
+    [toast, fetchData]
+  )
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-24">
@@ -684,6 +785,18 @@ export default function UsersPage() {
                 <span className="ml-auto inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 ring-1 ring-amber-200">
                   Awaiting signup
                 </span>
+                <Button
+                  variant="ghost"
+                  disabled={deletingId !== null}
+                  loading={deletingId === `invitation:${inv.email}`}
+                  onClick={() => revokeInvitation(inv.email)}
+                  className="!py-1 !px-2 !text-amber-700 hover:!bg-amber-100"
+                  aria-label={`Revoke invitation for ${inv.email}`}
+                  title={`Revoke invitation for ${inv.email}`}
+                >
+                  {deletingId === `invitation:${inv.email}` ? null : <Trash2 className="h-3.5 w-3.5" />}
+                  Revoke
+                </Button>
               </div>
             ))}
           </div>
@@ -767,7 +880,7 @@ export default function UsersPage() {
                 <TableHead className="hidden sm:table-cell">Active</TableHead>
                 <TableHead className="hidden xl:table-cell">Last Login</TableHead>
                 <TableHead className="hidden xl:table-cell">Created</TableHead>
-                <TableHead className="text-right">Save</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -860,16 +973,30 @@ export default function UsersPage() {
                       </span>
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button
-                        variant={dirty ? 'primary' : 'secondary'}
-                        disabled={!dirty || saving}
-                        loading={saving}
-                        onClick={() => saveRow(user)}
-                        className="!py-1.5 !px-3"
-                      >
-                        {saving ? null : dirty ? <Save className="h-3.5 w-3.5" /> : <Check className="h-3.5 w-3.5" />}
-                        {saving ? 'Saving' : dirty ? 'Save' : 'Saved'}
-                      </Button>
+                      <div className="flex items-center justify-end gap-2">
+                        <Button
+                          variant={dirty ? 'primary' : 'secondary'}
+                          disabled={!dirty || saving}
+                          loading={saving}
+                          onClick={() => saveRow(user)}
+                          className="!py-1.5 !px-3"
+                        >
+                          {saving ? null : dirty ? <Save className="h-3.5 w-3.5" /> : <Check className="h-3.5 w-3.5" />}
+                          {saving ? 'Saving' : dirty ? 'Save' : 'Saved'}
+                        </Button>
+                        {canDeleteUser(user) && (
+                          <Button
+                            variant="danger"
+                            disabled={deletingId !== null}
+                            onClick={() => setDeleteTarget(user)}
+                            className="!py-1.5 !px-2.5"
+                            aria-label={`Delete ${user.email}`}
+                            title={`Delete ${user.email}`}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 )
@@ -942,6 +1069,38 @@ export default function UsersPage() {
             </p>
           </div>
         </div>
+      </Modal>
+
+      {/* Delete user confirmation */}
+      <Modal
+        open={deleteTarget !== null}
+        onClose={() => { if (deletingId === null) setDeleteTarget(null) }}
+        title="Delete user"
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => setDeleteTarget(null)}
+              disabled={deletingId !== null}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={confirmDeleteUser}
+              loading={deletingId !== null && deleteTarget !== null && deletingId === deleteTarget.id}
+              disabled={deletingId !== null}
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-gray-700">
+          Delete <span className="font-semibold">{deleteTarget?.email}</span>? This
+          removes their login and unassigns their conversations. This can&apos;t be undone.
+        </p>
       </Modal>
     </div>
   )
