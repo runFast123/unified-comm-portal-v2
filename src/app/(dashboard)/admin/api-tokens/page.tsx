@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import { cookies } from 'next/headers'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase-server'
 import { getCurrentUser, isCompanyAdmin, isSuperAdmin } from '@/lib/auth'
 import { KNOWN_SCOPES } from '@/lib/api-tokens'
@@ -27,14 +28,28 @@ export default async function ApiTokensAdminPage() {
 
   const admin = await createServiceRoleClient()
 
-  let query = admin
-    .from('api_tokens')
-    .select('id, company_id, name, prefix, scopes, created_at, last_used_at, revoked_at, expires_at')
-    .order('created_at', { ascending: false })
-
-  if (!isSuperAdmin(profile!.role) && profile?.company_id) {
-    query = query.eq('company_id', profile.company_id)
-  } else if (!isSuperAdmin(profile!.role)) {
+  // api_tokens is company-keyed (company_id NOT NULL → companies). Resolve
+  // the company to scope by:
+  //   - super_admin → the switcher cookie's company when set + valid
+  //     (combined cross-tenant view when no cookie / stale cookie).
+  //   - company_admin / legacy admin → always their own company.
+  let scopeCompanyId: string | null = null
+  if (isSuperAdmin(profile!.role)) {
+    const cookieStore = await cookies()
+    const cookieCompanyId = cookieStore.get('selected_company_id')?.value?.trim() || null
+    if (cookieCompanyId) {
+      // Validate the cookie points at a real company before trusting it; a
+      // stale cookie falls through to the combined (all-tenant) view.
+      const { data: co } = await admin
+        .from('companies')
+        .select('id')
+        .eq('id', cookieCompanyId)
+        .maybeSingle()
+      if (co) scopeCompanyId = cookieCompanyId
+    }
+  } else if (profile?.company_id) {
+    scopeCompanyId = profile.company_id
+  } else {
     // Non-super admin with no company → show empty list.
     return (
       <ApiTokensClient
@@ -43,6 +58,15 @@ export default async function ApiTokensAdminPage() {
         canCreate={false}
       />
     )
+  }
+
+  let query = admin
+    .from('api_tokens')
+    .select('id, company_id, name, prefix, scopes, created_at, last_used_at, revoked_at, expires_at')
+    .order('created_at', { ascending: false })
+
+  if (scopeCompanyId) {
+    query = query.eq('company_id', scopeCompanyId)
   }
 
   const { data } = await query

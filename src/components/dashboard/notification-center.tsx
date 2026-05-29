@@ -13,6 +13,7 @@ import {
   X,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase-client'
+import { useUser } from '@/context/user-context'
 import { cn } from '@/lib/utils'
 
 type NotificationType = 'new_message' | 'ai_reply_ready' | 'escalation' | 'system_alert'
@@ -79,6 +80,7 @@ function playNotificationSound() {
 
 export function NotificationCenter() {
   const router = useRouter()
+  const { activeCompanyId, companyAccountIds } = useUser()
   const [open, setOpen] = useState(false)
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [loading, setLoading] = useState(false)
@@ -105,7 +107,7 @@ export function NotificationCenter() {
       const supabase = createClient()
 
       // Fetch recent inbound messages as "new_message" notifications
-      const { data: messages } = await supabase
+      let messagesQuery = supabase
         .from('messages')
         .select('id, conversation_id, sender_name, email_subject, message_text, channel, received_at, replied')
         .eq('direction', 'inbound')
@@ -113,12 +115,22 @@ export function NotificationCenter() {
         .limit(10)
 
       // Fetch recent AI replies as "ai_reply_ready" notifications
-      const { data: aiReplies } = await supabase
+      let aiRepliesQuery = supabase
         .from('ai_replies')
         .select('id, message_id, status, created_at, channel, messages!ai_replies_message_id_fkey(conversation_id, sender_name)')
         .in('status', ['pending_approval', 'edited'])
         .order('created_at', { ascending: false })
         .limit(10)
+
+      // Tenant scope: restrict both feeds to the active tenant's accounts.
+      // Combined view (super_admin, activeCompanyId === null) runs unscoped.
+      if (activeCompanyId) {
+        messagesQuery = messagesQuery.in('account_id', companyAccountIds)
+        aiRepliesQuery = aiRepliesQuery.in('account_id', companyAccountIds)
+      }
+
+      const { data: messages } = await messagesQuery
+      const { data: aiReplies } = await aiRepliesQuery
 
       const items: Notification[] = []
 
@@ -162,7 +174,7 @@ export function NotificationCenter() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [activeCompanyId, companyAccountIds])
 
   useEffect(() => {
     fetchNotifications()
@@ -185,6 +197,15 @@ export function NotificationCenter() {
         (payload: any) => {
           const msg = payload.new
           if (!msg || msg.direction !== 'inbound') return
+
+          // Tenant scope: when a tenant is selected, drop realtime inserts for
+          // accounts outside it. Supabase realtime filters only accept one
+          // expression (we keep direction server-side), so account scope is
+          // enforced here. Combined view (activeCompanyId === null) lets all
+          // tenants' messages through.
+          if (activeCompanyId && (!msg.account_id || !companyAccountIds.includes(msg.account_id))) {
+            return
+          }
 
           const sender = cleanSenderName(msg.sender_name)
           const subject = msg.email_subject || ''
@@ -236,7 +257,7 @@ export function NotificationCenter() {
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [permissionGranted])
+  }, [permissionGranted, activeCompanyId, companyAccountIds])
 
   const markAllRead = () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))

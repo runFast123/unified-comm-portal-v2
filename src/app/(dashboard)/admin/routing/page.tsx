@@ -6,6 +6,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase-client'
+import { useUser } from '@/context/user-context'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
@@ -163,6 +164,9 @@ function summarizeActions(rule: RoutingRule): string {
 export default function RoutingRulesPage() {
   const supabase = createClient()
   const { toast } = useToast()
+  // Active-tenant scope for the "Applies to" (accounts) and "Assign to user"
+  // dropdowns. null activeCompanyId = super_admin combined view (unscoped).
+  const { activeCompanyId, companyAccountIds } = useUser()
 
   const [rules, setRules] = useState<RoutingRule[]>([])
   const [accounts, setAccounts] = useState<AccountRow[]>([])
@@ -177,10 +181,22 @@ export default function RoutingRulesPage() {
   const loadAll = useCallback(async () => {
     setLoading(true)
     try {
+      // Scope accounts ("Applies to") and users ("Assign to user") to the
+      // active tenant. Combined view (activeCompanyId === null) stays
+      // unscoped; accounts filter by id, users by company_id.
+      let acctQuery = supabase.from('accounts').select('id, name').order('name')
+      if (activeCompanyId) acctQuery = acctQuery.in('id', companyAccountIds)
+      let usersQuery = supabase
+        .from('users')
+        .select('id, email, full_name')
+        .eq('is_active', true)
+        .order('email')
+      if (activeCompanyId) usersQuery = usersQuery.eq('company_id', activeCompanyId)
+
       const [rulesRes, acctRes, usersRes] = await Promise.all([
         fetch('/api/routing-rules', { cache: 'no-store' }),
-        supabase.from('accounts').select('id, name').order('name'),
-        supabase.from('users').select('id, email, full_name').eq('is_active', true).order('email'),
+        acctQuery,
+        usersQuery,
       ])
       if (rulesRes.ok) {
         const j = await rulesRes.json()
@@ -195,7 +211,7 @@ export default function RoutingRulesPage() {
       toast.error(`Failed to load: ${err instanceof Error ? err.message : 'unknown'}`)
     }
     setLoading(false)
-  }, [supabase, toast])
+  }, [supabase, toast, activeCompanyId, companyAccountIds])
 
   useEffect(() => {
     loadAll()

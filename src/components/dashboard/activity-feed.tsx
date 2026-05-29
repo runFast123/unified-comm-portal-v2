@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { Mail, Tag, Bot, CheckCircle, RefreshCw, Loader2, Activity, ExternalLink } from 'lucide-react'
 import { createClient } from '@/lib/supabase-client'
+import { useUser } from '@/context/user-context'
 
 interface ActivityEvent {
   id: string
@@ -70,6 +71,7 @@ function parseSenderName(raw: string | null): string {
 
 export function ActivityFeed() {
   const router = useRouter()
+  const { activeCompanyId, companyAccountIds } = useUser()
   const [events, setEvents] = useState<ActivityEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -86,7 +88,7 @@ export function ActivityFeed() {
       const allEvents: ActivityEvent[] = []
 
       // Fetch recent messages (new_message + reply_sent)
-      const { data: messages } = await supabase
+      let messagesQuery = supabase
         .from('messages')
         .select(`
           id,
@@ -99,6 +101,10 @@ export function ActivityFeed() {
         `)
         .order('received_at', { ascending: false })
         .limit(20)
+      // Tenant scope: restrict to the active tenant's accounts. Combined view
+      // (super_admin, activeCompanyId === null) runs unscoped.
+      if (activeCompanyId) messagesQuery = messagesQuery.in('account_id', companyAccountIds)
+      const { data: messages } = await messagesQuery
 
       if (messages) {
         for (const msg of messages) {
@@ -130,21 +136,26 @@ export function ActivityFeed() {
         }
       }
 
-      // Fetch recent classifications
-      const { data: classifications } = await supabase
+      // Fetch recent classifications. message_classifications has no
+      // account_id of its own, so we scope through the joined message
+      // (messages!inner → filter on the embedded messages.account_id).
+      let classificationsQuery = supabase
         .from('message_classifications')
         .select(`
           id,
           category,
           sentiment,
           classified_at,
-          messages!message_classifications_message_id_fkey (
+          messages!inner (
             conversation_id,
+            account_id,
             accounts!messages_account_id_fkey ( name )
           )
         `)
         .order('classified_at', { ascending: false })
         .limit(10)
+      if (activeCompanyId) classificationsQuery = (classificationsQuery as any).in('messages.account_id', companyAccountIds)
+      const { data: classifications } = await classificationsQuery
 
       if (classifications) {
         for (const cls of classifications) {
@@ -163,7 +174,7 @@ export function ActivityFeed() {
       }
 
       // Fetch recent AI replies
-      const { data: aiReplies } = await supabase
+      let aiRepliesQuery = supabase
         .from('ai_replies')
         .select(`
           id,
@@ -173,6 +184,8 @@ export function ActivityFeed() {
         `)
         .order('created_at', { ascending: false })
         .limit(10)
+      if (activeCompanyId) aiRepliesQuery = aiRepliesQuery.in('account_id', companyAccountIds)
+      const { data: aiReplies } = await aiRepliesQuery
 
       if (aiReplies) {
         for (const reply of aiReplies) {
@@ -204,7 +217,7 @@ export function ActivityFeed() {
       setLoading(false)
       setRefreshing(false)
     }
-  }, [])
+  }, [activeCompanyId, companyAccountIds])
 
   // Initial fetch
   useEffect(() => {
@@ -219,7 +232,11 @@ export function ActivityFeed() {
     return () => clearInterval(interval)
   }, [fetchEvents])
 
-  // Supabase realtime subscription for instant updates
+  // Supabase realtime subscription for instant updates. Each insert just
+  // triggers a refetch — and fetchEvents is tenant-scoped (keyed on
+  // activeCompanyId/companyAccountIds via its deps), so a cross-tenant insert
+  // only re-runs the scoped query and never pushes another tenant's rows into
+  // the UI. No client-side payload filtering needed here.
   useEffect(() => {
     const supabase = createClient()
 

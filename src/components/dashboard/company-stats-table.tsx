@@ -29,15 +29,26 @@ type SortKey = 'name' | 'totalMessages' | 'pendingReplies' | 'aiDraftsReady' | '
 interface Props {
   stats: CompanyPerformance[]
   companyAccountIds?: string[]
+  /**
+   * The active tenant id, or `null` for the super_admin combined view.
+   * The date-filtered fetch gates account scoping on this being non-null —
+   * NOT on `companyAccountIds.length`, so a real tenant with zero accounts
+   * still scopes to `[]` (zero rows) instead of falling through unscoped.
+   */
+  activeCompanyId?: string | null
 }
 
-export function CompanyStatsTable({ stats, companyAccountIds }: Props) {
+export function CompanyStatsTable({ stats, companyAccountIds, activeCompanyId }: Props) {
   const [sortKey, setSortKey] = useState<SortKey>('totalMessages')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [specificDate, setSpecificDate] = useState('')
   const [dateFilteredStats, setDateFilteredStats] = useState<CompanyPerformance[] | null>(null)
   const [dateLoading, setDateLoading] = useState(false)
   const [expandedRow, setExpandedRow] = useState<string | null>(null)
+
+  // Stable key for the account-id array so the callback/effect only re-fire
+  // when the actual tenant scope changes, not on every array re-identity.
+  const accountIdsKey = (companyAccountIds ?? []).join(',')
 
   // Fetch per-account stats for a specific date
   const fetchForDate = useCallback(async (date: string) => {
@@ -47,14 +58,18 @@ export function CompanyStatsTable({ stats, companyAccountIds }: Props) {
     const startOfDay = new Date(date + 'T00:00:00').toISOString()
     const endOfDay = new Date(date + 'T23:59:59.999').toISOString()
 
-    // Get accounts (scoped for non-admin users)
+    // Get accounts. Scope to the active tenant's accounts when a tenant is
+    // selected — gate on `activeCompanyId` (NOT `companyAccountIds.length`),
+    // so a real tenant with zero accounts scopes to `[]` (zero rows) instead
+    // of falling through unscoped. `activeCompanyId == null` is the
+    // super_admin combined view → no scope → cross-tenant aggregation.
     let accQuery = supabase
       .from('accounts')
       .select('id, name, channel_type, gmail_address')
       .eq('is_active', true)
       .order('name')
-    if (companyAccountIds && companyAccountIds.length > 0) {
-      accQuery = accQuery.in('id', companyAccountIds)
+    if (activeCompanyId) {
+      accQuery = accQuery.in('id', companyAccountIds ?? [])
     }
     const { data: accounts } = await accQuery
 
@@ -109,7 +124,8 @@ export function CompanyStatsTable({ stats, companyAccountIds }: Props) {
     )
     setDateFilteredStats(results)
     setDateLoading(false)
-  }, [])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCompanyId, accountIdsKey])
 
   useEffect(() => {
     if (specificDate) fetchForDate(specificDate)

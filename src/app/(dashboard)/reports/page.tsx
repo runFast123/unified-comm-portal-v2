@@ -873,7 +873,7 @@ export default function ReportsPage() {
         </div>
 
         {/* Overview Enhancements: Conversation Health + Spam Detection */}
-        <OverviewEnhancements dateStart={getDateRangeStart(dateRange, customFrom)} />
+        <OverviewEnhancements dateStart={getDateRangeStart(dateRange, customFrom)} activeCompanyId={activeCompanyId} companyAccountIds={companyAccountIds} />
         </>
       )}
 
@@ -1080,7 +1080,7 @@ export default function ReportsPage() {
         </div>
 
         {/* AI Performance Enhancement: Reply Funnel */}
-        <AIPerformanceEnhancements dateStart={getDateRangeStart(dateRange, customFrom)} />
+        <AIPerformanceEnhancements dateStart={getDateRangeStart(dateRange, customFrom)} activeCompanyId={activeCompanyId} companyAccountIds={companyAccountIds} />
         </>
       )}
 
@@ -1099,23 +1099,23 @@ export default function ReportsPage() {
         </div>
 
         {/* Trends Enhancement: Spam vs Real trend */}
-        <TrendsEnhancements />
+        <TrendsEnhancements activeCompanyId={activeCompanyId} companyAccountIds={companyAccountIds} />
         </>
       )}
 
       {/* NEW: Conversations Tab */}
       {activeTab === 'conversations' && (
-        <ConversationsTab />
+        <ConversationsTab activeCompanyId={activeCompanyId} companyAccountIds={companyAccountIds} />
       )}
 
       {/* Sentiment Analytics Tab */}
       {activeTab === 'sentiment' && (
-        <SentimentAnalyticsTab dateStart={getDateRangeStart(dateRange, customFrom)} />
+        <SentimentAnalyticsTab dateStart={getDateRangeStart(dateRange, customFrom)} activeCompanyId={activeCompanyId} companyAccountIds={companyAccountIds} />
       )}
 
       {/* Spam & Filters Tab */}
       {activeTab === 'spam-filters' && (
-        <SpamFiltersTab dateStart={getDateRangeStart(dateRange, customFrom)} />
+        <SpamFiltersTab dateStart={getDateRangeStart(dateRange, customFrom)} activeCompanyId={activeCompanyId} companyAccountIds={companyAccountIds} />
       )}
 
       {activeTab === 'imported-data' && (

@@ -165,6 +165,11 @@ export default function UsersPage() {
   const supabase = createClient()
   const { toast } = useToast()
   const currentUser = useUser()
+  // Active-tenant scope for the account-assignment dropdowns. `activeCompanyId`
+  // null = super_admin combined view (show every account); otherwise restrict
+  // the accounts query to the active tenant's account IDs (empty array → zero
+  // rows, correct for a tenant with no accounts yet).
+  const { activeCompanyId, companyAccountIds } = currentUser
   const canInviteSuperAdmin = isSuperAdmin(currentUser.role)
 
   // Invite-modal role options — append super_admin only for super_admin
@@ -242,6 +247,18 @@ export default function UsersPage() {
     setLoading(true)
     setError(null)
 
+    // Scope the account-assignment dropdown to the active tenant. In combined
+    // view (activeCompanyId === null) leave it unscoped so super_admin sees
+    // every account; with a tenant selected, restrict to that tenant's account
+    // IDs (empty array → zero rows, correct for a zero-account tenant).
+    let accountsQuery = supabase
+      .from('accounts')
+      .select('id, name, is_active')
+      .order('name')
+    if (activeCompanyId) {
+      accountsQuery = accountsQuery.in('id', companyAccountIds)
+    }
+
     const [usersResult, accountsResult] = await Promise.allSettled([
       fetch('/api/admin/users', {
         method: 'GET',
@@ -256,10 +273,7 @@ export default function UsersPage() {
         }
         return (json.users ?? []) as User[]
       }),
-      supabase
-        .from('accounts')
-        .select('id, name, is_active')
-        .order('name'),
+      accountsQuery,
     ])
 
     if (usersResult.status === 'fulfilled') {
@@ -300,7 +314,7 @@ export default function UsersPage() {
     }
 
     setLoading(false)
-  }, [supabase])
+  }, [supabase, activeCompanyId, companyAccountIds])
 
   useEffect(() => {
     fetchData()

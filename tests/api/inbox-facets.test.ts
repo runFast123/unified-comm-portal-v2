@@ -12,7 +12,10 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 
 vi.mock('next/headers', () => ({
   headers: async () => ({ get: () => null }),
-  cookies: async () => ({ getAll: () => [], set: () => {} }),
+  // `get` returns undefined → no `selected_company_id` cookie set, i.e. the
+  // super_admin "All companies" combined view. The route reads this cookie to
+  // optionally scope facet counts to a switcher-selected tenant.
+  cookies: async () => ({ get: () => undefined, getAll: () => [], set: () => {} }),
 }))
 
 interface AuthFixture {

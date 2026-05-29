@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase-client'
+import { useUser } from '@/context/user-context'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -44,6 +45,10 @@ function LogLevelBadge({ level }: { level: string }) {
 }
 
 export default function LogsPage() {
+  // Active-tenant scope. audit_log carries a denormalized company_id (added in
+  // migration 20260504030000); restrict to it unless we're in super_admin
+  // combined view (activeCompanyId === null → see every tenant's audit trail).
+  const { activeCompanyId } = useUser()
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -61,6 +66,7 @@ export default function LogsPage() {
     let countQuery = supabase
       .from('audit_log')
       .select('*', { count: 'exact', head: true })
+    if (activeCompanyId) countQuery = countQuery.eq('company_id', activeCompanyId)
     if (search) countQuery = countQuery.ilike('action', `%${search}%`)
     if (levelFilter !== 'all') countQuery = countQuery.ilike('action', `%[${levelFilter.toUpperCase()}]%`)
     if (categoryFilter !== 'all') countQuery = countQuery.ilike('action', `%${categoryFilter}:%`)
@@ -75,6 +81,7 @@ export default function LogsPage() {
       .order('created_at', { ascending: false })
       .range(offset, offset + PAGE_SIZE - 1)
 
+    if (activeCompanyId) query = query.eq('company_id', activeCompanyId)
     if (search) query = query.ilike('action', `%${search}%`)
     if (levelFilter !== 'all') query = query.ilike('action', `%[${levelFilter.toUpperCase()}]%`)
     if (categoryFilter !== 'all') query = query.ilike('action', `%${categoryFilter}:%`)
@@ -82,7 +89,7 @@ export default function LogsPage() {
     const { data } = await query
     setLogs((data || []) as LogEntry[])
     setLoading(false)
-  }, [page, search, levelFilter, categoryFilter])
+  }, [page, search, levelFilter, categoryFilter, activeCompanyId])
 
   useEffect(() => {
     fetchLogs()

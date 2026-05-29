@@ -37,7 +37,7 @@ export function AgentAssignment({
   currentAssignedName,
   currentUserId,
 }: AgentAssignmentProps) {
-  const { role: viewerRole } = useUser()
+  const { role: viewerRole, activeCompanyId } = useUser()
   // Phase 2 gate: only supervisor-or-above may reassign to ANOTHER user.
   // Members keep a self-claim affordance (Assign to me) so they can still
   // pick up unowned conversations.
@@ -74,11 +74,18 @@ export function AgentAssignment({
       setUsersLoading(true)
       try {
         const supabase = createClient()
-        const { data, error } = await supabase
+        let usersQuery = supabase
           .from('users')
           .select('id, full_name, email, role, avatar_url')
           .eq('is_active', true)
           .order('full_name', { ascending: true })
+
+        // Tenant scope: when a tenant is selected, only list that company's
+        // users in the assignee dropdown. Combined view (super_admin,
+        // activeCompanyId === null) lists everyone.
+        if (activeCompanyId) usersQuery = usersQuery.eq('company_id', activeCompanyId)
+
+        const { data, error } = await usersQuery
 
         if (cancelled) return
         if (error) throw error
@@ -95,7 +102,7 @@ export function AgentAssignment({
 
     fetchUsers()
     return () => { cancelled = true }
-  }, [open])
+  }, [open, activeCompanyId])
 
   const handleAssign = useCallback(async (userId: string | null) => {
     setLoading(true)

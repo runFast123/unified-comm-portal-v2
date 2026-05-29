@@ -1479,7 +1479,8 @@ export default function DashboardPage() {
                 if (channelFilter !== 'all' && s.channel_type !== channelFilter) return false
                 return true
               })}
-              companyAccountIds={activeCompanyId ? companyAccountIds : undefined}
+              companyAccountIds={companyAccountIds}
+              activeCompanyId={activeCompanyId}
             />
           </div>
         </div>

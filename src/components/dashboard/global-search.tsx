@@ -12,6 +12,7 @@ import {
   Loader2,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase-client'
+import { useUser } from '@/context/user-context'
 import { cn } from '@/lib/utils'
 
 interface SearchResultItem {
@@ -39,6 +40,7 @@ interface GlobalSearchProps {
 
 export function GlobalSearch({ variant = 'desktop' }: GlobalSearchProps) {
   const router = useRouter()
+  const { activeCompanyId, companyAccountIds } = useUser()
   const inputRef = useRef<HTMLInputElement>(null)
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -96,22 +98,32 @@ export function GlobalSearch({ variant = 'desktop' }: GlobalSearchProps) {
       const supabase = createClient()
       const searchTerm = `%${trimmed}%`
 
-      const [messagesRes, kbRes] = await Promise.all([
-        supabase
-          .from('messages')
-          .select('id, conversation_id, email_subject, sender_name, message_text, channel')
-          .or(`sender_name.ilike.${searchTerm},email_subject.ilike.${searchTerm},message_text.ilike.${searchTerm}`)
-          .eq('direction', 'inbound')
-          .order('received_at', { ascending: false })
-          .limit(5),
-        supabase
-          .from('kb_articles')
-          .select('id, title, content, category')
-          .or(`title.ilike.${searchTerm},content.ilike.${searchTerm}`)
-          .eq('is_active', true)
-          .order('updated_at', { ascending: false })
-          .limit(5),
-      ])
+      let messagesQuery = supabase
+        .from('messages')
+        .select('id, conversation_id, email_subject, sender_name, message_text, channel')
+        .or(`sender_name.ilike.${searchTerm},email_subject.ilike.${searchTerm},message_text.ilike.${searchTerm}`)
+        .eq('direction', 'inbound')
+        .order('received_at', { ascending: false })
+        .limit(5)
+
+      let kbQuery = supabase
+        .from('kb_articles')
+        .select('id, title, content, category')
+        .or(`title.ilike.${searchTerm},content.ilike.${searchTerm}`)
+        .eq('is_active', true)
+        .order('updated_at', { ascending: false })
+        .limit(5)
+
+      // Tenant scope: when a tenant is selected, restrict messages to its
+      // accounts and KB articles to its accounts OR shared rows (account_id
+      // IS NULL). Combined view (super_admin, activeCompanyId === null) runs
+      // unscoped.
+      if (activeCompanyId) {
+        messagesQuery = messagesQuery.in('account_id', companyAccountIds)
+        kbQuery = kbQuery.or(companyAccountIds.map(id => `account_id.eq.${id}`).concat('account_id.is.null').join(','))
+      }
+
+      const [messagesRes, kbRes] = await Promise.all([messagesQuery, kbQuery])
 
       const items: SearchResultItem[] = []
 
@@ -149,7 +161,7 @@ export function GlobalSearch({ variant = 'desktop' }: GlobalSearchProps) {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [activeCompanyId, companyAccountIds])
 
   // 300ms debounce
   useEffect(() => {

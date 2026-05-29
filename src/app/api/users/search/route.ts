@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase-server'
 import { isSuperAdmin } from '@/lib/auth'
 
@@ -10,7 +11,9 @@ import { isSuperAdmin } from '@/lib/auth'
  * @-mention autocomplete in internal notes.
  *
  * Auth: required. Results are scoped to the caller's company so we never leak
- * users across companies. super_admin sees everyone.
+ * users across companies. super_admin sees everyone in COMBINED view, but is
+ * scoped to the switcher-selected company when the `selected_company_id`
+ * cookie is set (so @-mention results match the active tenant).
  *
  * Returns: `[{ id, full_name, email }]`
  *
@@ -112,9 +115,30 @@ export async function GET(request: Request) {
     }
   }
 
+  // super_admin scope: when the company switcher has an active tenant selected
+  // (the `selected_company_id` cookie), restrict @-mention results to that
+  // company via the users.company_id column. No cookie (or a stale cookie that
+  // doesn't resolve to a real company) → combined cross-tenant view preserved.
+  // Non-super callers ignore the cookie entirely (already company-scoped above).
+  let superScopeCompanyId: string | null = null
+  if (isSuperAdmin(me.role as string)) {
+    const cookieStore = await cookies()
+    const cookieCompanyId = cookieStore.get('selected_company_id')?.value?.trim() || null
+    if (cookieCompanyId) {
+      const { data: co } = await admin
+        .from('companies')
+        .select('id')
+        .eq('id', cookieCompanyId)
+        .maybeSingle()
+      if (co) superScopeCompanyId = cookieCompanyId
+    }
+  }
+
   const applyCompanyScope = (
     q2: ReturnType<typeof buildQuery>,
   ): ReturnType<typeof buildQuery> => {
+    // super_admin with an active tenant selected → scope by company_id.
+    if (superScopeCompanyId) return q2.eq('company_id', superScopeCompanyId)
     if (companyAccountIds === null) return q2
     if (companyAccountIds.length === 1 && companyAccountIds[0] === authUser.id) {
       // Sentinel — no sibling accounts; restrict to self.

@@ -14,6 +14,7 @@
 // switching within a section doesn't zero everything out).
 
 import { NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
 
 import { getCurrentUser, isSuperAdmin } from '@/lib/auth'
 import {
@@ -254,7 +255,33 @@ export async function GET(request: Request) {
   }
 
   const admin = await createServiceRoleClient()
-  const allowedAccountIds = await resolveAllowedAccounts(admin, profile)
+  let allowedAccountIds = await resolveAllowedAccounts(admin, profile)
+
+  // super_admin scope: resolveAllowedAccounts returns null (all accounts) for
+  // super_admin, which makes facet counts span every tenant. When the company
+  // switcher has an active tenant selected (the `selected_company_id` cookie),
+  // restrict facet counts to that company's accounts so they stay consistent
+  // with the (scoped) inbox list. No cookie (or a stale cookie that doesn't
+  // resolve to a real company) → combined cross-tenant view preserved.
+  // Non-super callers already have a company-scoped allow-list above.
+  if (isSuperAdmin(profile.role)) {
+    const cookieStore = await cookies()
+    const cookieCompanyId = cookieStore.get('selected_company_id')?.value?.trim() || null
+    if (cookieCompanyId) {
+      const { data: co } = await admin
+        .from('companies')
+        .select('id')
+        .eq('id', cookieCompanyId)
+        .maybeSingle()
+      if (co) {
+        const { data: accs } = await admin
+          .from('accounts')
+          .select('id')
+          .eq('company_id', cookieCompanyId)
+        allowedAccountIds = ((accs ?? []) as Array<{ id: string }>).map((r) => r.id)
+      }
+    }
+  }
 
   const url = new URL(request.url)
   const filters = readFilters(url)

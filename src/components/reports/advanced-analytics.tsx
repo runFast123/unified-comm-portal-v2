@@ -218,32 +218,41 @@ function StatCard({ label, value, subtitle, icon: Icon, color }: { label: string
 
 // ─── Overview Enhancements ────────────────────────────────────────────────────
 
-export function OverviewEnhancements({ dateStart }: { dateStart: string }) {
+export function OverviewEnhancements({ dateStart, activeCompanyId, companyAccountIds }: { dateStart: string; activeCompanyId: string | null; companyAccountIds: string[] }) {
   const [convHealth, setConvHealth] = useState<ConvHealth>({ active: 0, in_progress: 0, waiting_on_customer: 0, resolved: 0, escalated: 0, archived: 0 })
   const [spamBreakdown, setSpamBreakdown] = useState<SpamBreakdown[]>([])
   const [totalSpam, setTotalSpam] = useState(0)
   const [totalReal, setTotalReal] = useState(0)
   const [loading, setLoading] = useState(true)
 
+  const accountIdsKey = companyAccountIds.join(',')
+
   useEffect(() => {
     async function fetch() {
       setLoading(true)
       const supabase = createClient()
+      // Scope to the active tenant's accounts. `activeCompanyId === null`
+      // is the super_admin combined view → no scope (cross-tenant).
+      const accountIdFilter = activeCompanyId ? companyAccountIds : null
 
       // Conversation health
-      const { data: convs } = await supabase.from('conversations').select('status').limit(10000)
+      let convQuery = supabase.from('conversations').select('status').limit(10000)
+      if (accountIdFilter) convQuery = convQuery.in('account_id', accountIdFilter)
+      const { data: convs } = await convQuery
       const health: ConvHealth = { active: 0, in_progress: 0, waiting_on_customer: 0, resolved: 0, escalated: 0, archived: 0 }
       ;(convs || []).forEach((c: any) => { if (c.status in health) (health as any)[c.status]++ })
       setConvHealth(health)
 
       // Spam breakdown
-      const { data: spamMsgs } = await supabase
+      let spamQuery = supabase
         .from('messages')
         .select('spam_reason')
         .eq('is_spam', true)
         .eq('direction', 'inbound')
         .gte('received_at', dateStart)
         .limit(10000)
+      if (accountIdFilter) spamQuery = spamQuery.in('account_id', accountIdFilter)
+      const { data: spamMsgs } = await spamQuery
       const reasons: Record<string, number> = {}
       ;(spamMsgs || []).forEach((m: any) => {
         const r = m.spam_reason || 'unknown'
@@ -253,18 +262,21 @@ export function OverviewEnhancements({ dateStart }: { dateStart: string }) {
       setTotalSpam(spamMsgs?.length || 0)
 
       // Total real messages
-      const { count } = await supabase
+      let realQuery = supabase
         .from('messages')
         .select('id', { count: 'exact', head: true })
         .eq('is_spam', false)
         .eq('direction', 'inbound')
         .gte('received_at', dateStart)
+      if (accountIdFilter) realQuery = realQuery.in('account_id', accountIdFilter)
+      const { count } = await realQuery
       setTotalReal(count || 0)
 
       setLoading(false)
     }
     fetch()
-  }, [dateStart])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dateStart, activeCompanyId, accountIdsKey])
 
   if (loading) return <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-gray-400" /></div>
 
@@ -297,7 +309,7 @@ export function OverviewEnhancements({ dateStart }: { dateStart: string }) {
 
 // ─── AI Performance Enhancements ──────────────────────────────────────────────
 
-export function AIPerformanceEnhancements({ dateStart }: { dateStart: string }) {
+export function AIPerformanceEnhancements({ dateStart, activeCompanyId, companyAccountIds }: { dateStart: string; activeCompanyId: string | null; companyAccountIds: string[] }) {
   const [funnel, setFunnel] = useState<AiFunnel>({ pending_approval: 0, approved: 0, sent: 0, rejected: 0, edited: 0, auto_sent: 0 })
   const [confidenceDistribution, setConfidenceDistribution] = useState<{ range: string; count: number }[]>([])
   const [editedCount, setEditedCount] = useState(0)
@@ -305,15 +317,20 @@ export function AIPerformanceEnhancements({ dateStart }: { dateStart: string }) 
   const [avgConfidence, setAvgConfidence] = useState(0)
   const [loading, setLoading] = useState(true)
 
+  const accountIdsKey = companyAccountIds.join(',')
+
   useEffect(() => {
     async function fetch() {
       setLoading(true)
       const supabase = createClient()
-      const { data } = await supabase
+      const accountIdFilter = activeCompanyId ? companyAccountIds : null
+      let repliesQuery = supabase
         .from('ai_replies')
         .select('status, confidence_score, edited_text, draft_text')
         .gte('created_at', dateStart)
         .limit(10000)
+      if (accountIdFilter) repliesQuery = repliesQuery.in('account_id', accountIdFilter)
+      const { data } = await repliesQuery
 
       const f: AiFunnel = { pending_approval: 0, approved: 0, sent: 0, rejected: 0, edited: 0, auto_sent: 0 }
       const confBuckets: Record<string, number> = { '0-20%': 0, '20-40%': 0, '40-60%': 0, '60-80%': 0, '80-100%': 0 }
@@ -342,7 +359,8 @@ export function AIPerformanceEnhancements({ dateStart }: { dateStart: string }) 
       setLoading(false)
     }
     fetch()
-  }, [dateStart])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dateStart, activeCompanyId, accountIdsKey])
 
   if (loading) return <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-gray-400" /></div>
 
@@ -392,22 +410,27 @@ export function AIPerformanceEnhancements({ dateStart }: { dateStart: string }) 
 
 // ─── Trends Enhancements ──────────────────────────────────────────────────────
 
-export function TrendsEnhancements() {
+export function TrendsEnhancements({ activeCompanyId, companyAccountIds }: { activeCompanyId: string | null; companyAccountIds: string[] }) {
   const [spamTrend, setSpamTrend] = useState<{ date: string; spam: number; real: number }[]>([])
   const [loading, setLoading] = useState(true)
+
+  const accountIdsKey = companyAccountIds.join(',')
 
   useEffect(() => {
     async function fetch() {
       setLoading(true)
       const supabase = createClient()
+      const accountIdFilter = activeCompanyId ? companyAccountIds : null
       const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
 
-      const { data: msgs } = await supabase
+      let msgsQuery = supabase
         .from('messages')
         .select('received_at, is_spam')
         .eq('direction', 'inbound')
         .gte('received_at', thirtyDaysAgo)
         .limit(10000)
+      if (accountIdFilter) msgsQuery = msgsQuery.in('account_id', accountIdFilter)
+      const { data: msgs } = await msgsQuery
 
       const byDay: Record<string, { spam: number; real: number }> = {}
       ;(msgs || []).forEach((m: any) => {
@@ -426,7 +449,8 @@ export function TrendsEnhancements() {
       setLoading(false)
     }
     fetch()
-  }, [])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCompanyId, accountIdsKey])
 
   if (loading) return <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-gray-400" /></div>
 
@@ -466,7 +490,7 @@ export function TrendsEnhancements() {
 
 // ─── Conversations Tab ────────────────────────────────────────────────────────
 
-export function ConversationsTab() {
+export function ConversationsTab({ activeCompanyId, companyAccountIds }: { activeCompanyId: string | null; companyAccountIds: string[] }) {
   const [convHealth, setConvHealth] = useState<ConvHealth>({ active: 0, in_progress: 0, waiting_on_customer: 0, resolved: 0, escalated: 0, archived: 0 })
   const [priorityDist, setPriorityDist] = useState<{ label: string; value: number }[]>([])
   const [escalated, setEscalated] = useState<EscalatedConv[]>([])
@@ -474,13 +498,18 @@ export function ConversationsTab() {
   const [avgResolution, setAvgResolution] = useState<{ email: string; teams: string }>({ email: '--', teams: '--' })
   const [loading, setLoading] = useState(true)
 
+  const accountIdsKey = companyAccountIds.join(',')
+
   useEffect(() => {
     async function fetch() {
       setLoading(true)
       const supabase = createClient()
+      const accountIdFilter = activeCompanyId ? companyAccountIds : null
 
       // Status breakdown
-      const { data: convs } = await supabase.from('conversations').select('status, priority, channel, assigned_to, first_message_at, last_message_at').limit(10000)
+      let convQuery = supabase.from('conversations').select('status, priority, channel, assigned_to, first_message_at, last_message_at').limit(10000)
+      if (accountIdFilter) convQuery = convQuery.in('account_id', accountIdFilter)
+      const { data: convs } = await convQuery
       const health: ConvHealth = { active: 0, in_progress: 0, waiting_on_customer: 0, resolved: 0, escalated: 0, archived: 0 }
       const prio: Record<string, number> = { low: 0, medium: 0, high: 0, urgent: 0 }
       const resTimes: Record<string, number[]> = { email: [], teams: [] }
@@ -504,12 +533,14 @@ export function ConversationsTab() {
       })
 
       // Escalated conversations
-      const { data: escConvs } = await supabase
+      let escQuery = supabase
         .from('conversations')
         .select('id, participant_name, channel, priority, last_message_at, accounts!conversations_account_id_fkey(name)')
         .eq('status', 'escalated')
         .order('last_message_at', { ascending: false })
         .limit(10)
+      if (accountIdFilter) escQuery = escQuery.in('account_id', accountIdFilter)
+      const { data: escConvs } = await escQuery
       setEscalated((escConvs || []).map((c: any) => ({
         id: c.id,
         participant_name: c.participant_name,
@@ -520,11 +551,13 @@ export function ConversationsTab() {
       })))
 
       // Agent workload
-      const { data: assignedConvs } = await supabase
+      let assignedQuery = supabase
         .from('conversations')
         .select('assigned_to, status, users!conversations_assigned_to_fkey(full_name)')
         .not('assigned_to', 'is', null)
         .limit(10000)
+      if (accountIdFilter) assignedQuery = assignedQuery.in('account_id', accountIdFilter)
+      const { data: assignedConvs } = await assignedQuery
       const agentMap: Record<string, { name: string; total: number; pending: number }> = {}
       ;(assignedConvs || []).forEach((c: any) => {
         const uid = c.assigned_to
@@ -538,7 +571,8 @@ export function ConversationsTab() {
       setLoading(false)
     }
     fetch()
-  }, [])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCompanyId, accountIdsKey])
 
   if (loading) return <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-gray-400" /></div>
 
@@ -644,7 +678,7 @@ export function ConversationsTab() {
 
 // ─── Spam & Filters Tab ───────────────────────────────────────────────────────
 
-export function SpamFiltersTab({ dateStart }: { dateStart: string }) {
+export function SpamFiltersTab({ dateStart, activeCompanyId, companyAccountIds }: { dateStart: string; activeCompanyId: string | null; companyAccountIds: string[] }) {
   const [spamByReason, setSpamByReason] = useState<{ label: string; value: number }[]>([])
   const [spamByAccount, setSpamByAccount] = useState<{ label: string; value: number }[]>([])
   const [totalSpam, setTotalSpam] = useState(0)
@@ -652,19 +686,24 @@ export function SpamFiltersTab({ dateStart }: { dateStart: string }) {
   const [aiDetectedCount, setAiDetectedCount] = useState(0)
   const [loading, setLoading] = useState(true)
 
+  const accountIdsKey = companyAccountIds.join(',')
+
   useEffect(() => {
     async function fetch() {
       setLoading(true)
       const supabase = createClient()
+      const accountIdFilter = activeCompanyId ? companyAccountIds : null
 
       // Spam by reason
-      const { data: spamMsgs } = await supabase
+      let spamQuery = supabase
         .from('messages')
         .select('spam_reason, account_id, accounts!messages_account_id_fkey(name)')
         .eq('is_spam', true)
         .eq('direction', 'inbound')
         .gte('received_at', dateStart)
         .limit(10000)
+      if (accountIdFilter) spamQuery = spamQuery.in('account_id', accountIdFilter)
+      const { data: spamMsgs } = await spamQuery
 
       const reasons: Record<string, number> = {}
       const accounts: Record<string, number> = {}
@@ -688,7 +727,8 @@ export function SpamFiltersTab({ dateStart }: { dateStart: string }) {
       setLoading(false)
     }
     fetch()
-  }, [dateStart])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dateStart, activeCompanyId, accountIdsKey])
 
   if (loading) return <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-gray-400" /></div>
 

@@ -253,7 +253,7 @@ interface ChannelSentiment {
   messages: SentimentMessage[]
 }
 
-export function SentimentAnalyticsTab({ dateStart }: { dateStart: string }) {
+export function SentimentAnalyticsTab({ dateStart, activeCompanyId, companyAccountIds }: { dateStart: string; activeCompanyId: string | null; companyAccountIds: string[] }) {
   const [loading, setLoading] = useState(true)
   const [modalData, setModalData] = useState<{ title: string; messages: SentimentMessage[]; initialFilter?: 'all' | 'positive' | 'neutral' | 'negative' } | null>(null)
   const [channelFilter, setChannelFilter] = useState<'all' | 'email' | 'teams' | 'whatsapp'>('all')
@@ -266,13 +266,18 @@ export function SentimentAnalyticsTab({ dateStart }: { dateStart: string }) {
   const [categories, setCategories] = useState<CategorySentiment[]>([])
   const [allMessages, setAllMessages] = useState<SentimentMessage[]>([])
 
+  const accountIdsKey = companyAccountIds.join(',')
+
   useEffect(() => {
     async function fetchData() {
       setLoading(true)
       const supabase = createClient()
+      // Scope to the active tenant's accounts via the inner messages join.
+      // `activeCompanyId === null` is the super_admin combined view → no scope.
+      const accountIdFilter = activeCompanyId ? companyAccountIds : null
 
       // Fetch ALL classifications with account info
-      const { data: classData } = await supabase
+      let classQuery = supabase
         .from('message_classifications')
         .select(`
           sentiment,
@@ -290,6 +295,8 @@ export function SentimentAnalyticsTab({ dateStart }: { dateStart: string }) {
         `)
         .gte('classified_at', dateStart)
         .limit(10000)
+      if (accountIdFilter) classQuery = (classQuery as any).in('messages.account_id', accountIdFilter)
+      const { data: classData } = await classQuery
 
       const classifications = (classData || []).filter((c: any) => !c.messages?.is_spam)
 
@@ -479,7 +486,8 @@ export function SentimentAnalyticsTab({ dateStart }: { dateStart: string }) {
       setLoading(false)
     }
     fetchData()
-  }, [dateStart])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dateStart, activeCompanyId, accountIdsKey])
 
   if (loading) {
     return (

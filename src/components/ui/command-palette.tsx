@@ -17,6 +17,7 @@ import {
   Command,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase-client'
+import { useUser } from '@/context/user-context'
 import { cn } from '@/lib/utils'
 
 // ─── Types ───────────────────────────────────────────────────────
@@ -50,6 +51,7 @@ export interface CommandPaletteProps {
 
 export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const router = useRouter()
+  const { activeCompanyId, companyAccountIds } = useUser()
   const inputRef = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<SearchResult[]>([])
@@ -87,20 +89,29 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
       try {
         const supabase = createClient()
 
-        const [messagesRes, accountsRes] = await Promise.all([
-          supabase
-            .from('messages')
-            .select('id, conversation_id, email_subject, sender_name, channel')
-            .or(`email_subject.ilike.%${trimmed}%,sender_name.ilike.%${trimmed}%,message_text.ilike.%${trimmed}%`)
-            .eq('direction', 'inbound')
-            .order('received_at', { ascending: false })
-            .limit(5),
-          supabase
-            .from('accounts')
-            .select('id, name, channel_type')
-            .ilike('name', `%${trimmed}%`)
-            .limit(5),
-        ])
+        let messagesQuery = supabase
+          .from('messages')
+          .select('id, conversation_id, email_subject, sender_name, channel')
+          .or(`email_subject.ilike.%${trimmed}%,sender_name.ilike.%${trimmed}%,message_text.ilike.%${trimmed}%`)
+          .eq('direction', 'inbound')
+          .order('received_at', { ascending: false })
+          .limit(5)
+
+        let accountsQuery = supabase
+          .from('accounts')
+          .select('id, name, channel_type')
+          .ilike('name', `%${trimmed}%`)
+          .limit(5)
+
+        // Tenant scope: when a tenant is selected, restrict messages to its
+        // accounts and the accounts list to the tenant's own account ids.
+        // Combined view (super_admin, activeCompanyId === null) runs unscoped.
+        if (activeCompanyId) {
+          messagesQuery = messagesQuery.in('account_id', companyAccountIds)
+          accountsQuery = accountsQuery.in('id', companyAccountIds)
+        }
+
+        const [messagesRes, accountsRes] = await Promise.all([messagesQuery, accountsQuery])
 
         const messageResults: SearchResult[] = (messagesRes.data ?? []).map((m: any) => {
           const cleanSender = (m.sender_name || 'Unknown').replace(/<[^>]+>/g, '').replace(/^["']+|["']+$/g, '').trim()
@@ -132,7 +143,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
         setLoading(false)
       }
     },
-    []
+    [activeCompanyId, companyAccountIds]
   )
 
   // Debounced search

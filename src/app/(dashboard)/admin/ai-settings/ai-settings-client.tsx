@@ -186,11 +186,18 @@ export default function AISettingsClient({ companyAccountIds, companyId }: AISet
         }
       }
 
-      // Load accounts
-      const { data, error } = await supabase
+      // Load accounts, scoped to the caller's company. `companyAccountIds`
+      // is the same sentinel the save path uses: `null` = super_admin (no
+      // scope, show every account); an empty array = a real tenant with zero
+      // accounts (the `.in('id', [])` returns no rows, which is correct).
+      let accountsQuery = supabase
         .from('accounts')
         .select('*')
         .order('name', { ascending: true })
+      if (companyAccountIds !== null) {
+        accountsQuery = accountsQuery.in('id', companyAccountIds)
+      }
+      const { data, error } = await accountsQuery
 
       if (error) {
         console.error('Failed to load accounts:', error.message)
@@ -205,10 +212,11 @@ export default function AISettingsClient({ companyAccountIds, companyId }: AISet
       setLoading(false)
     }
     loadData()
-    // companyId is server-resolved and stable for the lifetime of the page,
-    // but we list it as a dep so a future tenant-picker would re-fetch.
+    // companyId / companyAccountIds are server-resolved and stable for the
+    // lifetime of the page, but we list them as deps so a future tenant-picker
+    // would re-fetch with the new tenant's scope.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [companyId])
+  }, [companyId, companyAccountIds])
 
   const handleSaveProvider = useCallback(async () => {
     setProviderSaving(true)
@@ -473,7 +481,14 @@ export default function AISettingsClient({ companyAccountIds, companyId }: AISet
     setDirty(false)
   }, [supabase, companyId])
 
-  function AIUsageCard() {
+  // `scopeIds` is the same scope sentinel the rest of this client uses (the
+  // `companyAccountIds` prop): `null` = super_admin combined view (no scope);
+  // an empty array = a real tenant with zero accounts (queries must return
+  // zero rows). message_classifications has no account_id column, so we scope
+  // it through the messages!inner(account_id) join — matching the established
+  // pattern in company-stats-table.tsx / dashboard/page.tsx. ai_replies is
+  // scoped directly via account_id.
+  function AIUsageCard({ scopeIds }: { scopeIds: string[] | null }) {
     const [usageStats, setUsageStats] = useState({ classifications: 0, replies: 0, sent: 0 })
     useEffect(() => {
       async function fetchUsage() {
@@ -483,10 +498,29 @@ export default function AISettingsClient({ companyAccountIds, companyId }: AISet
         monthStart.setHours(0, 0, 0, 0)
         const startISO = monthStart.toISOString()
 
+        let classQ = sb
+          .from('message_classifications')
+          .select('*, messages!inner(account_id)', { count: 'exact', head: true })
+          .gte('classified_at', startISO)
+        if (scopeIds !== null) classQ = classQ.in('messages.account_id', scopeIds)
+
+        let replyQ = sb
+          .from('ai_replies')
+          .select('*', { count: 'exact', head: true })
+          .gte('created_at', startISO)
+        if (scopeIds !== null) replyQ = replyQ.in('account_id', scopeIds)
+
+        let sentQ = sb
+          .from('ai_replies')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'sent')
+          .gte('created_at', startISO)
+        if (scopeIds !== null) sentQ = sentQ.in('account_id', scopeIds)
+
         const [{ count: classCount }, { count: replyCount }, { count: sentCount }] = await Promise.all([
-          sb.from('message_classifications').select('*', { count: 'exact', head: true }).gte('classified_at', startISO),
-          sb.from('ai_replies').select('*', { count: 'exact', head: true }).gte('created_at', startISO),
-          sb.from('ai_replies').select('*', { count: 'exact', head: true }).eq('status', 'sent').gte('created_at', startISO),
+          classQ,
+          replyQ,
+          sentQ,
         ])
         setUsageStats({
           classifications: classCount || 0,
@@ -495,7 +529,7 @@ export default function AISettingsClient({ companyAccountIds, companyId }: AISet
         })
       }
       fetchUsage()
-    }, [])
+    }, [scopeIds])
 
     const accuracy = usageStats.classifications > 0
       ? Math.round((usageStats.sent / Math.max(usageStats.replies, 1)) * 100)
@@ -960,8 +994,8 @@ export default function AISettingsClient({ companyAccountIds, companyId }: AISet
         </div>
       </Card>
 
-      {/* AI API Usage - Live from database */}
-      <AIUsageCard />
+      {/* AI API Usage - Live from database (scoped to the caller's company) */}
+      <AIUsageCard scopeIds={companyAccountIds} />
 
       {/* Sticky save bar — only renders when there are unsaved changes. Anchors
           to the viewport bottom so users on long forms can save without
