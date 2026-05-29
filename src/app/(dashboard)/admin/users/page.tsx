@@ -508,10 +508,17 @@ export default function UsersPage() {
       } else if (data.email_sent === true) {
         toast.success(data.message || `Invite email sent to ${invitedEmail}.`)
         setInviteFallbackLink(null)
+      } else if (data.invite_link) {
+        // No email sent (SMTP off), but we generated a real set-password link.
+        // This is the normal path right now: show the link for the admin to
+        // share. Clicking it confirms the user's email and lets them set a
+        // password — no "Email not confirmed" wall.
+        toast.success(`${invitedEmail} invited — share their set-password link.`)
+        setInviteFallbackLink({ email: invitedEmail, url: data.invite_link })
+        setFallbackCopied(false)
       } else {
-        // email_sent === false (or absent on a legacy response): pre-registered,
-        // but the email couldn't go out. Warn + surface the signup link so the
-        // admin can share it manually.
+        // Couldn't even generate a link — fall back to the bare signup link
+        // (works only if "Confirm email" is disabled in Supabase).
         toast.warning(
           data.warning ||
             `Couldn't send the invite email. Share the signup link with ${invitedEmail}.`,
@@ -683,16 +690,18 @@ export default function UsersPage() {
         </Card>
       )}
 
-      {/* Email-fallback notice — shown when the invite email couldn't be sent
-          (Supabase SMTP not configured). Gives the admin the shareable signup
-          link to pass along manually. Dismissible. */}
+      {/* Invite-link notice — the system generated a set-password link for the
+          invited user (no email sent because Supabase SMTP isn't configured).
+          The admin copies it and sends it however they like. Clicking it
+          confirms the user's email and lets them choose a password. */}
       {inviteFallbackLink && (
         <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4">
           <Mail className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
           <div className="min-w-0 flex-1">
             <p className="text-sm font-medium text-amber-900">
-              Email couldn&apos;t be sent. Share this signup link with{' '}
-              <span className="font-semibold">{inviteFallbackLink.email}</span>:
+              Send this set-password link to{' '}
+              <span className="font-semibold">{inviteFallbackLink.email}</span> — it confirms
+              their email and lets them choose a password:
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <code className="max-w-full truncate rounded border border-amber-200 bg-white px-2 py-1 text-xs text-amber-900">
@@ -705,7 +714,7 @@ export default function UsersPage() {
                   try {
                     await navigator.clipboard.writeText(inviteFallbackLink.url)
                     setFallbackCopied(true)
-                    toast.success('Signup link copied to clipboard.')
+                    toast.success('Invite link copied to clipboard.')
                     setTimeout(() => setFallbackCopied(false), 2000)
                   } catch {
                     toast.error('Could not copy — select and copy the link manually.')

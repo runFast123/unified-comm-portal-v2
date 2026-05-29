@@ -303,10 +303,88 @@ export async function POST(request: Request) {
   // `gate` (which TS can't carry across a nested function boundary).
   const ctx = gate.ctx
 
-  // Pre-register fallback (shared by every non-happy path below). Upsert by
-  // email so re-inviting just refreshes the pending settings rather than
-  // erroring on the PK — identical to the previous Case B behaviour.
+  // Pre-register fallback (used when no invite EMAIL could be sent — i.e.
+  // Supabase SMTP isn't configured). Instead of handing back a bare /signup
+  // link (which dead-ends when the project has "Confirm email" ON but no
+  // SMTP — the user gets "Email not confirmed" and can never sign in), we
+  // GENERATE a real action link server-side via the GoTrue admin
+  // `generate_link` endpoint. That endpoint returns the link in its response
+  // (no email send needed), and the link AUTO-CONFIRMS the user's email when
+  // clicked — so there's no confirmation wall. The invitee lands on
+  // /accept-invite, sets a password, and is in.
   async function preregisterFallback() {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+    // Generate an action link without sending email. type=invite creates the
+    // auth user (if new) and confirms on click; type=recovery is the fallback
+    // when the user already exists in auth.
+    async function genLink(type: 'invite' | 'recovery'): Promise<string | null> {
+      if (!supabaseUrl || !serviceKey) return null
+      try {
+        const r = await fetch(`${supabaseUrl}/auth/v1/admin/generate_link`, {
+          method: 'POST',
+          headers: {
+            apikey: serviceKey,
+            Authorization: `Bearer ${serviceKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            type,
+            email,
+            ...(fullName ? { data: { full_name: fullName } } : {}),
+            options: { redirect_to: `${siteUrl}/accept-invite` },
+          }),
+        })
+        if (!r.ok) return null
+        const j = (await r.json().catch(() => null)) as
+          | { action_link?: string; properties?: { action_link?: string } }
+          | null
+        return j?.action_link ?? j?.properties?.action_link ?? null
+      } catch {
+        return null
+      }
+    }
+
+    const inviteLink = (await genLink('invite')) ?? (await genLink('recovery'))
+
+    if (inviteLink) {
+      // The auth user now exists (invite created it, or recovery implies it
+      // already existed). The handle_new_auth_user trigger created the
+      // public.users row; ensure it carries the intended role/account/company,
+      // then clear any now-redundant pending invitation row.
+      await admin
+        .from('users')
+        .update({
+          role,
+          account_id: accountId,
+          company_id: targetCompanyId,
+          full_name: fullName ?? undefined,
+          is_active: true,
+        })
+        .eq('email', email)
+      await admin.from('user_invitations').delete().eq('email', email)
+
+      await admin.from('audit_log').insert({
+        user_id: ctx.userId,
+        action: 'user.invite.link',
+        entity_type: 'user',
+        entity_id: null,
+        details: { email, role, account_id: accountId, company_id: targetCompanyId, actor_id: ctx.userId },
+      })
+
+      return NextResponse.json({
+        success: true,
+        status: 'invited',
+        email_sent: false,
+        invite_link: inviteLink,
+        message:
+          'User invited. Share this set-password link with them — it confirms their email and lets them choose a password.',
+      })
+    }
+
+    // Last resort — link generation unavailable. Keep a pending invitation so
+    // a self-signup still inherits the role (works when "Confirm email" is off).
     const { data: invitation, error: inviteErr } = await admin
       .from('user_invitations')
       .upsert(
@@ -341,7 +419,7 @@ export async function POST(request: Request) {
       email_sent: false,
       signup_url: `${siteUrl}/signup`,
       warning:
-        'Invite email could not be sent (email/SMTP not configured in Supabase). Share the signup link with the user — they will inherit this role when they sign up with this email.',
+        'Could not generate an invite link. Share the signup link — the user inherits this role when they sign up with this email.',
       message: 'User pre-registered.',
       invitation,
     })
