@@ -54,6 +54,11 @@ interface WebhookPayload {
 const BACKFILL_DAYS = 7
 // Per-run cap so a huge mailbox doesn't exhaust the request timeout
 const MAX_MESSAGES_PER_RUN = 100
+// Every run also re-scans this many days by DATE (not just by UID high-water-
+// mark) so no inbound mail is ever missed if the UID cursor stalls (the Gmail
+// `N:*` range quirk) or mail arrives out of UID order. Re-fetches are deduped
+// by Message-ID, so this is safe + cheap.
+const RECONCILE_DAYS = 3
 
 /**
  * Hand a parsed inbound email to the ingest pipeline.
@@ -231,19 +236,40 @@ export async function pollEmailAccount(
     {
       const lock = await client.getMailboxLock('INBOX')
       try {
-        const searchCriteria: Record<string, unknown> =
+        // Two-pronged scan so we NEVER miss inbound mail:
+        //   1. UID high-water-mark — fast incremental path for the common case.
+        //   2. A date-window RECONCILE (`SINCE last N days`) every run — catches
+        //      anything the UID cursor would skip: the Gmail `N:*` range quirk
+        //      (when no UID exceeds the cursor, `lastUid+1:*` resolves back to the
+        //      highest existing UID and the cursor stalls), out-of-order UID
+        //      delivery, and category-tab mail. Re-fetching recent messages is
+        //      cheap + safe because ingest dedups by RFC Message-ID (and a unique
+        //      index backs it), so already-stored mail is skipped, not duplicated.
+        const reconcileSince = new Date(Date.now() - RECONCILE_DAYS * 24 * 60 * 60 * 1000)
+        const uidCriteria: Record<string, unknown> =
           lastUid && lastUid > 0
             ? { uid: `${lastUid + 1}:*` }
             : { since: new Date(Date.now() - BACKFILL_DAYS * 24 * 60 * 60 * 1000) }
 
-        const uids = (await client.search(searchCriteria, { uid: true })) as number[] | false
+        const [uidHitsRaw, reconcileHitsRaw] = await Promise.all([
+          client.search(uidCriteria, { uid: true }) as Promise<number[] | false>,
+          client.search({ since: reconcileSince }, { uid: true }) as Promise<number[] | false>,
+        ])
+        const uidHits = Array.isArray(uidHitsRaw) ? uidHitsRaw : []
+        const reconcileHits = Array.isArray(reconcileHitsRaw) ? reconcileHitsRaw : []
+        const merged = Array.from(new Set([...uidHits, ...reconcileHits]))
+        const uids: number[] | false = merged.length > 0 ? merged : false
+
         if (uids && uids.length > 0) {
-          const sorted = [...uids].sort((a, b) => a - b)
-          // Take the HEAD (oldest UIDs) not the tail. We advance the cursor
-          // to max(processed UIDs), so taking the tail would orphan every
-          // older UID below it — chronological gaps on first-run backfill.
-          // The next run resumes from `last_imap_uid + 1`, naturally picking
-          // up the remaining unfetched UIDs.
+          // Ordering depends on the mode:
+          //   - First-run BACKFILL (no cursor yet): OLDEST-first, so we advance
+          //     the cursor contiguously and never orphan older UIDs below a
+          //     capped batch (the backlog drains over successive runs).
+          //   - INCREMENTAL (cursor set): NEWEST-first, so today's mail ingests
+          //     first; the date reconcile re-surfaces any stragglers next run
+          //     and Message-ID dedup makes the overlap free.
+          const isBackfill = !(lastUid && lastUid > 0)
+          const sorted = [...uids].sort((a, b) => (isBackfill ? a - b : b - a))
           const toFetch =
             sorted.length > MAX_MESSAGES_PER_RUN ? sorted.slice(0, MAX_MESSAGES_PER_RUN) : sorted
 
