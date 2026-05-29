@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-client'
 import type { Account } from '@/types/database'
+import { useUser } from '@/context/user-context'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -107,6 +108,10 @@ export default function ChannelsPage() {
   const { toast } = useToast()
   const searchParams = useSearchParams()
   const router = useRouter()
+  // Tenant scope from the company switcher. When a tenant is selected
+  // (activeCompanyId !== null), restrict accounts to that tenant. When in
+  // super_admin combined view (activeCompanyId === null), show every tenant.
+  const { activeCompanyId, companyAccountIds } = useUser()
   const [accounts, setAccounts] = useState<Account[]>([])
   const [loading, setLoading] = useState(true)
   const [configs, setConfigs] = useState<Record<string, ConfigState>>({})
@@ -182,11 +187,20 @@ export default function ChannelsPage() {
 
   const loadAccounts = useCallback(async () => {
     setLoading(true)
-    const { data, error } = await supabase
+    let query = supabase
       .from('accounts')
       .select('*')
       .eq('is_active', true)
       .order('name')
+    // Multi-tenant scope. When the company switcher has a tenant selected
+    // (cookie set), only show that tenant's accounts. Empty companyAccountIds
+    // returns no rows, which is the correct answer for a zero-account
+    // tenant. activeCompanyId === null is super_admin combined view —
+    // leave the query unscoped so every tenant's accounts show.
+    if (activeCompanyId) {
+      query = query.in('id', companyAccountIds)
+    }
+    const { data, error } = await query
     if (error) {
       toast.error('Failed to load accounts: ' + error.message)
       setAccounts([])
@@ -194,7 +208,7 @@ export default function ChannelsPage() {
       setAccounts((data as Account[]) || [])
     }
     setLoading(false)
-  }, [supabase, toast])
+  }, [supabase, toast, activeCompanyId, companyAccountIds])
 
   const loadConfigStatus = useCallback(async (accountId: string, channel: Channel) => {
     try {

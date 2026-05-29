@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import { createClient } from '@/lib/supabase-client'
 import type { Account, Company } from '@/types/database'
+import { useUser } from '@/context/user-context'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Toggle } from '@/components/ui/toggle'
@@ -157,6 +158,10 @@ function normalizeAllowlistEntry(raw: string): string | null {
 
 export default function AccountsPage() {
   const supabase = createClient()
+  // Tenant scope from the company switcher — when a specific tenant is
+  // selected, restrict the visible accounts to that tenant. Combined view
+  // (super_admin, activeCompanyId === null) shows all tenants.
+  const { activeCompanyId, companyAccountIds } = useUser()
   const [accounts, setAccounts] = useState<Account[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -482,10 +487,16 @@ export default function AccountsPage() {
     async function fetchAccounts() {
       setLoading(true)
       setError(null)
-      const { data, error: fetchError } = await supabase
+      let query = supabase
         .from('accounts')
         .select('*')
         .order('name', { ascending: true })
+      // Multi-tenant scope. Combined-view (super_admin without tenant
+      // selected) leaves query unscoped to aggregate across tenants.
+      if (activeCompanyId) {
+        query = query.in('id', companyAccountIds)
+      }
+      const { data, error: fetchError } = await query
 
       if (fetchError) {
         setError(fetchError.message)
@@ -509,7 +520,9 @@ export default function AccountsPage() {
       setLoading(false)
     }
     fetchAccounts()
-  }, [])
+    // Re-fetch when the tenant switcher changes scope so the table
+    // immediately reflects the active tenant's accounts.
+  }, [supabase, activeCompanyId, companyAccountIds])
 
   const filtered = accounts.filter((a) => {
     if (channelFilter !== 'all' && a.channel_type !== channelFilter) return false
