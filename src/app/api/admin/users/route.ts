@@ -72,5 +72,29 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  return NextResponse.json({ users: data ?? [] })
+  // Pending pre-registrations (people invited but not yet signed up). Scope
+  // them the same way as the users list so the admin sees the result of an
+  // "Add User" action even though no public.users row exists yet.
+  let invQuery = admin
+    .from('user_invitations')
+    .select('email, role, account_id, company_id, full_name, created_at')
+    .order('created_at', { ascending: true })
+
+  if (isSuperAdmin(profile?.role)) {
+    let scopeCompanyId: string | null = null
+    if (queryCompanyId && queryCompanyId.trim().length > 0) {
+      scopeCompanyId = queryCompanyId.trim()
+    } else {
+      const cookieStore = await cookies()
+      const cookieCompanyId = cookieStore.get('selected_company_id')?.value ?? null
+      if (cookieCompanyId && cookieCompanyId.trim().length > 0) scopeCompanyId = cookieCompanyId.trim()
+    }
+    if (scopeCompanyId) invQuery = invQuery.eq('company_id', scopeCompanyId)
+  } else if (profile?.company_id) {
+    invQuery = invQuery.eq('company_id', profile.company_id)
+  }
+
+  const { data: invitations } = await invQuery
+
+  return NextResponse.json({ users: data ?? [], invitations: invitations ?? [] })
 }

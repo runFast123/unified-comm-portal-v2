@@ -197,40 +197,112 @@ export async function POST(request: Request) {
       ? body.full_name.trim()
       : null
 
-  // Insert via service role (bypasses RLS — safe because we've gated above).
-  const { data: inserted, error: insertErr } = await admin
+  // ── How a user actually comes into existence in this system ──────────────
+  // public.users rows are created ONLY by the `handle_new_auth_user` trigger
+  // when a Supabase Auth user is created (i.e. on signup). public.users.id
+  // has no default — it must equal auth.uid. So we CANNOT insert a free-
+  // standing users row here (that was the old bug: "null value in column id").
+  //
+  // Two cases:
+  //   A) The email already belongs to a real user → update that row directly
+  //      (role / account / company), with a hostile-takeover guard so a
+  //      company_admin can't steal a user from another tenant.
+  //   B) The email is not a user yet → store a pending invitation. The signup
+  //      trigger consumes it (by email) and applies role/account/company when
+  //      the person signs up. This is exactly what the modal promises.
+
+  const { data: existingUser } = await admin
     .from('users')
-    .insert({
-      email,
-      full_name: fullName,
+    .select('id, role, company_id, account_id, full_name')
+    .eq('email', email)
+    .maybeSingle()
+
+  if (existingUser) {
+    const existingCompanyId =
+      (existingUser as { company_id?: string | null }).company_id ?? null
+    // Hostile-takeover guard: a company_admin must not move a user who's
+    // already attached to a different company. Only super_admin can.
+    if (!isSuper && existingCompanyId && existingCompanyId !== targetCompanyId) {
+      return NextResponse.json(
+        {
+          error:
+            'That email already belongs to a user in another company. Ask a super_admin to transfer them.',
+        },
+        { status: 409 }
+      )
+    }
+
+    const patch: Record<string, unknown> = {
       role,
-      avatar_url: null,
-      is_active: true,
-      last_login_at: null,
       account_id: accountId,
       company_id: targetCompanyId,
+      is_active: true,
+    }
+    if (fullName && !(existingUser as { full_name?: string | null }).full_name) {
+      patch.full_name = fullName
+    }
+
+    const { data: updated, error: updateErr } = await admin
+      .from('users')
+      .update(patch)
+      .eq('id', (existingUser as { id: string }).id)
+      .select('id, email, full_name, role, company_id, account_id, is_active')
+      .single()
+    if (updateErr) {
+      return NextResponse.json({ error: updateErr.message }, { status: 500 })
+    }
+
+    await admin.from('audit_log').insert({
+      user_id: gate.ctx.userId,
+      action: 'user.invite.update_existing',
+      entity_type: 'user',
+      entity_id: (updated as { id: string }).id,
+      details: { email, role, account_id: accountId, company_id: targetCompanyId, actor_id: gate.ctx.userId },
     })
+
+    return NextResponse.json({
+      success: true,
+      status: 'updated',
+      message: 'Existing user updated with the new role and assignment.',
+      user: updated,
+    })
+  }
+
+  // Case B — pre-register. Upsert by email so re-inviting just refreshes the
+  // pending settings rather than erroring on the PK.
+  const { data: invitation, error: inviteErr } = await admin
+    .from('user_invitations')
+    .upsert(
+      {
+        email,
+        role,
+        account_id: accountId,
+        company_id: targetCompanyId,
+        full_name: fullName,
+        invited_by: gate.ctx.userId,
+      },
+      { onConflict: 'email' }
+    )
     .select()
     .single()
 
-  if (insertErr) {
-    return NextResponse.json({ error: insertErr.message }, { status: 500 })
+  if (inviteErr) {
+    return NextResponse.json({ error: inviteErr.message }, { status: 500 })
   }
 
-  // Audit
   await admin.from('audit_log').insert({
     user_id: gate.ctx.userId,
-    action: 'user.invite',
-    entity_type: 'user',
-    entity_id: (inserted as { id: string }).id,
-    details: {
-      email,
-      role,
-      account_id: accountId,
-      company_id: targetCompanyId,
-      actor_id: gate.ctx.userId,
-    },
+    action: 'user.invite.preregister',
+    entity_type: 'user_invitation',
+    entity_id: null,
+    details: { email, role, account_id: accountId, company_id: targetCompanyId, actor_id: gate.ctx.userId },
   })
 
-  return NextResponse.json({ success: true, user: inserted })
+  return NextResponse.json({
+    success: true,
+    status: 'invited',
+    message:
+      'User pre-registered. They will inherit this role and assignment when they sign up with this email.',
+    invitation,
+  })
 }

@@ -210,6 +210,17 @@ export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([])
   const [accounts, setAccounts] = useState<Account[]>([])
   const [accountMap, setAccountMap] = useState<Record<string, string>>({})
+  // Pending pre-registrations (invited, not yet signed up). These live in
+  // user_invitations (keyed by email) — they have no public.users row until
+  // the person signs up and the trigger consumes the invitation.
+  const [pendingInvitations, setPendingInvitations] = useState<Array<{
+    email: string
+    role: UserRole
+    account_id: string | null
+    company_id: string | null
+    full_name: string | null
+    created_at: string
+  }>>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -266,18 +277,30 @@ export default function UsersPage() {
       }).then(async (r) => {
         const json = (await r.json().catch(() => ({}))) as {
           users?: User[]
+          invitations?: Array<{
+            email: string
+            role: UserRole
+            account_id: string | null
+            company_id: string | null
+            full_name: string | null
+            created_at: string
+          }>
           error?: string
         }
         if (!r.ok) {
           throw new Error(json?.error || `Failed to fetch users (${r.status})`)
         }
-        return (json.users ?? []) as User[]
+        return {
+          users: (json.users ?? []) as User[],
+          invitations: json.invitations ?? [],
+        }
       }),
       accountsQuery,
     ])
 
     if (usersResult.status === 'fulfilled') {
-      const fetched = usersResult.value
+      const fetched = usersResult.value.users
+      setPendingInvitations(usersResult.value.invitations)
       setUsers(fetched)
       // Seed drafts so inline controls have stable state
       const seed: Record<string, RowDraft> = {}
@@ -296,6 +319,7 @@ export default function UsersPage() {
           : 'Failed to fetch users'
       setError(errorMsg)
       setUsers([])
+      setPendingInvitations([])
     }
 
     if (accountsResult.status === 'fulfilled' && !accountsResult.value.error) {
@@ -456,29 +480,34 @@ export default function UsersPage() {
         return
       }
 
-      const inserted = data.user as User
-      setUsers((prev) => [...prev, inserted])
-      setDrafts((prev) => ({
-        ...prev,
-        [inserted.id]: {
-          role: inserted.role,
-          account_id: inserted.account_id ?? '',
-          is_active: inserted.is_active,
-        },
-      }))
+      // The endpoint returns one of two shapes:
+      //   { status: 'updated',  user }       — email already a real user, updated in place
+      //   { status: 'invited',  invitation } — pre-registered; inherits on signup
+      const invitedEmail = inviteEmail.trim().toLowerCase()
       setInviteEmail('')
       setInviteName('')
       setInviteRole('company_member')
       setInviteAccountId('')
       setInviteError(null)
       setShowInvite(false)
-      toast.success(`User ${inviteEmail} pre-registered successfully`)
+
+      if (data.status === 'updated') {
+        toast.success(`${invitedEmail} updated with the new role and assignment.`)
+      } else {
+        toast.success(
+          `${invitedEmail} pre-registered. They'll inherit this role when they sign up with this email.`
+        )
+      }
+      // Refresh from the server so the users list AND the pending-invitations
+      // list both reflect the change (the pre-registered user has no
+      // public.users row yet, so it only shows under "Pending invitations").
+      await fetchData()
     } catch (err) {
       setInviteError(err instanceof Error ? err.message : 'Failed to invite user')
     } finally {
       setInviting(false)
     }
-  }, [inviteEmail, inviteName, inviteRole, inviteAccountId, toast])
+  }, [inviteEmail, inviteName, inviteRole, inviteAccountId, toast, fetchData])
 
   if (loading) {
     return (
@@ -594,6 +623,41 @@ export default function UsersPage() {
           />
         </div>
       </div>
+
+      {/* Pending invitations — pre-registered emails that haven't signed up
+          yet. They have no public.users row; they appear here until the
+          person signs up with this email (the trigger then creates their
+          user row with the pre-assigned role/account). */}
+      {pendingInvitations.length > 0 && (
+        <Card className="border-amber-200 bg-amber-50/40">
+          <div className="border-b border-amber-200 px-4 py-3">
+            <h2 className="text-sm font-semibold text-amber-900">
+              Pending invitations ({pendingInvitations.length})
+            </h2>
+            <p className="mt-0.5 text-xs text-amber-700">
+              These people were pre-registered. They&apos;ll inherit the role &amp; account below
+              automatically when they sign up with the same email.
+            </p>
+          </div>
+          <div className="divide-y divide-amber-100">
+            {pendingInvitations.map((inv) => (
+              <div
+                key={inv.email}
+                className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5 text-sm"
+              >
+                <span className="font-medium text-gray-800">{inv.email}</span>
+                {getRoleBadge(inv.role)}
+                <span className="text-gray-500">
+                  {inv.account_id ? (accountMap[inv.account_id] ?? 'Account') : 'No account'}
+                </span>
+                <span className="ml-auto inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 ring-1 ring-amber-200">
+                  Awaiting signup
+                </span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {/* Users table */}
       <Card>
