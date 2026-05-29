@@ -25,6 +25,7 @@ import { NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase-server'
 import { requireToken } from '@/app/api/v1/_helpers'
 import { sendEmail, sendTeams, sendWhatsApp } from '@/lib/channel-sender'
+import { getReplyToMessageId } from '@/lib/api-helpers'
 import { logError, logInfo } from '@/lib/logger'
 
 interface PostBody {
@@ -110,11 +111,15 @@ export async function POST(
     if (!conv.participant_email) {
       return NextResponse.json({ error: 'Conversation has no participant email' }, { status: 400 })
     }
+    // Thread the API reply against the conversation's latest inbound email
+    // (In-Reply-To / References) so it stays in the same thread.
+    const replyToMessageId = await getReplyToMessageId(admin, id)
     result = await sendEmail({
       accountId: conv.account_id,
       to: conv.participant_email,
       subject: subject || 'Re: Your inquiry',
       body: messageBody,
+      replyToMessageId,
     })
   } else if (conv.channel === 'teams') {
     if (!conv.teams_chat_id) {

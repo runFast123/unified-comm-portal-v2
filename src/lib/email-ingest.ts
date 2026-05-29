@@ -160,23 +160,31 @@ export async function ingestInboundEmail(
     return { ok: false, status: 'account_inactive', error: 'Account is not active', http_code: 403 }
   }
 
-  // ── Dedup (fallback) ────────────────────────────────────────────
+  // ── Dedup (fallback for mail with NO Message-ID) ────────────────
   // The PRIMARY Message-ID dedup already ran before the rate limiter above.
-  // This is the FALLBACK for the rare email with NO Message-ID: same body
-  // prefix from the same account+sender within 5 min. Kept narrow so
-  // legitimate repeat messages aren't wrongly dropped.
+  // This is the FALLBACK for the rare email that carries no RFC Message-ID.
+  //
+  // It MUST be time-independent. `timestamp`/`received_at` now hold the real
+  // email Date header (not poll time), so the old now()-relative 5-minute
+  // window never matched reconciled historical mail — the date-reconcile scan
+  // re-fetched those no-ID messages every run and re-inserted them, and the
+  // partial unique index (which covers Message-ID rows only) can't catch them.
+  // Instead we match the migration's canonical no-ID key: same account +
+  // sender + subject + exact body. Identical content from the same sender is
+  // treated as the same email, exactly as the dedupe migration does.
   if (!emailMessageId && plainTextBody && plainTextBody.trim().length > 0) {
-    const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString()
-    const { data: existingMsg } = await supabase
+    let dedupQuery = supabase
       .from('messages')
       .select('id')
       .eq('account_id', account_id)
       .eq('channel', 'email')
       .eq('direction', 'inbound')
-      .like('message_text', plainTextBody.substring(0, 100).replace(/%/g, '\\%').replace(/_/g, '\\_') + '%')
-      .gte('timestamp', fiveMinAgo)
-      .limit(1)
-      .maybeSingle()
+      .eq('sender_name', senderName || sender)
+      .eq('message_text', plainTextBody)
+    // Match the stored `email_subject` exactly — note an empty subject is
+    // persisted as NULL on insert, so use IS NULL rather than `= ''`.
+    dedupQuery = subject ? dedupQuery.eq('email_subject', subject) : dedupQuery.is('email_subject', null)
+    const { data: existingMsg } = await dedupQuery.limit(1).maybeSingle()
 
     if (existingMsg) {
       void bumpLastPolledAt(supabase, account_id)

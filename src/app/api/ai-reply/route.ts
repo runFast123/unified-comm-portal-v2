@@ -476,14 +476,19 @@ export async function POST(request: Request) {
           .maybeSingle()
         const { data: origMsg } = await supabase
           .from('messages')
-          .select('email_subject')
+          .select('email_subject, email_message_id')
           .eq('id', message_id)
           .maybeSingle()
 
         const subject = origMsg?.email_subject ? `Re: ${origMsg.email_subject}` : 'Re: Your communication'
         let sendResult
         if (channelKey === 'email' && convForReply?.participant_email) {
-          sendResult = await sendEmail({ accountId: account_id, to: convForReply.participant_email, subject, body: replyText })
+          // Thread the auto-reply against the exact customer message we're
+          // answering (In-Reply-To / References, RFC 5322 §3.6.4) so it lands
+          // in the same thread in the recipient's mail client and our
+          // Sent-folder reconcile re-attaches it by thread root.
+          const replyToMessageId = (origMsg as { email_message_id?: string | null } | null)?.email_message_id ?? null
+          sendResult = await sendEmail({ accountId: account_id, to: convForReply.participant_email, subject, body: replyText, replyToMessageId })
         } else if (channelKey === 'teams' && convForReply?.teams_chat_id) {
           sendResult = await sendTeams({ accountId: account_id, chatId: convForReply.teams_chat_id, body: replyText })
         } else if (channelKey === 'whatsapp' && convForReply?.participant_phone) {

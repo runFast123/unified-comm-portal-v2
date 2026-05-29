@@ -143,6 +143,39 @@ async function matchEmailBySubject(
 }
 
 /**
+ * Resolve the RFC 5322 Message-ID that an outbound email reply should thread
+ * against. Returns the most recent INBOUND email message's `email_message_id`
+ * for the conversation (the message we're replying to), or null when there is
+ * no inbound email with a stored Message-ID.
+ *
+ * Setting In-Reply-To / References to this value (RFC 5322 §3.6.4) makes the
+ * recipient's mail client file our reply under the original thread, and lets
+ * our own Sent-folder reconcile re-attach the sent copy to the correct
+ * conversation by thread root instead of falling back to sender-only matching.
+ * Pure read; never throws (degrades to null so sends are never blocked).
+ */
+export async function getReplyToMessageId(
+  supabase: Awaited<ReturnType<typeof createServiceRoleClient>>,
+  conversationId: string,
+): Promise<string | null> {
+  try {
+    const { data } = await supabase
+      .from('messages')
+      .select('email_message_id')
+      .eq('conversation_id', conversationId)
+      .eq('channel', 'email')
+      .eq('direction', 'inbound')
+      .not('email_message_id', 'is', null)
+      .order('received_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    return (data as { email_message_id?: string | null } | null)?.email_message_id ?? null
+  } catch {
+    return null
+  }
+}
+
+/**
  * Finds an existing conversation or creates a new one.
  */
 export async function findOrCreateConversation(

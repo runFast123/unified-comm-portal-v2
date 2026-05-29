@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase-server'
 import { sendEmail, sendTeams, sendWhatsApp } from '@/lib/channel-sender'
-import { validateWebhookSecret } from '@/lib/api-helpers'
+import { validateWebhookSecret, getReplyToMessageId } from '@/lib/api-helpers'
 import { logError, logInfo } from '@/lib/logger'
 import { getRequestId } from '@/lib/request-id'
 import { recordMetric } from '@/lib/metrics'
@@ -119,11 +119,15 @@ export async function GET(request: Request) {
         if (!row.to_address) {
           throw new Error('Missing recipient email on scheduled row')
         }
+        // Thread against the conversation's latest inbound email so the
+        // dispatched reply stays in the same thread (In-Reply-To / References).
+        const replyToMessageId = await getReplyToMessageId(admin, row.conversation_id)
         result = await sendEmail({
           accountId: row.account_id,
           to: row.to_address,
           subject: row.subject || 'Re: Your inquiry',
           body: row.reply_text,
+          replyToMessageId,
         })
       } else if (row.channel === 'teams') {
         if (!row.teams_chat_id) {
@@ -319,11 +323,15 @@ export async function GET(request: Request) {
           // shape we stored in /api/send. Unwrap defensively.
           const attsRaw = (row.attachments as { attachments?: Array<{ path: string; filename: string; contentType?: string }> } | null)?.attachments
           const atts = Array.isArray(attsRaw) ? attsRaw : []
+          // Thread the undo-window reply against the conversation's latest
+          // inbound email (In-Reply-To / References) at dispatch time.
+          const replyToMessageId = await getReplyToMessageId(admin, row.conversation_id)
           result = await sendEmail({
             accountId: row.account_id,
             to: row.to_address,
             subject: row.subject || 'Re: Your inquiry',
             body: row.reply_text,
+            replyToMessageId,
             attachments: atts.length > 0
               ? atts.map((a) => ({ path: a.path, filename: a.filename, contentType: a.contentType }))
               : undefined,

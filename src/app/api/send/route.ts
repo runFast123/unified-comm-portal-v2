@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase-server'
 import { sendEmail, sendTeams, sendWhatsApp } from '@/lib/channel-sender'
-import { checkRateLimit, verifyAccountAccess } from '@/lib/api-helpers'
+import { checkRateLimit, verifyAccountAccess, getReplyToMessageId } from '@/lib/api-helpers'
 import { getRequestId } from '@/lib/request-id'
 import { logError, logInfo } from '@/lib/logger'
 import { resolveSignature, appendSignatureToBody } from '@/lib/email-signature'
@@ -232,6 +232,10 @@ export async function POST(request: Request) {
     let result
     if (channel === 'email') {
       if (!body.to) return NextResponse.json({ error: 'Missing recipient email', request_id: requestId }, { status: 400 })
+      // Thread the reply against the latest inbound email on this conversation
+      // (In-Reply-To / References) so it stays in the same thread for the
+      // recipient and the Sent-folder reconcile re-attaches it by thread root.
+      const replyToMessageId = await getReplyToMessageId(admin, conversation_id)
       result = await sendEmail({
         accountId: account_id,
         to: body.to,
@@ -239,6 +243,7 @@ export async function POST(request: Request) {
         // Signature-augmented body for email; no-op when append_signature
         // is false or no signature is configured.
         body: resolvedReplyText,
+        replyToMessageId,
         attachments: attachments.length > 0
           ? attachments.map((a) => ({ path: a.path, filename: a.filename, contentType: a.contentType }))
           : undefined,
