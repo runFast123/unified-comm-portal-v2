@@ -100,9 +100,32 @@ export async function ingestInboundEmail(
     return { ok: false, status: 'invalid_input', error: 'Missing or empty required field: sender', http_code: 400 }
   }
 
+  // ── Dedup by Message-ID — BEFORE the rate limit ─────────────────────
+  // The poller's date-reconcile re-fetches recent mail every run; the vast
+  // majority is already stored. We must short-circuit those re-feeds HERE,
+  // before the rate limiter, otherwise re-fed duplicates burn the per-account
+  // token budget and 429 (which is exactly what happened once reconcile was
+  // added — 53 fetched, a dozen "rate limit exceeded"). The RFC Message-ID is
+  // globally unique per email, so this is the correct, time-independent key.
+  if (emailMessageId) {
+    const { data: existingById } = await supabase
+      .from('messages')
+      .select('id')
+      .eq('account_id', account_id)
+      .eq('channel', 'email')
+      .eq('email_message_id', emailMessageId)
+      .limit(1)
+      .maybeSingle()
+    if (existingById) {
+      void bumpLastPolledAt(supabase, account_id)
+      return { ok: true, status: 'duplicate', message_id: existingById.id, http_code: 200 }
+    }
+  }
+
   // Per-account rate limit. 100 inbound/min is a conservative ceiling that
   // protects the AI pipeline from a runaway upstream — same guard the HTTP
-  // webhook applies, so behavior is identical regardless of caller.
+  // webhook applies, so behavior is identical regardless of caller. Only
+  // genuinely-new mail (past the dedup above) consumes the budget.
   if (!(await checkRateLimit(`webhook:email:${account_id}`, 100, 60))) {
     return { ok: false, status: 'rate_limited', error: 'Rate limit exceeded. Try again later.', http_code: 429 }
   }
@@ -137,35 +160,11 @@ export async function ingestInboundEmail(
     return { ok: false, status: 'account_inactive', error: 'Account is not active', http_code: 403 }
   }
 
-  // ── Dedup ───────────────────────────────────────────────────────
-  // PRIMARY: the RFC Message-ID is globally unique per email. If we've already
-  // stored a message with this (account_id, email_message_id), this is a
-  // re-delivery or a re-poll of the same UID — skip it. This is
-  // time-INDEPENDENT, which is the whole point: the previous dedup only looked
-  // back 5 minutes by `timestamp`, so when the IMAP cursor re-scanned the
-  // mailbox hours/days later it re-ingested everything, producing thousands of
-  // duplicate rows (and `idempotency_key` was never set as a backstop). A hard
-  // partial-unique index on (account_id, email_message_id) backs this up at the
-  // DB layer (migration 20260529130000); the 23505 handler on insert below
-  // turns a lost race into a clean "duplicate" instead of a 500.
-  if (emailMessageId) {
-    const { data: existingById } = await supabase
-      .from('messages')
-      .select('id')
-      .eq('account_id', account_id)
-      .eq('channel', 'email')
-      .eq('email_message_id', emailMessageId)
-      .limit(1)
-      .maybeSingle()
-    if (existingById) {
-      void bumpLastPolledAt(supabase, account_id)
-      return { ok: true, status: 'duplicate', message_id: existingById.id, http_code: 200 }
-    }
-  }
-
-  // FALLBACK (only for the rare email with NO Message-ID): same body prefix
-  // from the same account+sender within 5 min. Kept narrow so legitimate
-  // repeat messages aren't wrongly dropped.
+  // ── Dedup (fallback) ────────────────────────────────────────────
+  // The PRIMARY Message-ID dedup already ran before the rate limiter above.
+  // This is the FALLBACK for the rare email with NO Message-ID: same body
+  // prefix from the same account+sender within 5 min. Kept narrow so
+  // legitimate repeat messages aren't wrongly dropped.
   if (!emailMessageId && plainTextBody && plainTextBody.trim().length > 0) {
     const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString()
     const { data: existingMsg } = await supabase
