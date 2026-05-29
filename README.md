@@ -271,8 +271,8 @@ Agent Review (UI)
 
 | Model | Parameters | Best For |
 |-------|-----------|----------|
-| moonshotai/kimi-k2.5 (default) | 1T MoE | Best overall quality, multilingual |
-| meta/llama-3.3-70b-instruct | 70B | Fast, reliable general use |
+| meta/llama-3.3-70b-instruct (default) | 70B | Fast, reliable general use, structured output |
+| moonshotai/kimi-k2.6 | 1T MoE | Highest quality, multilingual (slower cold-start) |
 | deepseek-ai/deepseek-v3.2 | 685B MoE | Complex reasoning |
 | qwen/qwen3.5-397b-a17b | 397B MoE | Multilingual + code |
 | meta/llama-3.1-405b-instruct | 405B | Maximum accuracy |
@@ -344,7 +344,7 @@ WEBHOOK_SECRET=your-webhook-secret
 # AI (NVIDIA NIM)
 AI_BASE_URL=https://integrate.api.nvidia.com/v1
 AI_API_KEY=your-nvidia-api-key
-AI_MODEL=moonshotai/kimi-k2.5
+AI_MODEL=meta/llama-3.3-70b-instruct
 
 # WhatsApp (optional)
 WHATSAPP_VERIFY_TOKEN=your-verify-token

@@ -94,7 +94,7 @@ export default function AISettingsClient({ companyAccountIds, companyId }: AISet
   const [providerName, setProviderName] = useState('NVIDIA')
   const [baseUrl, setBaseUrl] = useState('https://integrate.api.nvidia.com/v1')
   const [apiKey, setApiKey] = useState('')
-  const [model, setModel] = useState('moonshotai/kimi-k2.5')
+  const [model, setModel] = useState('meta/llama-3.3-70b-instruct')
   const [maxTokens, setMaxTokens] = useState(4096)
   const [temperature, setTemperature] = useState(1.0)
   const [showApiKey, setShowApiKey] = useState(false)
@@ -631,11 +631,11 @@ export default function AISettingsClient({ companyAccountIds, companyId }: AISet
                 className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-teal-500 focus:ring-1 focus:ring-teal-500 focus:outline-none"
               >
                 <optgroup label="Recommended">
-                  <option value="moonshotai/kimi-k2.5">Kimi K2.5 — Best quality (1T MoE, 200K context)</option>
+                  <option value="meta/llama-3.3-70b-instruct">Llama 3.3 70B — Fast &amp; reliable (default)</option>
                 </optgroup>
                 <optgroup label="Backup Models">
-                  <option value="meta/llama-3.3-70b-instruct">Llama 3.3 70B — Free tier, reliable</option>
-                  <option value="openai/gpt-oss-120b">GPT-OSS 120B — Previous default</option>
+                  <option value="moonshotai/kimi-k2.6">Kimi K2.6 — Highest quality (1T MoE, slower)</option>
+                  <option value="openai/gpt-oss-120b">GPT-OSS 120B — General purpose</option>
                 </optgroup>
                 <optgroup label="Other NVIDIA Models">
                   <option value="z-ai/glm5">GLM-5 — Strong reasoning (744B MoE)</option>
@@ -651,7 +651,7 @@ export default function AISettingsClient({ companyAccountIds, companyId }: AISet
               </select>
               {/* Model info badge */}
               <div className="mt-2 rounded-lg bg-gray-50 border border-gray-200 px-3 py-2 text-xs text-gray-600">
-                {model === 'moonshotai/kimi-k2.5' && '1T parameters (32B active) · 200K context · Best for KB-grounded replies'}
+                {model === 'moonshotai/kimi-k2.6' && '1T parameters (32B active) · Highest quality · Slower cold-start (can exceed the 30s timeout under low traffic)'}
                 {model === 'meta/llama-3.3-70b-instruct' && '70B parameters · Free tier available · Good all-rounder · Reliable structured output'}
                 {model === 'openai/gpt-oss-120b' && '120B parameters · General purpose · Average quality · Low cost'}
                 {model === 'z-ai/glm5' && '744B MoE · Strong reasoning + agentic tasks'}

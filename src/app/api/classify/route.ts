@@ -179,7 +179,24 @@ export async function POST(request: Request) {
           { status: 200 }
         )
       }
-      throw err
+      // Any OTHER AI provider failure — a non-2xx response (e.g. a retired
+      // model returning 404, a 429, or a 5xx), a network error, or a timeout
+      // after retries. Classification is best-effort: never 500 the
+      // webhook/ingest pipeline over it. Log it (so the failure is visible in
+      // ops) and skip — the circuit breaker + retries handle recovery, and the
+      // message row is already stored so it can be re-classified later.
+      logError('ai', 'ai_error_classify', err instanceof Error ? err.message : 'Unknown AI error', {
+        request_id: requestId,
+        account_id,
+        message_id,
+      })
+      return NextResponse.json(
+        {
+          skipped: true,
+          reason: 'ai_provider_error',
+        },
+        { status: 200 }
+      )
     }
 
     // Parse the JSON response from Claude

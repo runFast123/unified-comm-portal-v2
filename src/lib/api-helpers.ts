@@ -480,7 +480,7 @@ async function getAIConfig(accountId?: string): Promise<AIConfig> {
   return {
     base_url: process.env.AI_BASE_URL || 'https://integrate.api.nvidia.com/v1',
     api_key: apiKey,
-    model: process.env.AI_MODEL || 'moonshotai/kimi-k2.5',
+    model: process.env.AI_MODEL || 'meta/llama-3.3-70b-instruct',
     max_tokens: Number(process.env.AI_MAX_TOKENS) || 4096,
     temperature: Number(process.env.AI_TEMPERATURE) || 1.0,
   }
