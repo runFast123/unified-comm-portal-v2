@@ -1,16 +1,33 @@
 'use client'
 
-import { useState, Suspense } from 'react'
-import Link from 'next/link'
-import { useSearchParams } from 'next/navigation'
+import { useState, useEffect, Suspense } from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { Loader2, Mail, Lock, CheckCircle2, AlertCircle } from 'lucide-react'
 import { signIn } from '@/lib/auth-actions'
 
 function LoginForm() {
+  const router = useRouter()
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const searchParams = useSearchParams()
   const message = searchParams.get('message')
+
+  // Invite / password-recovery links carry their token in the URL *hash*
+  // (#access_token=...&type=invite|recovery|signup). Supabase sometimes lands
+  // these on the Site URL root / login instead of /accept-invite. If we detect
+  // such a token here, forward it (hash intact) to the set-password page so the
+  // invitee can choose a password — otherwise they'd be stuck on this form with
+  // no password to enter ("Invalid login credentials").
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const hash = window.location.hash
+    if (!hash || !hash.includes('access_token')) return
+    const params = new URLSearchParams(hash.replace(/^#/, ''))
+    const type = params.get('type')
+    if (type === 'recovery' || type === 'invite' || type === 'signup') {
+      router.replace('/accept-invite' + hash)
+    }
+  }, [router])
 
   async function handleSubmit(formData: FormData) {
     setError(null)
@@ -103,20 +120,9 @@ function LoginForm() {
         </button>
       </form>
 
-      <div className="mt-6 flex items-center gap-3">
-        <div className="h-px flex-1 bg-gray-200" />
-        <span className="text-xs text-gray-400">or</span>
-        <div className="h-px flex-1 bg-gray-200" />
-      </div>
-
-      <p className="mt-4 text-center text-sm text-gray-500">
-        Don&apos;t have an account?{' '}
-        <Link
-          href="/signup"
-          className="font-semibold text-teal-700 hover:text-teal-800 transition-colors"
-        >
-          Create one
-        </Link>
+      <p className="mt-6 text-center text-xs text-gray-400">
+        Access is invite-only. Ask your administrator to add you, then use the
+        set-password link they share.
       </p>
     </>
   )
