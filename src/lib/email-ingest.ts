@@ -138,9 +138,35 @@ export async function ingestInboundEmail(
   }
 
   // ── Dedup ───────────────────────────────────────────────────────
-  // Same body prefix from same account within 5 min → already processed.
-  // thread_id is intentionally NOT used (multiple messages share threads).
-  if (plainTextBody && plainTextBody.trim().length > 0) {
+  // PRIMARY: the RFC Message-ID is globally unique per email. If we've already
+  // stored a message with this (account_id, email_message_id), this is a
+  // re-delivery or a re-poll of the same UID — skip it. This is
+  // time-INDEPENDENT, which is the whole point: the previous dedup only looked
+  // back 5 minutes by `timestamp`, so when the IMAP cursor re-scanned the
+  // mailbox hours/days later it re-ingested everything, producing thousands of
+  // duplicate rows (and `idempotency_key` was never set as a backstop). A hard
+  // partial-unique index on (account_id, email_message_id) backs this up at the
+  // DB layer (migration 20260529130000); the 23505 handler on insert below
+  // turns a lost race into a clean "duplicate" instead of a 500.
+  if (emailMessageId) {
+    const { data: existingById } = await supabase
+      .from('messages')
+      .select('id')
+      .eq('account_id', account_id)
+      .eq('channel', 'email')
+      .eq('email_message_id', emailMessageId)
+      .limit(1)
+      .maybeSingle()
+    if (existingById) {
+      void bumpLastPolledAt(supabase, account_id)
+      return { ok: true, status: 'duplicate', message_id: existingById.id, http_code: 200 }
+    }
+  }
+
+  // FALLBACK (only for the rare email with NO Message-ID): same body prefix
+  // from the same account+sender within 5 min. Kept narrow so legitimate
+  // repeat messages aren't wrongly dropped.
+  if (!emailMessageId && plainTextBody && plainTextBody.trim().length > 0) {
     const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString()
     const { data: existingMsg } = await supabase
       .from('messages')
@@ -154,9 +180,6 @@ export async function ingestInboundEmail(
       .maybeSingle()
 
     if (existingMsg) {
-      // We did receive the email, even if we'd already stored it. Stamp the
-      // account so the operator-visible "last synced" timestamp reflects
-      // the actual delivery moment instead of staying stuck on a stale poll.
       void bumpLastPolledAt(supabase, account_id)
       return { ok: true, status: 'duplicate', message_id: existingMsg.id, http_code: 200 }
     }
@@ -227,6 +250,23 @@ export async function ingestInboundEmail(
     .single()
 
   if (msgError || !message) {
+    // A unique-violation on the (account_id, email_message_id) backstop index
+    // means a concurrent poll already stored this exact email — treat it as a
+    // duplicate (idempotent), not a failure.
+    if ((msgError as { code?: string } | null)?.code === '23505' && emailMessageId) {
+      const { data: race } = await supabase
+        .from('messages')
+        .select('id')
+        .eq('account_id', account_id)
+        .eq('channel', 'email')
+        .eq('email_message_id', emailMessageId)
+        .limit(1)
+        .maybeSingle()
+      if (race) {
+        void bumpLastPolledAt(supabase, account_id)
+        return { ok: true, status: 'duplicate', message_id: race.id, http_code: 200 }
+      }
+    }
     logError('webhook', 'email_store_failed', msgError?.message || 'unknown insert failure', {
       request_id: requestId,
       account_id,
