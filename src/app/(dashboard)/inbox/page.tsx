@@ -536,25 +536,36 @@ export default function InboxPage() {
         } satisfies InboxItem
       })
 
-      // For Teams: group by conversation_id and show only the latest message per conversation
-      // Email shows each message individually (each email = separate topic)
+      // Collapse to ONE row per conversation (industry standard, like Gmail/
+      // Front). Both Teams AND email are now grouped by conversation_id — we
+      // keep the LATEST message per conversation (real `received_at` date) and
+      // track how many messages it represents via `message_count`. WhatsApp and
+      // any other channel are collapsed the same way. Previously only Teams was
+      // collapsed and every email was pushed as its own row, which — combined
+      // with sender-only threading — flooded the inbox with duplicate threads.
       const convMap = new Map<string, InboxItem>()
-      const deduped: InboxItem[] = []
+      const passthrough: InboxItem[] = []
       for (const item of mapped) {
-        if (item.channel === 'teams') {
-          const existing = convMap.get(item.conversation_id)
-          if (!existing || item.timestamp > existing.timestamp) {
-            convMap.set(item.conversation_id, item)
-          }
+        if (!item.conversation_id) {
+          // No conversation id (shouldn't happen for stored messages) — keep as-is.
+          passthrough.push(item)
+          continue
+        }
+        const existing = convMap.get(item.conversation_id)
+        if (!existing) {
+          convMap.set(item.conversation_id, { ...item, message_count: 1 })
         } else {
-          deduped.push(item)
+          const count = (existing.message_count ?? 1) + 1
+          // Keep whichever message is newest by real timestamp as the row head.
+          const head =
+            new Date(item.timestamp).getTime() > new Date(existing.timestamp).getTime()
+              ? item
+              : existing
+          convMap.set(item.conversation_id, { ...head, message_count: count })
         }
       }
-      // Add the latest Teams message per conversation
-      for (const item of convMap.values()) {
-        deduped.push(item)
-      }
-      // Re-sort by timestamp descending
+      const deduped: InboxItem[] = [...passthrough, ...convMap.values()]
+      // Sort newest-activity first (real `received_at` now drives `timestamp`).
       deduped.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
 
       setItems(deduped)
@@ -649,9 +660,34 @@ export default function InboxPage() {
             snoozed_until: conv?.snoozed_until ?? null,
           }
         })
-        setItems(prev => [...prev, ...mapped])
+        // Merge into the existing list, collapsing to one row per conversation
+        // (same rule as the initial fetch). A newly-paged message that belongs
+        // to a conversation already on screen bumps its message_count and, if
+        // newer, becomes the row head — it does NOT add a duplicate row.
+        const collapseMerge = (prev: InboxItem[]): InboxItem[] => {
+          const byConv = new Map<string, InboxItem>()
+          const loose: InboxItem[] = []
+          for (const it of [...prev, ...mapped]) {
+            if (!it.conversation_id) { loose.push(it); continue }
+            const ex = byConv.get(it.conversation_id)
+            if (!ex) {
+              byConv.set(it.conversation_id, { ...it, message_count: it.message_count ?? 1 })
+            } else {
+              const count = (ex.message_count ?? 1) + (it.message_count ?? 1)
+              const head =
+                new Date(it.timestamp).getTime() > new Date(ex.timestamp).getTime() ? it : ex
+              byConv.set(it.conversation_id, { ...head, message_count: count })
+            }
+          }
+          const merged = [...loose, ...byConv.values()]
+          merged.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+          return merged
+        }
+        const mergedItems = collapseMerge(items)
+        setItems(mergedItems)
+        // Keep the count badge in sync with the collapsed row count.
+        setTotalCount(mergedItems.length)
         setHasMore(moreMessages.length >= INBOX_PAGE_SIZE)
-        setTotalCount(prev => prev + mapped.length)
       } else {
         setHasMore(false)
       }

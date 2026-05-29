@@ -5,9 +5,10 @@ import { InboxRow } from '@/components/inbox/inbox-row'
 import { Select } from '@/components/ui/select'
 import type { InboxItem } from '@/types/database'
 
-type SortKey = 'time_waiting' | 'priority' | 'channel'
+type SortKey = 'newest' | 'time_waiting' | 'priority' | 'channel'
 
 const sortOptions = [
+  { value: 'newest', label: 'Newest' },
   { value: 'time_waiting', label: 'Longest waiting' },
   { value: 'priority', label: 'Priority' },
   { value: 'channel', label: 'Channel' },
@@ -30,7 +31,9 @@ interface InboxListProps {
 
 export function InboxList({ items, onItemClick, selectedItemId, selectedIds: externalSelectedIds, onSelectionChange }: InboxListProps) {
   const [internalSelectedIds, setInternalSelectedIds] = useState<Set<string>>(new Set())
-  const [sortBy, setSortBy] = useState<SortKey>('time_waiting')
+  // Default to newest-activity-first (industry standard, like Gmail/Front).
+  // `timestamp` carries the conversation's latest real `received_at`.
+  const [sortBy, setSortBy] = useState<SortKey>('newest')
 
   // Use external selection if provided, otherwise use internal
   const selectedIds = externalSelectedIds ?? internalSelectedIds
@@ -54,6 +57,15 @@ export function InboxList({ items, onItemClick, selectedItemId, selectedIds: ext
   const sortedItems = useMemo(() => {
     const sorted = [...items]
     switch (sortBy) {
+      case 'newest':
+        // Most recent activity first. `timestamp` = latest real received_at;
+        // fall back to time_waiting if a row somehow lacks it.
+        sorted.sort(
+          (a, b) =>
+            new Date(b.timestamp || b.time_waiting).getTime() -
+            new Date(a.timestamp || a.time_waiting).getTime()
+        )
+        break
       case 'time_waiting':
         sorted.sort(
           (a, b) => new Date(a.time_waiting).getTime() - new Date(b.time_waiting).getTime()

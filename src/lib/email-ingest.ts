@@ -31,6 +31,20 @@ export interface InboundEmailPayload {
   /** Raw body (HTML or text). HTML will be stripped. */
   body?: string | null
   thread_id?: string | null
+  /**
+   * Stable RFC/Gmail thread ROOT used to group the conversation (Gmail/Front
+   * style). When present, this — NOT the sender — decides which conversation
+   * the message joins. Computed by the poller via `computeThreadRoot`.
+   */
+  email_thread_id?: string | null
+  /** This message's own (normalized) Message-ID, for per-message threading. */
+  email_message_id?: string | null
+  /**
+   * Real email date (ISO string) from the RFC `Date` header. Drives
+   * `received_at`/`timestamp` so the inbox sorts by actual send time, not poll
+   * time. Falls back to now() when absent/unparseable.
+   */
+  received_at?: string | null
   attachments?: unknown
 }
 
@@ -63,6 +77,20 @@ export async function ingestInboundEmail(
 ): Promise<IngestResult> {
   const { account_id, sender, subject, body: emailBody, thread_id, attachments } = payload
   const requestId = ctx.request_id
+
+  // Stable thread root (preferred grouping key) + this message's own id.
+  const emailThreadId = payload.email_thread_id ?? null
+  const emailMessageId = payload.email_message_id ?? null
+  // Real email date drives sort order. Validate the supplied ISO string and
+  // fall back to now() when it's missing or unparseable — we never want a bad
+  // header to produce an Invalid Date in the column.
+  const receivedAtIso = (() => {
+    if (payload.received_at) {
+      const t = new Date(payload.received_at)
+      if (!Number.isNaN(t.getTime())) return t.toISOString()
+    }
+    return new Date().toISOString()
+  })()
 
   // ── Validate ─────────────────────────────────────────────────────
   if (!account_id) {
@@ -153,6 +181,8 @@ export async function ingestInboundEmail(
     channel: 'email',
     participant_name: senderName,
     participant_email: senderEmail,
+    email_thread_id: emailThreadId,
+    subject: subject ?? null,
   })
   let isNewConversation = false
   try {
@@ -179,14 +209,19 @@ export async function ingestInboundEmail(
       message_type: 'text',
       direction: 'inbound',
       email_subject: subject || null,
-      email_thread_id: thread_id || null,
+      // Store the STABLE thread root (not the raw References chain). Falls back
+      // to the legacy thread_id only if the poller didn't compute a root.
+      email_thread_id: emailThreadId || thread_id || null,
+      email_message_id: emailMessageId,
       attachments: attachments || null,
       replied: false,
       reply_required: spamResult.isSpam ? false : true,
       is_spam: spamResult.isSpam,
       spam_reason: spamResult.reason,
-      timestamp: new Date().toISOString(),
-      received_at: new Date().toISOString(),
+      // Real email date (RFC Date header) so the inbox sorts by actual send
+      // time, not poll time. Resolved/validated above; falls back to now().
+      timestamp: receivedAtIso,
+      received_at: receivedAtIso,
     })
     .select('id')
     .single()

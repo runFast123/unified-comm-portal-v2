@@ -650,4 +650,7 @@ export interface InboxItem {
   /** ISO timestamp the conversation is snoozed until. NULL/missing = not snoozed.
    *  Surfaced on the inbox row so users can see a "Snoozed until …" badge. */
   snoozed_until?: string | null
+  /** Number of messages collapsed into this conversation row. Teams and email
+   *  are both collapsed to one row per conversation; 1 = single message. */
+  message_count?: number
 }

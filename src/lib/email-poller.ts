@@ -6,6 +6,7 @@ import { getGmailAccessToken, GmailOAuthExpiredError } from '@/lib/gmail-oauth'
 import { createServiceRoleClient } from '@/lib/supabase-server'
 import { mintRequestId } from '@/lib/request-id'
 import { ingestInboundEmail } from '@/lib/email-ingest'
+import { computeThreadRoot, normalizeMessageId } from '@/lib/email-threading'
 import { logError } from '@/lib/logger'
 
 // ─── Sharding + circuit breaker shared across the email/teams pollers ──
@@ -40,6 +41,12 @@ interface WebhookPayload {
   subject: string
   body: string
   thread_id: string | null
+  /** Stable RFC/Gmail thread ROOT used to group the conversation. */
+  email_thread_id: string | null
+  /** This message's own Message-ID (for per-message dedup/threading). */
+  email_message_id: string | null
+  /** Real email date (RFC Date header). Drives received_at/timestamp. */
+  received_at: string | null
   attachments: Array<{ filename: string | undefined; contentType: string | undefined; size: number }>
 }
 
@@ -258,6 +265,29 @@ export async function pollEmailAccount(
                 contentType: a.contentType,
                 size: a.size,
               }))
+              // ── Threading (industry standard) ──────────────────────
+              // Compute a STABLE thread root from the RFC headers (or Gmail
+              // threadId when available). This replaces the old behavior of
+              // stashing the raw, ever-growing References chain in thread_id —
+              // that was unstable and never used for grouping.
+              //
+              // We pull References from the parsed field first, falling back to
+              // the raw header (mailparser sometimes only populates one). The
+              // Gmail OAuth path does not expose the API threadId through
+              // ImapFlow, so we rely on headers there — which is sufficient.
+              const referencesValue =
+                (parsed.references as string | string[] | undefined) ??
+                (parsed.headers.get('references') as string | string[] | undefined) ??
+                null
+              const emailThreadId = computeThreadRoot({
+                messageId: parsed.messageId ?? null,
+                inReplyTo: parsed.inReplyTo ?? null,
+                references: referencesValue,
+                gmailThreadId: null,
+              })
+              // Real email date drives sort order. Fall back to now() only when
+              // the Date header is missing/unparseable.
+              const receivedAt = parsed.date ? parsed.date.toISOString() : null
               // One request id per fetched message. End-to-end traceability:
               // the webhook propagates this to classify + ai-reply, so a
               // single polled email = a single correlation thread.
@@ -269,10 +299,12 @@ export async function pollEmailAccount(
                   sender: senderStr,
                   subject: parsed.subject || '',
                   body: parsed.html || parsed.text || '',
-                  thread_id:
-                    (parsed.headers.get('references') as string | undefined) ||
-                    parsed.messageId ||
-                    null,
+                  // Legacy field kept for back-compat with the webhook payload
+                  // shape; the conversation grouping now uses email_thread_id.
+                  thread_id: parsed.messageId ?? null,
+                  email_thread_id: emailThreadId,
+                  email_message_id: normalizeMessageId(parsed.messageId),
+                  received_at: receivedAt,
                   attachments,
                 },
                 messageRequestId
@@ -335,15 +367,46 @@ export async function pollEmailAccount(
               const recipientEmail = toAddrs[0]?.address?.toLowerCase()
               if (!recipientEmail) continue
 
-              // Find the conversation by recipient email
-              const { data: convo } = await supabase
-                .from('conversations')
-                .select('id')
-                .eq('account_id', accountId)
-                .eq('channel', 'email')
-                .eq('participant_email', recipientEmail)
-                .limit(1)
-                .maybeSingle()
+              // Find the conversation. Now that multiple threads can exist per
+              // sender, prefer matching on the stable thread ROOT (the agent's
+              // reply carries References/In-Reply-To pointing back at the
+              // original thread). Only fall back to participant_email when the
+              // sent message has no usable thread headers.
+              const sentReferences =
+                (parsed.references as string | string[] | undefined) ??
+                (parsed.headers.get('references') as string | string[] | undefined) ??
+                null
+              const sentThreadRoot = computeThreadRoot({
+                messageId: parsed.messageId ?? null,
+                inReplyTo: parsed.inReplyTo ?? null,
+                references: sentReferences,
+                gmailThreadId: null,
+              })
+
+              let convo: { id: string } | null = null
+              if (sentThreadRoot) {
+                const { data: byThread } = await supabase
+                  .from('conversations')
+                  .select('id')
+                  .eq('account_id', accountId)
+                  .eq('channel', 'email')
+                  .eq('email_thread_id', sentThreadRoot)
+                  .limit(1)
+                  .maybeSingle()
+                if (byThread) convo = byThread as { id: string }
+              }
+              if (!convo) {
+                const { data: byEmail } = await supabase
+                  .from('conversations')
+                  .select('id')
+                  .eq('account_id', accountId)
+                  .eq('channel', 'email')
+                  .eq('participant_email', recipientEmail)
+                  .order('last_message_at', { ascending: false })
+                  .limit(1)
+                  .maybeSingle()
+                if (byEmail) convo = byEmail as { id: string }
+              }
 
               if (!convo) continue // no matching convo — skip
 

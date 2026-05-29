@@ -75,6 +75,74 @@ export function validateWebhookSecret(request: Request): boolean {
 
 // ─── Conversation Management ────────────────────────────────────────
 /**
+ * Normalize an email subject for thread matching: strip leading reply/forward
+ * prefixes (Re:, Fwd:, RE :, AW:, etc.), collapse whitespace, lowercase.
+ * Returns null when nothing meaningful remains.
+ */
+export function normalizeEmailSubject(subject: string | null | undefined): string | null {
+  if (!subject) return null
+  let s = subject.trim()
+  // Repeatedly strip a leading reply/forward token (handles "Re: Fwd: ...").
+  // Covers common locales: Re, Fwd/Fw, AW (de), SV (sv), VS (fi), Antwort.
+  const prefix = /^(re|fwd?|aw|sv|vs|antwort|wg)\s*(\[\d+\])?\s*:\s*/i
+  let prev: string
+  do {
+    prev = s
+    s = s.replace(prefix, '').trim()
+  } while (s !== prev && s.length > 0)
+  s = s.replace(/\s+/g, ' ').trim().toLowerCase()
+  return s.length > 0 ? s : null
+}
+
+/**
+ * Fallback email match: find the sender's most-recent active conversation whose
+ * LATEST message shares the normalized subject. Subject isn't stored on
+ * `conversations`, so we look it up via the latest message. Conservative by
+ * design — scoped to one sender and confirmed against the real stored subject —
+ * so it can only ever re-join a thread the same person already started.
+ */
+async function matchEmailBySubject(
+  supabase: Awaited<ReturnType<typeof createServiceRoleClient>>,
+  accountId: string,
+  participantEmail: string,
+  subject: string,
+): Promise<{ id: string; status?: string } | null> {
+  const normalized = normalizeEmailSubject(subject)
+  if (!normalized) return null
+
+  // Candidate conversations for this sender, newest activity first. Small cap —
+  // we only need the few most recent to find a subject match.
+  const { data: candidates } = await supabase
+    .from('conversations')
+    .select('id, status')
+    .eq('account_id', accountId)
+    .eq('channel', 'email')
+    .eq('participant_email', participantEmail)
+    .in('status', ['active', 'in_progress', 'escalated', 'waiting_on_customer', 'resolved'])
+    .order('last_message_at', { ascending: false })
+    .limit(10)
+
+  const list = (candidates as Array<{ id: string; status?: string }> | null) ?? []
+  for (const conv of list) {
+    const { data: lastMsg } = await supabase
+      .from('messages')
+      .select('email_subject')
+      .eq('conversation_id', conv.id)
+      .eq('channel', 'email')
+      .order('received_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    const lastSubject = normalizeEmailSubject(
+      (lastMsg as { email_subject?: string | null } | null)?.email_subject ?? null,
+    )
+    if (lastSubject && lastSubject === normalized) {
+      return { id: conv.id, status: conv.status }
+    }
+  }
+  return null
+}
+
+/**
  * Finds an existing conversation or creates a new one.
  */
 export async function findOrCreateConversation(
@@ -84,30 +152,79 @@ export async function findOrCreateConversation(
     channel: 'teams' | 'email' | 'whatsapp'
     teams_chat_id?: string | null
     email_thread_id?: string | null
+    /** Email subject — used for the fallback subject+sender match. */
+    subject?: string | null
     participant_name?: string | null
     participant_email?: string | null
     participant_phone?: string | null
   }
 ): Promise<string> {
-  let query = supabase
-    .from('conversations')
-    .select('id, status')
-    .eq('account_id', params.account_id)
-    .eq('channel', params.channel)
-    .in('status', ['active', 'in_progress', 'escalated', 'waiting_on_customer', 'resolved'])
+  // ── Email matching strategy (industry standard, like Gmail/Front) ──────
+  // Emails are grouped by a STABLE thread root, NOT by sender. Matching order:
+  //   1. (account_id, email_thread_id) — the RFC/Gmail thread root.
+  //   2. normalized-subject + participant_email (optional; skipped if no
+  //      subject) — catches replies whose client stripped References.
+  //   3. participant_email (legacy) — last resort ONLY when no thread id was
+  //      supplied at all. When a thread id IS present but doesn't match an
+  //      existing row, we deliberately DO NOT fall back to sender — we create a
+  //      new conversation so distinct threads stay distinct.
+  const baseSelect = () =>
+    supabase
+      .from('conversations')
+      .select('id, status')
+      .eq('account_id', params.account_id)
+      .eq('channel', params.channel)
+      .in('status', ['active', 'in_progress', 'escalated', 'waiting_on_customer', 'resolved'])
 
-  if (params.channel === 'teams' && params.teams_chat_id) {
-    query = query.eq('teams_chat_id', params.teams_chat_id)
-  } else if (params.channel === 'email' && params.participant_email) {
-    query = query.eq('participant_email', params.participant_email)
-  } else if (params.channel === 'whatsapp' && params.participant_phone) {
-    query = query.eq('participant_phone', params.participant_phone)
-  }
+  let existing: { id: string; status?: string } | null = null
 
-  const { data: existing, error: lookupError } = await query.limit(1).maybeSingle()
+  if (params.channel === 'email') {
+    if (params.email_thread_id) {
+      // 1. Match by stable thread root.
+      const { data, error } = await baseSelect()
+        .eq('email_thread_id', params.email_thread_id)
+        .limit(1)
+        .maybeSingle()
+      if (error) throw new Error(`Failed to look up conversation: ${error.message}`)
+      existing = data ?? null
 
-  if (lookupError) {
-    throw new Error(`Failed to look up conversation: ${lookupError.message}`)
+      // 2. Fallback: normalized-subject + sender. Only when we have both a
+      // subject and a sender, and the thread-root lookup missed. This rescues
+      // replies whose client dropped the References/In-Reply-To headers but
+      // kept a recognizable "Re: <subject>". Subject is not stored on
+      // conversations, so we confirm the match against the candidate's latest
+      // message subject. Scoped to the same sender, so no cross-sender risk.
+      if (!existing && params.subject && params.participant_email) {
+        existing = await matchEmailBySubject(
+          supabase,
+          params.account_id,
+          params.participant_email,
+          params.subject,
+        )
+      }
+    } else if (params.participant_email) {
+      // 3. Legacy last-resort: no thread id at all → match by sender.
+      const { data, error } = await baseSelect()
+        .eq('participant_email', params.participant_email)
+        .order('last_message_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (error) throw new Error(`Failed to look up conversation: ${error.message}`)
+      existing = data ?? null
+    }
+  } else {
+    // Non-email channels keep their original single-key lookup.
+    let query = baseSelect()
+    if (params.channel === 'teams' && params.teams_chat_id) {
+      query = query.eq('teams_chat_id', params.teams_chat_id)
+    } else if (params.channel === 'whatsapp' && params.participant_phone) {
+      query = query.eq('participant_phone', params.participant_phone)
+    }
+    const { data, error: lookupError } = await query.limit(1).maybeSingle()
+    if (lookupError) {
+      throw new Error(`Failed to look up conversation: ${lookupError.message}`)
+    }
+    existing = data ?? null
   }
 
   if (existing) {
@@ -131,6 +248,9 @@ export async function findOrCreateConversation(
       account_id: params.account_id,
       channel: params.channel,
       teams_chat_id: params.teams_chat_id || null,
+      // Stamp the stable thread root so subsequent messages in this thread
+      // match here (and the partial unique index enforces one row per thread).
+      email_thread_id: params.email_thread_id || null,
       participant_name: params.participant_name || null,
       participant_email: params.participant_email || null,
       participant_phone: params.participant_phone || null,
@@ -148,11 +268,14 @@ export async function findOrCreateConversation(
     // conversation, re-run the lookup and return whichever row won.
     // Postgres unique-violation code is 23505.
     //
-    // Currently only the `teams` channel has a unique partial index
-    // (`conversations_teams_unique_chat` on account_id + teams_chat_id).
-    // If you add similar unique indexes for email or whatsapp, list the
-    // matching lookup key in CHANNEL_UNIQUE_KEY below and the recovery will
-    // automatically extend to those channels.
+    // Unique partial indexes per channel that a concurrent insert can collide
+    // with. On a 23505 we re-select by the SAME key the unique index covers and
+    // return the row the other writer won:
+    //   teams → `conversations_teams_unique_chat` (account_id, teams_chat_id)
+    //   email → `uniq_conversations_email_thread`  (account_id, email_thread_id)
+    //           [migration 20260529120000 — the old sender-unique index is gone]
+    // whatsapp has a unique index on participant_phone but its lookup key here
+    // mirrors that column.
     const isUniqueViolation =
       (error as { code?: string } | null)?.code === '23505' ||
       /duplicate key|unique constraint/i.test(error?.message || '')
@@ -160,8 +283,9 @@ export async function findOrCreateConversation(
       type UniqueKey = { col: 'teams_chat_id' | 'email_thread_id' | 'participant_phone'; value: string | null | undefined }
       const CHANNEL_UNIQUE_KEY: Record<typeof params.channel, UniqueKey | null> = {
         teams: { col: 'teams_chat_id', value: params.teams_chat_id },
-        email: null, // no unique index yet — add to this map when introduced
-        whatsapp: null,
+        // Email is keyed off the stable thread root now (NOT the sender).
+        email: { col: 'email_thread_id', value: params.email_thread_id },
+        whatsapp: { col: 'participant_phone', value: params.participant_phone },
       }
       const key = CHANNEL_UNIQUE_KEY[params.channel]
       if (key && key.value) {

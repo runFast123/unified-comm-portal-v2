@@ -49,6 +49,11 @@ function mockSupabase(opts: MockOpts = {}) {
       select: () => chain,
       eq: () => chain,
       in: () => chain,
+      // `.order()` + `.ilike()` are part of the postgrest builder the real
+      // helper now uses on the email lookup paths (newest-first legacy fallback
+      // + subject-match). They just return the chain in this stub.
+      order: () => chain,
+      ilike: () => chain,
       limit: () => chain,
       maybeSingle: async () => terminalValue,
       single: async () => terminalValue,
@@ -197,7 +202,27 @@ describe('findOrCreateConversation', () => {
     expect(id).toBe('conv-race-winner')
   })
 
-  it('insert 23505 on email channel (no unique index in map) → throws (documents current behavior)', async () => {
+  it('insert 23505 on email WITH an email_thread_id → race re-lookup returns winner id', async () => {
+    // After the threading migration, email has a unique partial index on
+    // (account_id, email_thread_id). A concurrent insert that loses the race
+    // is recovered by re-selecting on the thread root.
+    const { supabase } = mockSupabase({
+      existingConvo: null,
+      insertError: { code: '23505', message: 'duplicate key value violates unique constraint "uniq_conversations_email_thread"' },
+      raceWinner: { id: 'conv-email-race-winner' },
+    })
+    const id = await findOrCreateConversation(supabase, {
+      account_id: 'acc-1',
+      channel: 'email',
+      participant_email: 'x@y.com',
+      email_thread_id: 'root-message-id@example.com',
+    })
+    expect(id).toBe('conv-email-race-winner')
+  })
+
+  it('insert 23505 on email with NO email_thread_id → throws (nothing to re-select on)', async () => {
+    // With no thread root supplied there is no unique key to recover by, so a
+    // 23505 surfaces as a descriptive throw rather than silently swallowing it.
     const { supabase } = mockSupabase({
       existingConvo: null,
       insertError: { code: '23505', message: 'duplicate key on some other index' },
