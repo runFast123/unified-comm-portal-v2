@@ -402,7 +402,7 @@ export function ConversationActions({
   const fetchTemplates = useCallback(async () => {
     setTemplatesLoading(true)
     try {
-      const res = await fetch('/api/templates')
+      const res = await fetch(`/api/templates?account_id=${encodeURIComponent(accountId)}`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = (await res.json()) as { templates?: ReplyTemplate[] }
       const list = (data.templates ?? []).filter((t) => t.is_active)
@@ -430,7 +430,7 @@ export function ConversationActions({
   const fetchShortcutTemplates = useCallback(async () => {
     if (shortcutLoaded) return
     try {
-      const res = await fetch('/api/templates')
+      const res = await fetch(`/api/templates?account_id=${encodeURIComponent(accountId)}`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = (await res.json()) as { templates?: ReplyTemplate[] }
       const list = (data.templates ?? [])

@@ -214,12 +214,12 @@ function jsonReq(url: string, method: string, body?: unknown): Request {
 describe('GET /api/templates', () => {
   it('401 when unauthenticated', async () => {
     fixture.auth.user = null
-    const res = await listGET()
+    const res = await listGET(new Request('http://l/api/templates'))
     expect(res.status).toBe(401)
   })
 
   it('returns only templates from the caller\'s company', async () => {
-    const res = await listGET()
+    const res = await listGET(new Request('http://l/api/templates'))
     expect(res.status).toBe(200)
     const body = (await res.json()) as { templates: Array<{ id: string; company_id: string }> }
     expect(body.templates.length).toBe(1)
@@ -229,15 +229,26 @@ describe('GET /api/templates', () => {
   it('super_admin sees rows across all companies', async () => {
     fixture.auth.profile!.role = 'super_admin'
     fixture.auth.profile!.company_id = null
-    const res = await listGET()
+    const res = await listGET(new Request('http://l/api/templates'))
     const body = (await res.json()) as { templates: Array<{ id: string }> }
     expect(body.templates.length).toBe(2)
+  })
+
+  it('super_admin scopes to ?company_id so the composer only sees that tenant', async () => {
+    // The conversation composer passes the conversation's company so a
+    // super_admin is never offered another tenant's templates.
+    fixture.auth.profile!.role = 'super_admin'
+    fixture.auth.profile!.company_id = null
+    const res = await listGET(new Request('http://l/api/templates?company_id=comp-a'))
+    const body = (await res.json()) as { templates: Array<{ id: string; company_id: string }> }
+    expect(body.templates.length).toBe(1)
+    expect(body.templates[0].company_id).toBe('comp-a')
   })
 
   it('member without a company gets empty list', async () => {
     fixture.auth.profile!.role = 'company_member'
     fixture.auth.profile!.company_id = null
-    const res = await listGET()
+    const res = await listGET(new Request('http://l/api/templates'))
     const body = (await res.json()) as { templates: unknown[] }
     expect(body.templates).toEqual([])
   })

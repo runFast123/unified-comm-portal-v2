@@ -44,7 +44,7 @@ async function getSession(): Promise<
   }
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const gate = await getSession()
   if (!gate.ok) {
     return NextResponse.json({ error: gate.error }, { status: gate.status })
@@ -64,6 +64,25 @@ export async function GET() {
       return NextResponse.json({ templates: [] })
     }
     query = query.eq('company_id', gate.companyId)
+  } else {
+    // super_admin bypasses RLS, so an unscoped list returns EVERY company's
+    // templates. The conversation composer passes ?account_id (or ?company_id)
+    // so it only offers the viewed tenant's templates — never another
+    // company's. Without a hint we return all (the admin Templates page filters
+    // by the switcher itself).
+    const url = new URL(request.url)
+    const companyIdParam = url.searchParams.get('company_id')?.trim() || null
+    const accountIdParam = url.searchParams.get('account_id')?.trim() || null
+    let scopeCompanyId: string | null = companyIdParam
+    if (!scopeCompanyId && accountIdParam) {
+      const { data: acct } = await admin
+        .from('accounts')
+        .select('company_id')
+        .eq('id', accountIdParam)
+        .maybeSingle()
+      scopeCompanyId = (acct as { company_id?: string | null } | null)?.company_id ?? null
+    }
+    if (scopeCompanyId) query = query.eq('company_id', scopeCompanyId)
   }
 
   const { data, error } = await query

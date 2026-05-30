@@ -108,11 +108,26 @@ Example output: ["Thank you for reaching out. I'll look into this right away.", 
       suggestions = ['Thank you for reaching out. How can I help you?', 'I\'ll look into this and get back to you shortly.', 'Could you provide more details so I can assist you better?']
     }
 
-    // Also fetch matching templates
-    const { data: templates } = await supabase
+    // Scope template suggestions to the conversation's OWN company so a
+    // super_admin (whose RLS sees every tenant) is never offered another
+    // company's reply templates in this tenant's conversation.
+    let convCompanyId: string | null = null
+    if (convRow?.account_id) {
+      const { data: convAcct } = await admin
+        .from('accounts')
+        .select('company_id')
+        .eq('id', convRow.account_id)
+        .maybeSingle()
+      convCompanyId = (convAcct as { company_id?: string | null } | null)?.company_id ?? null
+    }
+
+    // Also fetch matching templates (company-scoped).
+    let tmplQuery = supabase
       .from('reply_templates')
       .select('id, title, content')
       .eq('is_active', true)
+    if (convCompanyId) tmplQuery = tmplQuery.eq('company_id', convCompanyId)
+    const { data: templates } = await tmplQuery
       .order('usage_count', { ascending: false })
       .limit(3)
 
