@@ -463,21 +463,25 @@ export async function pollEmailAccount(
                   .limit(1)
                   .maybeSingle()
                 if (byMsgId) existing = byMsgId as { id: string }
-              } else {
-                // Fallback for the rare sent mail with NO Message-ID: same
-                // conversation + outbound + identical body prefix, time-
-                // independent and scoped per-conversation. (Only runs when there
-                // is no Message-ID, so it can't wrongly collapse two genuinely
-                // distinct replies that each carry their own Message-ID.)
-                const bodyPrefix = bodyText.slice(0, 80).trim()
-                if (bodyPrefix) {
-                  // .ilike() handles % and _ escaping safely via parameter binding.
+              }
+
+              // Fallback (runs whenever the Message-ID check didn't already
+              // match): identical FULL body in the same conversation. This also
+              // collapses rows that predate Message-ID capture (so Gmail's
+              // `N+1:*` re-fetch of an old reply doesn't add a second copy) and
+              // a portal-sent copy that shares the identical stored body. We
+              // match the FULL body, not a prefix, so two genuinely distinct
+              // replies — which always carry different quoted history — are
+              // never wrongly collapsed. Time-independent and conversation-scoped.
+              if (!existing) {
+                const bodyTrimmed = bodyText.trim()
+                if (bodyTrimmed) {
                   const { data: byBody } = await supabase
                     .from('messages')
                     .select('id')
                     .eq('conversation_id', convo.id)
                     .eq('direction', 'outbound')
-                    .ilike('message_text', `${bodyPrefix}%`)
+                    .eq('message_text', bodyText)
                     .limit(1)
                     .maybeSingle()
                   if (byBody) existing = byBody as { id: string }
