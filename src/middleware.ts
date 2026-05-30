@@ -122,10 +122,21 @@ export async function middleware(request: NextRequest) {
     '/robots.txt',
   ])
 
+  // Next.js metadata image routes (favicon, app icon, OG/Twitter share cards).
+  // They have no file extension, so the matcher doesn't skip them — but social
+  // crawlers and logged-out visitors must be able to fetch them, so allow any
+  // request whose path starts with one of these generated-asset prefixes.
+  const isMetadataAsset =
+    pathname.startsWith('/opengraph-image') ||
+    pathname.startsWith('/twitter-image') ||
+    pathname.startsWith('/icon') ||
+    pathname.startsWith('/apple-icon')
+
   // Redirect unauthenticated users to login
   if (
     !user &&
     !PUBLIC_PATHS.has(pathname) &&
+    !isMetadataAsset &&
     !pathname.startsWith('/api/') &&
     !pathname.startsWith('/_next/') &&
     // Public CSAT survey landing — customers click these from email and
