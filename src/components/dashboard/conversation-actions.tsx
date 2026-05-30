@@ -116,7 +116,14 @@ export function ConversationActions({
     } catch { /* non-critical */ }
   }, [conversationId])
   const isActiveConvo = conversationStatus === 'active' || conversationStatus === 'in_progress' || conversationStatus === 'escalated' || conversationStatus === 'waiting_on_customer'
-  const [showManualReply, setShowManualReply] = useState(isActiveConvo)
+  // Composer starts CLOSED so the message thread is the hero on load. An open
+  // composer (textarea + signature + action bar) consumes ~280px and, stacked
+  // under the suggested-replies block, used to squeeze the actual conversation
+  // off-screen — the user had to Cancel the composer just to read the chat.
+  // The user opens it explicitly via "Manual Reply" (or by clicking a suggested
+  // reply, which opens it automatically). `isActiveConvo` still gates whether
+  // the reply controls render at all.
+  const [showManualReply, setShowManualReply] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
   const [showEditReply, setShowEditReply] = useState(false)
   const [showTemplates, setShowTemplates] = useState(false)

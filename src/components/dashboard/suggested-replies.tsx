@@ -18,6 +18,9 @@ export function SuggestedReplies({ conversationId, latestMessage, category }: Su
   const [loaded, setLoaded] = useState(false)
   const [inserted, setInserted] = useState<string | null>(null)
   const [expanded, setExpanded] = useState(false)
+  // The whole block is COLLAPSED by default so the message thread stays the
+  // focus on load. The suggestions are one click away via the header toggle.
+  const [collapsed, setCollapsed] = useState(true)
 
   // Helper that uses React's native value setter so a controlled component's
   // onChange fires. Assigning textarea.value = text directly primes React's
@@ -105,22 +108,34 @@ export function SuggestedReplies({ conversationId, latestMessage, category }: Su
   const visible = expanded ? all : all.slice(0, VISIBLE_BY_DEFAULT)
 
   return (
-    <div className="shrink-0 border-t border-gray-100 bg-gray-50/50 px-4 sm:px-6 py-4">
-      {/* Section header — gives the suggestions block a clear identity
-          and makes intent obvious instead of relying on icon shape. */}
-      <div className="mb-2 flex items-center justify-between">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
-          {loading ? 'Generating suggestions…' : 'Suggested replies'}
-        </p>
-        {loading && <Loader2 className="h-3 w-3 animate-spin text-gray-400" />}
-      </div>
+    <div className="shrink-0 border-t border-gray-100 bg-gray-50/50 px-4 sm:px-6 py-2.5">
+      {/* Collapsible header. Collapsed by default so the message thread stays
+          the focus on load; clicking expands the suggestion cards. */}
+      <button
+        type="button"
+        onClick={() => setCollapsed((c) => !c)}
+        className="flex w-full items-center justify-between gap-2 text-left"
+        aria-expanded={!collapsed}
+      >
+        <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+          <Sparkles className="h-3 w-3 text-purple-500" />
+          {loading ? 'Generating suggestions…' : `Suggested replies${all.length ? ` (${all.length})` : ''}`}
+        </span>
+        {loading ? (
+          <Loader2 className="h-3 w-3 animate-spin text-gray-400" />
+        ) : (
+          <ChevronDown className={`h-3.5 w-3.5 text-gray-400 transition-transform ${collapsed ? '' : 'rotate-180'}`} />
+        )}
+      </button>
 
+      {!collapsed && (
+      <>
       {/* Full-width cards stacked vertically. Each card shows the full
           first sentence (no mid-sentence truncation), an icon that
           distinguishes AI (purple Sparkles) from saved templates
           (gray FileText), and a "Use this reply" affordance that fades
           in on hover. */}
-      <div className="space-y-1.5">
+      <div className="mt-2.5 space-y-1.5">
         {visible.map((entry) => {
           const isInserted = inserted === entry.text
           const isAi = entry.kind === 'ai'
@@ -179,6 +194,8 @@ export function SuggestedReplies({ conversationId, latestMessage, category }: Su
           />
           {expanded ? 'Show fewer' : `Show ${hidden} more`}
         </button>
+      )}
+      </>
       )}
     </div>
   )
