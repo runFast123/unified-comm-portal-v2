@@ -1,7 +1,8 @@
 'use client'
 
-import { Bot, Check, CheckCheck, Mail, Paperclip, Clock, Sparkles, FileText, FileSpreadsheet, FileImage, File, Download } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { useState, useEffect, useCallback } from 'react'
+import { Bot, Check, CheckCheck, Mail, Paperclip, Clock, Sparkles, FileText, FileSpreadsheet, FileImage, File, Download, Loader2 } from 'lucide-react'
+import { cn, decodeHtmlEntities } from '@/lib/utils'
 import type { Message, ChannelType } from '@/types/database'
 
 export interface ConversationThreadProps {
@@ -53,6 +54,9 @@ interface AttachmentItem {
   size?: number
   url?: string
   data?: string
+  /** Supabase Storage path (private `attachments` bucket). Resolved to a
+   *  short-lived signed URL on demand via /api/attachments/signed-url. */
+  path?: string
   attachmentId?: string
   contentType?: string
 }
@@ -79,24 +83,139 @@ function formatFileSize(bytes?: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
+// A single attachment row. Resolves a private Storage `path` to a short-lived
+// signed URL on demand (images up front, other files on click) so PDFs and
+// files are actually downloadable. Falls back to a direct url / data URI.
+function AttachmentChip({ att, index }: { att: AttachmentItem; index: number }) {
+  const name = att.filename || att.name || `Attachment ${index + 1}`
+  const mime = att.mimeType || att.mime_type || att.contentType || ''
+  const size = att.size
+  const path = att.path
+  const directUrl = att.url || (att.data ? `data:${mime};base64,${att.data}` : '')
+  const ext = (name.split('.').pop() || '').toLowerCase()
+  const isImage = mime.startsWith('image/') || ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(ext)
+
+  const [resolvedUrl, setResolvedUrl] = useState<string | null>(directUrl || null)
+  const [loading, setLoading] = useState(false)
+  const [failed, setFailed] = useState(false)
+
+  const resolve = useCallback(async (): Promise<string | null> => {
+    if (resolvedUrl) return resolvedUrl
+    if (!path) return null
+    setLoading(true)
+    setFailed(false)
+    try {
+      const res = await fetch(`/api/attachments/signed-url?path=${encodeURIComponent(path)}`)
+      const json = (await res.json().catch(() => ({}))) as { url?: string }
+      if (res.ok && json.url) {
+        setResolvedUrl(json.url)
+        return json.url
+      }
+      setFailed(true)
+      return null
+    } catch {
+      setFailed(true)
+      return null
+    } finally {
+      setLoading(false)
+    }
+  }, [path, resolvedUrl])
+
+  // Image previews resolve up front; other files resolve on click.
+  useEffect(() => {
+    if (isImage && path && !directUrl) void resolve()
+  }, [isImage, path, directUrl, resolve])
+
+  const handleOpen = useCallback(
+    async (e: React.MouseEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+      const url = await resolve()
+      if (url) window.open(url, '_blank', 'noopener,noreferrer')
+    },
+    [resolve],
+  )
+
+  if (isImage && resolvedUrl) {
+    return (
+      <div className="rounded-lg border border-gray-200 bg-white overflow-hidden hover:shadow-sm transition-all">
+        <a href={resolvedUrl} target="_blank" rel="noopener noreferrer">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={resolvedUrl} alt={name} className="max-h-48 w-auto rounded-t-lg object-contain bg-gray-50" loading="lazy" />
+        </a>
+        <div className="flex items-center gap-2 px-3 py-1.5 text-xs text-gray-500">
+          <FileImage className="h-3 w-3" />
+          <span className="truncate">{name}</span>
+          {size ? <span className="shrink-0">{formatFileSize(size)}</span> : null}
+        </div>
+      </div>
+    )
+  }
+
+  const downloadable = !!(directUrl || path)
+
+  return (
+    <div className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-3 py-2.5 hover:border-gray-300 hover:shadow-sm transition-all">
+      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gray-100 shrink-0">
+        {getFileIcon(name, mime)}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-gray-800 truncate">{name}</p>
+        <p className="text-xs text-gray-400">
+          {mime.split('/').pop()?.toUpperCase() || 'FILE'}
+          {size ? ` · ${formatFileSize(size)}` : ''}
+          {failed ? <span className="text-red-400"> · unavailable</span> : null}
+        </p>
+      </div>
+      {downloadable ? (
+        directUrl ? (
+          <a
+            href={directUrl}
+            download={name}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="flex h-8 w-8 items-center justify-center rounded-md text-gray-400 hover:text-teal-600 hover:bg-teal-50 transition-colors"
+            title={`Download ${name}`}
+          >
+            <Download className="h-4 w-4" />
+          </a>
+        ) : (
+          <button
+            type="button"
+            onClick={handleOpen}
+            disabled={loading}
+            className="flex h-8 w-8 items-center justify-center rounded-md text-gray-400 hover:text-teal-600 hover:bg-teal-50 transition-colors disabled:opacity-50"
+            title={`Download ${name}`}
+          >
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+          </button>
+        )
+      ) : (
+        <span className="text-[10px] text-gray-500 px-2">No file</span>
+      )}
+    </div>
+  )
+}
+
 function renderAttachments(attachments: unknown) {
   let items: AttachmentItem[] = []
 
   if (Array.isArray(attachments)) {
     // Filter to only real file attachments (must have filename or name)
     items = attachments.filter((att: any) =>
-      att && (att.filename || att.name || att.url || att.contentUrl)
+      att && (att.filename || att.name || att.url || att.contentUrl || att.path)
     )
   } else if (typeof attachments === 'object' && attachments !== null) {
     const obj = attachments as Record<string, unknown>
     // Skip metadata objects (team_name, channel_name, is_reply, etc.) — NOT real attachments
-    if (obj.filename || obj.name || obj.url || obj.contentUrl) {
+    if (obj.filename || obj.name || obj.url || obj.contentUrl || obj.path) {
       items = [obj as AttachmentItem]
     }
     // If it has an "attachments" sub-array (legacy format), extract those
     if (Array.isArray(obj.attachments)) {
       items = (obj.attachments as AttachmentItem[]).filter((att: any) =>
-        att && (att.filename || att.name || att.url || att.contentUrl)
+        att && (att.filename || att.name || att.url || att.contentUrl || att.path)
       )
     }
   }
@@ -110,63 +229,9 @@ function renderAttachments(attachments: unknown) {
         <span>{items.length} Attachment{items.length > 1 ? 's' : ''}</span>
       </div>
       <div className="space-y-1.5">
-        {items.map((att, i) => {
-          const name = att.filename || att.name || `Attachment ${i + 1}`
-          const mime = att.mimeType || att.mime_type || att.contentType || ''
-          const size = att.size
-          const url = att.url || (att.data ? `data:${mime};base64,${att.data}` : '')
-
-          const isImage = mime.startsWith('image/') || ['png','jpg','jpeg','gif','webp','svg'].includes((name.split('.').pop() || '').toLowerCase())
-
-          // Inline image preview
-          if (isImage && url) {
-            return (
-              <div key={i} className="rounded-lg border border-gray-200 bg-white overflow-hidden hover:shadow-sm transition-all">
-                <a href={url} target="_blank" rel="noopener noreferrer">
-                  <img src={url} alt={name} className="max-h-48 w-auto rounded-t-lg object-contain bg-gray-50" loading="lazy" />
-                </a>
-                <div className="flex items-center gap-2 px-3 py-1.5 text-xs text-gray-500">
-                  <FileImage className="h-3 w-3" />
-                  <span className="truncate">{name}</span>
-                  {size ? <span className="shrink-0">{formatFileSize(size)}</span> : null}
-                </div>
-              </div>
-            )
-          }
-
-          return (
-            <div
-              key={i}
-              className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-3 py-2.5 hover:border-gray-300 hover:shadow-sm transition-all group"
-            >
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gray-100 shrink-0">
-                {getFileIcon(name, mime)}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-800 truncate">{name}</p>
-                <p className="text-xs text-gray-400">
-                  {mime.split('/').pop()?.toUpperCase() || 'FILE'}
-                  {size ? ` · ${formatFileSize(size)}` : ''}
-                </p>
-              </div>
-              {url ? (
-                <a
-                  href={url}
-                  download={name}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(e) => e.stopPropagation()}
-                  className="flex h-8 w-8 items-center justify-center rounded-md text-gray-400 hover:text-teal-600 hover:bg-teal-50 transition-colors opacity-0 group-hover:opacity-100"
-                  title={`Download ${name}`}
-                >
-                  <Download className="h-4 w-4" />
-                </a>
-              ) : (
-                <span className="text-[10px] text-gray-500 px-2">No link</span>
-              )}
-            </div>
-          )
-        })}
+        {items.map((att, i) => (
+          <AttachmentChip key={i} att={att} index={i} />
+        ))}
       </div>
     </div>
   )
@@ -236,8 +301,11 @@ function inlineFormat(line: string, keyPrefix: string): React.ReactNode {
 }
 
 /** Format email body - clean up quoted text, signatures, and formatting */
-function formatEmailBody(text: string | null): React.ReactNode {
-  if (!text) return <span className="text-gray-500 italic">No content</span>
+function formatEmailBody(rawText: string | null): React.ReactNode {
+  if (!rawText) return <span className="text-gray-500 italic">No content</span>
+  // Decode HTML entities (older stored bodies carry raw &#160; / &#39; etc.) so
+  // the thread renders clean text — matches the inbox-preview decode.
+  const text = decodeHtmlEntities(rawText)
 
   // Split into main body and quoted sections
   const lines = text.split('\n')
@@ -494,7 +562,7 @@ function TeamsBubble({ message, isOutbound }: { message: Message; isOutbound: bo
             'text-sm leading-relaxed whitespace-pre-wrap',
             isOutbound ? 'text-white' : 'text-gray-900'
           )}>
-            {inlineFormat(message.message_text || '', `tm-${message.id}`)}
+            {inlineFormat(decodeHtmlEntities(message.message_text), `tm-${message.id}`)}
           </p>
           {message.attachments && renderAttachments(message.attachments)}
         </div>
@@ -522,7 +590,7 @@ function WhatsAppBubble({ message, isOutbound }: { message: Message; isOutbound:
         )}
       >
         <p className="text-sm leading-relaxed text-gray-900 whitespace-pre-wrap">
-          {inlineFormat(message.message_text || '', `wa-${message.id}`)}
+          {inlineFormat(decodeHtmlEntities(message.message_text), `wa-${message.id}`)}
         </p>
         {message.attachments && renderAttachments(message.attachments)}
         <div className="mt-1 flex items-center justify-end gap-1.5">

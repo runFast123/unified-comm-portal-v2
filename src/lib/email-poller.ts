@@ -47,7 +47,7 @@ interface WebhookPayload {
   email_message_id: string | null
   /** Real email date (RFC Date header). Drives received_at/timestamp. */
   received_at: string | null
-  attachments: Array<{ filename: string | undefined; contentType: string | undefined; size: number }>
+  attachments: Array<{ filename?: string; contentType?: string; size: number; path?: string }>
 }
 
 // First-run backfill window (how far back to go when last_imap_uid is null)
@@ -59,6 +59,9 @@ const MAX_MESSAGES_PER_RUN = 100
 // `N:*` range quirk) or mail arrives out of UID order. Re-fetches are deduped
 // by Message-ID, so this is safe + cheap.
 const RECONCILE_DAYS = 3
+// Per-attachment upload cap. Anything larger is recorded as metadata only
+// (we don't want one giant attachment to stall a poll or bloat storage).
+const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024 // 25 MB
 
 /**
  * Hand a parsed inbound email to the ingest pipeline.
@@ -286,11 +289,35 @@ export async function pollEmailAccount(
               const senderStr = fromAddr
                 ? `${fromAddr.name || ''} <${fromAddr.address || ''}>`.trim()
                 : parsed.from?.text || ''
-              const attachments = (parsed.attachments || []).map((a) => ({
-                filename: a.filename,
-                contentType: a.contentType,
-                size: a.size,
-              }))
+              // Persist inbound attachment CONTENT to the private `attachments`
+              // bucket so PDFs/files are actually downloadable later. The old
+              // code stored only metadata, so there was never a file to fetch.
+              // Path layout: inbound/{account_id}/{msg-key}/{filename}; the
+              // signed-url route gates access by the account. upsert:true keeps
+              // reconcile re-fetches idempotent.
+              const msgKey = (normalizeMessageId(parsed.messageId) || String(msg.uid ?? 'na'))
+                .replace(/[^a-zA-Z0-9._-]/g, '_')
+                .slice(0, 80)
+              const attachments: Array<{ filename?: string; contentType?: string; size: number; path?: string }> = []
+              for (const a of parsed.attachments || []) {
+                const meta = { filename: a.filename, contentType: a.contentType, size: a.size }
+                const content = a.content as Buffer | undefined
+                if (content && content.length > 0 && content.length <= MAX_ATTACHMENT_BYTES) {
+                  const safeName = (a.filename || 'file').replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 100) || 'file'
+                  const objectPath = `inbound/${accountId}/${msgKey}/${safeName}`
+                  const { error: upErr } = await supabase.storage
+                    .from('attachments')
+                    .upload(objectPath, content, {
+                      contentType: a.contentType || 'application/octet-stream',
+                      upsert: true,
+                    })
+                  if (!upErr) {
+                    attachments.push({ ...meta, path: objectPath })
+                    continue
+                  }
+                }
+                attachments.push(meta) // metadata only (inline / oversized / upload failed)
+              }
               // ── Threading (industry standard) ──────────────────────
               // Compute a STABLE thread root from the RFC headers (or Gmail
               // threadId when available). This replaces the old behavior of

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase-server'
-import { getCurrentUser, isSuperAdmin, isCompanyAdmin } from '@/lib/auth'
+import { getCurrentUser, isSuperAdmin } from '@/lib/auth'
 import { verifyAccountAccess } from '@/lib/api-helpers'
 
 export const runtime = 'nodejs'
@@ -37,43 +37,45 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Missing path' }, { status: 400 })
     }
 
-    // Parse {user_id}/{conversation_id}/{rest...}
+    // Two path layouts, both gated by ACCOUNT access:
+    //   outbound: {owner_user_id}/{conversation_id}/{filename...}
+    //   inbound:  inbound/{account_id}/{msg-key}/{filename...}  (saved by the
+    //             email poller — no owner user, so we scope by the account)
     const segments = path.split('/')
     if (segments.length < 3) {
       return NextResponse.json({ error: 'Invalid path' }, { status: 400 })
     }
-    const conversationId = segments[1]
 
     const profile = await getCurrentUser(user.id)
     if (!profile) return NextResponse.json({ error: 'User profile not found' }, { status: 403 })
 
-    const isPriv = isSuperAdmin(profile.role) || isCompanyAdmin(profile.role)
-
-    // FIX: For non-super_admin, the path MUST belong to the caller — reject
-    // paths whose owner segment is some other user's id.
-    if (!isSuperAdmin(profile.role) && segments[0] !== user.id) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
-
     const admin = await createServiceRoleClient()
+    let accountId: string | null = null
 
-    const { data: conv } = await admin
-      .from('conversations')
-      .select('id, account_id')
-      .eq('id', conversationId)
-      .maybeSingle()
-    if (!conv) return NextResponse.json({ error: 'Conversation not found' }, { status: 404 })
-
-    // FIX: account-scope check via verifyAccountAccess (covers super_admin,
-    // company_admin, and company-scoped members alike). Privileged role alone
-    // is no longer sufficient — they still need access to *this* account.
-    const allowed = await verifyAccountAccess(user.id, conv.account_id as string)
-    if (!allowed && !isPriv) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    if (segments[0] === 'inbound') {
+      // inbound/{account_id}/...
+      accountId = segments[1] || null
+    } else {
+      // outbound {owner_user_id}/{conversation_id}/...
+      // For non-super_admin, the owner segment MUST be the caller — rejects
+      // crafted paths pointing at someone else's owner-prefix.
+      if (!isSuperAdmin(profile.role) && segments[0] !== user.id) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
+      const { data: conv } = await admin
+        .from('conversations')
+        .select('id, account_id')
+        .eq('id', segments[1])
+        .maybeSingle()
+      if (!conv) return NextResponse.json({ error: 'Conversation not found' }, { status: 404 })
+      accountId = conv.account_id as string
     }
-    // Even privileged callers must have account access (super_admin always
-    // does via verifyAccountAccess). company_admin scoped to a different
-    // company should not be able to sign.
+
+    if (!accountId) return NextResponse.json({ error: 'Invalid path' }, { status: 400 })
+
+    // The real gate: the caller must have access to THIS account (covers
+    // super_admin, company_admin, and company-scoped members alike).
+    const allowed = await verifyAccountAccess(user.id, accountId)
     if (!allowed) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
