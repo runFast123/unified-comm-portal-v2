@@ -29,12 +29,14 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@
 import { EmptyState } from '@/components/ui/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { ReplyTemplate } from '@/types/database'
-import { cn, truncate, timeAgo } from '@/lib/utils'
+import { truncate, timeAgo } from '@/lib/utils'
 import { useUser } from '@/context/user-context'
+import { useToast } from '@/components/ui/toast'
 
 interface AccountOption {
   id: string
   name: string
+  company_id: string | null
 }
 
 const CATEGORIES = ['General', 'Sales', 'Technical', 'Billing', 'Support']
@@ -67,13 +69,15 @@ function getCategoryVariant(category: string): 'info' | 'warning' | 'success' | 
 
 export default function TemplatesPage() {
   const supabase = createClient()
-  const { isAdmin, companyAccountIds, activeCompanyId } = useUser()
+  const { isAdmin, role, companyAccountIds, activeCompanyId } = useUser()
+  const isSuper = role === 'super_admin'
+  const { toast } = useToast()
   const [templates, setTemplates] = useState<ReplyTemplate[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
-  const [accountFilter, setAccountFilter] = useState('')
+  const [companyFilter, setCompanyFilter] = useState('')
   const [selectedTemplate, setSelectedTemplate] = useState<ReplyTemplate | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
   const [editModalOpen, setEditModalOpen] = useState(false)
@@ -83,25 +87,35 @@ export default function TemplatesPage() {
     category: 'General',
     shortcut: '',
     account_id: '',
+    company_id: '',
   })
   const [editingId, setEditingId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [accounts, setAccounts] = useState<AccountOption[]>([])
+  const [companies, setCompanies] = useState<{ id: string; name: string }[]>([])
 
   // Fetch accounts for filter/selector
   async function fetchAccounts() {
     let query = supabase
       .from('accounts')
-      .select('id, name')
+      .select('id, name, company_id')
       .eq('is_active', true)
       .order('name')
     // Scope to the active tenant's accounts. `activeCompanyId === null`
-    // (super_admin combined view) leaves the query unscoped.
+    // (super_admin combined view) leaves the query unscoped so the modal can
+    // offer accounts for whichever company a super_admin picks.
     if (activeCompanyId) {
       query = query.in('id', companyAccountIds)
     }
     const { data } = await query
     if (data) setAccounts(data)
+  }
+
+  // Companies for the template's owning-tenant picker. RLS returns every
+  // company to a super_admin and only their own to a company_admin.
+  async function fetchCompanies() {
+    const { data } = await supabase.from('companies').select('id, name').order('name')
+    if (data) setCompanies(data)
   }
 
   // Fetch templates from Supabase
@@ -113,10 +127,11 @@ export default function TemplatesPage() {
       .select('*')
       .order('updated_at', { ascending: false })
 
-    // Scope to the active tenant's accounts OR shared rows (account_id IS NULL).
-    // Combined view (super_admin, activeCompanyId === null) runs unscoped.
+    // Company-scoped. A selected tenant filters by company_id; super_admin
+    // combined view (activeCompanyId === null) runs unscoped. RLS still limits a
+    // company_admin to their own company regardless of this client filter.
     if (activeCompanyId) {
-      query = query.or(companyAccountIds.map(id => `account_id.eq.${id}`).concat('account_id.is.null').join(','))
+      query = query.eq('company_id', activeCompanyId)
     }
 
     const { data, error: fetchError } = await query
@@ -134,6 +149,7 @@ export default function TemplatesPage() {
   useEffect(() => {
     fetchTemplates()
     fetchAccounts()
+    fetchCompanies()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdmin, companyAccountIds, activeCompanyId])
 
@@ -149,9 +165,15 @@ export default function TemplatesPage() {
 
   // Helper to get account name from id
   function getAccountName(accountId: string | null): string {
-    if (!accountId) return 'General'
+    if (!accountId) return 'All accounts'
     const acc = accounts.find((a) => a.id === accountId)
     return acc ? acc.name : 'Unknown'
+  }
+
+  function getCompanyName(companyId: string | null): string {
+    if (!companyId) return 'Unknown'
+    const c = companies.find((c) => c.id === companyId)
+    return c ? c.name : 'Unknown'
   }
 
   // Filtered templates
@@ -162,14 +184,10 @@ export default function TemplatesPage() {
         template.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         template.content.toLowerCase().includes(searchQuery.toLowerCase())
       const matchesCategory = !categoryFilter || template.category === categoryFilter
-      const matchesAccount =
-        !accountFilter ||
-        (accountFilter === 'general'
-          ? !template.account_id
-          : template.account_id === accountFilter)
-      return matchesSearch && matchesCategory && matchesAccount
+      const matchesCompany = !companyFilter || template.company_id === companyFilter
+      return matchesSearch && matchesCategory && matchesCompany
     })
-  }, [templates, searchQuery, categoryFilter, accountFilter])
+  }, [templates, searchQuery, categoryFilter, companyFilter])
 
   // Handlers
   async function handleToggleActive(id: string) {
@@ -229,12 +247,17 @@ export default function TemplatesPage() {
 
   function handleOpenAdd() {
     setEditingId(null)
+    // Default the owning company to the active tenant (super_admin) or the
+    // caller's own company (company_admin → the single company they can read).
+    // Scope defaults to "whole company" (account_id = '').
+    const defaultCompany = activeCompanyId ?? (companies[0]?.id ?? '')
     setEditForm({
       title: '',
       content: '',
       category: 'General',
       shortcut: '',
-      account_id: companyAccountIds.length > 0 ? companyAccountIds[0] : '',
+      account_id: '',
+      company_id: defaultCompany,
     })
     setEditModalOpen(true)
   }
@@ -247,6 +270,7 @@ export default function TemplatesPage() {
       category: template.category || 'General',
       shortcut: template.shortcut || '',
       account_id: template.account_id || '',
+      company_id: template.company_id || '',
     })
     setEditModalOpen(true)
     setModalOpen(false)
@@ -257,6 +281,17 @@ export default function TemplatesPage() {
     setSaving(true)
 
     const accountId = editForm.account_id || null
+    // company_id is the tenant key and is REQUIRED — the company-scoped RLS
+    // rejects an insert/update whose company_id isn't the caller's company (and
+    // a missing company_id used to fail silently for company_admins and create
+    // orphaned, invisible templates for super_admins). Super_admins choose it;
+    // a company_admin's `companies` list is just their own company.
+    const companyId = editForm.company_id || companies[0]?.id || null
+    if (!companyId) {
+      toast.error('Please select a company for this template.')
+      setSaving(false)
+      return
+    }
 
     if (editingId) {
       // Update existing template
@@ -267,6 +302,7 @@ export default function TemplatesPage() {
           content: editForm.content.trim(),
           category: editForm.category,
           shortcut: editForm.shortcut.trim() || null,
+          company_id: companyId,
           account_id: accountId,
           updated_at: new Date().toISOString(),
         })
@@ -274,6 +310,7 @@ export default function TemplatesPage() {
 
       if (updateError) {
         console.error('Failed to update template:', updateError.message)
+        toast.error(updateError.message)
       }
     } else {
       // Create new template
@@ -284,12 +321,14 @@ export default function TemplatesPage() {
           content: editForm.content.trim(),
           category: editForm.category,
           shortcut: editForm.shortcut.trim() || null,
+          company_id: companyId,
           account_id: accountId,
           is_active: true,
         })
 
       if (insertError) {
         console.error('Failed to create template:', insertError.message)
+        toast.error(insertError.message)
       }
     }
 
@@ -454,18 +493,17 @@ export default function TemplatesPage() {
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
-        {isAdmin && (
+        {isSuper && companies.length > 1 && (
           <div className="w-full sm:w-48">
             <select
-              value={accountFilter}
-              onChange={(e) => setAccountFilter(e.target.value)}
+              value={companyFilter}
+              onChange={(e) => setCompanyFilter(e.target.value)}
               className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
             >
               <option value="">All Companies</option>
-              <option value="general">General (Shared)</option>
-              {accounts.map((acc) => (
-                <option key={acc.id} value={acc.id}>
-                  {acc.name}
+              {companies.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
                 </option>
               ))}
             </select>
@@ -529,16 +567,14 @@ export default function TemplatesPage() {
                     </button>
                   </TableCell>
                   <TableCell>
-                    <span
-                      className={cn(
-                        'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
-                        template.account_id
-                          ? 'bg-teal-50 text-teal-700'
-                          : 'bg-gray-100 text-gray-600'
-                      )}
-                    >
-                      {getAccountName(template.account_id)}
-                    </span>
+                    <div className="flex flex-col gap-0.5">
+                      <span className="inline-flex w-fit items-center rounded-full bg-teal-50 px-2 py-0.5 text-xs font-medium text-teal-700">
+                        {getCompanyName(template.company_id)}
+                      </span>
+                      <span className="text-[11px] text-gray-400">
+                        {template.account_id ? getAccountName(template.account_id) : 'All accounts'}
+                      </span>
+                    </div>
                   </TableCell>
                   <TableCell>
                     <Badge variant={getCategoryVariant(template.category || 'General')} size="sm">
@@ -620,7 +656,10 @@ export default function TemplatesPage() {
           <div className="space-y-4">
             <div className="flex items-center gap-3">
               <Badge variant="default" size="sm">
-                {getAccountName(selectedTemplate.account_id)}
+                {getCompanyName(selectedTemplate.company_id)}
+              </Badge>
+              <Badge variant="default" size="sm">
+                {selectedTemplate.account_id ? getAccountName(selectedTemplate.account_id) : 'All accounts'}
               </Badge>
               <Badge variant={getCategoryVariant(selectedTemplate.category || 'General')}>
                 {selectedTemplate.category || 'General'}
@@ -687,7 +726,7 @@ export default function TemplatesPage() {
             <Button
               onClick={handleSaveTemplate}
               loading={saving}
-              disabled={!editForm.title.trim() || !editForm.content.trim()}
+              disabled={!editForm.title.trim() || !editForm.content.trim() || (isAdmin && !editForm.company_id)}
             >
               <CheckCircle2 className="h-4 w-4" />
               {editingId ? 'Save Changes' : 'Create Template'}
@@ -707,24 +746,46 @@ export default function TemplatesPage() {
             />
           </div>
           {isAdmin && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Company</label>
-              <select
-                value={editForm.account_id}
-                onChange={(e) => setEditForm((prev) => ({ ...prev, account_id: e.target.value }))}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
-              >
-                <option value="">General (Shared across all companies)</option>
-                {accounts.map((acc) => (
-                  <option key={acc.id} value={acc.id}>
-                    {acc.name}
-                  </option>
-                ))}
-              </select>
-              <p className="mt-1 text-xs text-gray-400">
-                Select which company this template belongs to. &quot;General&quot; templates are shared
-                across all companies.
-              </p>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Company *</label>
+                <select
+                  value={editForm.company_id}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, company_id: e.target.value, account_id: '' }))}
+                  disabled={!isSuper}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500 disabled:bg-gray-50 disabled:text-gray-500"
+                >
+                  {isSuper && <option value="">Select a company…</option>}
+                  {companies.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-gray-400">
+                  The tenant that owns this template. {isSuper ? 'Pick any company.' : 'Locked to your company.'}
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Scope</label>
+                <select
+                  value={editForm.account_id}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, account_id: e.target.value }))}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                >
+                  <option value="">Whole company (all accounts)</option>
+                  {accounts
+                    .filter((a) => !editForm.company_id || a.company_id === editForm.company_id)
+                    .map((acc) => (
+                      <option key={acc.id} value={acc.id}>
+                        {acc.name}
+                      </option>
+                    ))}
+                </select>
+                <p className="mt-1 text-xs text-gray-400">
+                  Use it company-wide, or limit it to one account.
+                </p>
+              </div>
             </div>
           )}
           <div>
