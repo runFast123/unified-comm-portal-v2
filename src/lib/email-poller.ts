@@ -439,30 +439,36 @@ export async function pollEmailAccount(
               const bodyText = parsed.text || (parsed.html ? parsed.html.replace(/<[^>]+>/g, ' ') : '')
               const sentAt = parsed.date ? parsed.date.toISOString() : new Date().toISOString()
 
-              // Dedup: if a matching outbound message already exists (same subject
-              // OR body prefix within the last 2 hours) this is probably a
-              // portal-sent reply that's also in the Sent folder — skip.
-              // We run two sequential queries rather than a single `.or()` because
-              // PostgREST's `.or()` filter syntax is brittle with special chars
-              // (parens, commas, operators) that show up in real subjects/bodies.
-              const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
+              // Dedup. This MUST be time-independent: the Sent folder
+              // re-surfaces the same message on every poll, and `received_at`
+              // holds the email Date header (not insert time), so the previous
+              // now()-relative 2-hour window stopped matching once the mail aged
+              // past it — every subsequent poll then re-inserted the reply,
+              // piling up hundreds of duplicate outbound rows on one
+              // conversation (the reported bug).
+              //
+              // Primary, authoritative key: the RFC Message-ID, backed by the
+              // partial unique index on (account_id, email_message_id). A
+              // re-fetch of the same sent mail is now a guaranteed no-op.
+              const sentMessageId = normalizeMessageId(parsed.messageId)
               let existing: { id: string } | null = null
 
-              const subjectTrimmed = (parsed.subject || '').trim()
-              if (subjectTrimmed) {
-                const { data: bySubject } = await supabase
+              if (sentMessageId) {
+                const { data: byMsgId } = await supabase
                   .from('messages')
                   .select('id')
-                  .eq('conversation_id', convo.id)
-                  .eq('direction', 'outbound')
-                  .gte('received_at', twoHoursAgo)
-                  .eq('email_subject', subjectTrimmed)
+                  .eq('account_id', accountId)
+                  .eq('channel', 'email')
+                  .eq('email_message_id', sentMessageId)
                   .limit(1)
                   .maybeSingle()
-                if (bySubject) existing = bySubject as { id: string }
-              }
-
-              if (!existing) {
+                if (byMsgId) existing = byMsgId as { id: string }
+              } else {
+                // Fallback for the rare sent mail with NO Message-ID: same
+                // conversation + outbound + identical body prefix, time-
+                // independent and scoped per-conversation. (Only runs when there
+                // is no Message-ID, so it can't wrongly collapse two genuinely
+                // distinct replies that each carry their own Message-ID.)
                 const bodyPrefix = bodyText.slice(0, 80).trim()
                 if (bodyPrefix) {
                   // .ilike() handles % and _ escaping safely via parameter binding.
@@ -471,7 +477,6 @@ export async function pollEmailAccount(
                     .select('id')
                     .eq('conversation_id', convo.id)
                     .eq('direction', 'outbound')
-                    .gte('received_at', twoHoursAgo)
                     .ilike('message_text', `${bodyPrefix}%`)
                     .limit(1)
                     .maybeSingle()
@@ -497,8 +502,11 @@ export async function pollEmailAccount(
                 .eq('conversation_id', convo.id)
                 .eq('status', 'pending_approval')
 
-              // Insert the sent message as an outbound agent message
-              await supabase.from('messages').insert({
+              // Insert the sent message as an outbound agent message. Store the
+              // Message-ID so the (account_id, email_message_id) partial unique
+              // index is the hard backstop against duplicate Sent-folder
+              // re-fetches, even if the in-app dedup above is ever bypassed.
+              const { error: sentInsertErr } = await supabase.from('messages').insert({
                 conversation_id: convo.id,
                 account_id: accountId,
                 channel: 'email',
@@ -506,12 +514,22 @@ export async function pollEmailAccount(
                 sender_type: 'agent',
                 message_text: bodyText,
                 email_subject: parsed.subject || null,
+                email_message_id: sentMessageId,
                 direction: 'outbound',
                 replied: true,
                 reply_required: false,
                 timestamp: sentAt,
                 received_at: sentAt,
               })
+              if (sentInsertErr) {
+                // 23505 → the unique index caught a concurrent duplicate of this
+                // exact sent message. Idempotent: treat as already recorded.
+                if ((sentInsertErr as { code?: string }).code === '23505') {
+                  if (msg.uid && msg.uid > highestSentUid) highestSentUid = msg.uid
+                  continue
+                }
+                throw sentInsertErr
+              }
 
               // Flip conversation state: inbound messages are now "replied",
               // conversation is waiting_on_customer.
