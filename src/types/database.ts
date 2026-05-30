@@ -311,6 +311,9 @@ export interface ImportedRecord {
 export interface KBArticle {
   id: string
   account_id: string | null
+  /** Owning tenant. Every article belongs to exactly one company; account_id
+   *  (optional) narrows it to one account within that company. */
+  company_id: string | null
   title: string
   content: string
   category: string

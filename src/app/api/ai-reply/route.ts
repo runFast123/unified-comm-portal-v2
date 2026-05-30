@@ -214,12 +214,24 @@ export async function POST(request: Request) {
     }
 
     const kbFilter = kbAccountIds.map(id => `account_id.eq.${id}`).join(',')
-    const { data: kbArticles } = await supabase
-      .from('kb_articles')
-      .select('id, title, content, category')
-      .eq('is_active', true)
-      .or(`${kbFilter},account_id.is.null`)
-      .order('title')
+    // Company-scoped retrieval. We ALWAYS constrain to the conversation's own
+    // company, then include company-wide articles (account_id IS NULL) plus any
+    // scoped to this account. The previous query used `account_id.is.null` with
+    // NO company filter, which pulled EVERY company's "General" articles into
+    // this tenant's AI context — a cross-tenant leak. If the account has no
+    // company we skip the KB entirely rather than risk an unscoped pull.
+    type KbRow = { id: string; title: string; content: string; category: string }
+    let kbArticles: KbRow[] = []
+    if (account.company_id) {
+      const kbRes = await supabase
+        .from('kb_articles')
+        .select('id, title, content, category')
+        .eq('is_active', true)
+        .eq('company_id', account.company_id)
+        .or(`account_id.is.null,${kbFilter}`)
+        .order('title')
+      kbArticles = (kbRes.data as KbRow[] | null) ?? []
+    }
 
     let kbContext = ''
     const matchedKbIds: string[] = []

@@ -200,6 +200,7 @@ function GapAnalysis() {
 interface AccountOption {
   id: string
   name: string
+  company_id: string | null
 }
 
 const CATEGORIES = ['General', 'Billing', 'Technical', 'Sales', 'Support', 'Company Info', 'Products & Services', 'General FAQ']
@@ -232,7 +233,9 @@ function getCategoryVariant(category: string): 'info' | 'warning' | 'success' | 
 
 export default function KnowledgeBasePage() {
   const supabase = createClient()
-  const { isAdmin, companyAccountIds, activeCompanyId } = useUser()
+  const { isAdmin, role, companyAccountIds, activeCompanyId } = useUser()
+  const isSuper = role === 'super_admin'
+  const { toast } = useToast()
   const [articles, setArticles] = useState<KBArticle[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -243,28 +246,37 @@ export default function KnowledgeBasePage() {
   const [selectedArticle, setSelectedArticle] = useState<KBArticle | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
   const [editModalOpen, setEditModalOpen] = useState(false)
-  const [editForm, setEditForm] = useState({ title: '', content: '', category: 'Technical', tags: '', account_id: '' })
+  const [editForm, setEditForm] = useState({ title: '', content: '', category: 'Technical', tags: '', account_id: '', company_id: '' })
   const [editingId, setEditingId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [accounts, setAccounts] = useState<AccountOption[]>([])
-  const [accountFilter, setAccountFilter] = useState('')
+  const [companies, setCompanies] = useState<{ id: string; name: string }[]>([])
+  const [companyFilter, setCompanyFilter] = useState('')
 
   // Fetch accounts for filter/selector
   async function fetchAccounts() {
     let query = supabase
       .from('accounts')
-      .select('id, name')
+      .select('id, name, company_id')
       .eq('is_active', true)
       .order('name')
     // Scope to the active tenant's accounts. `activeCompanyId === null`
     // (super_admin combined view) leaves the query unscoped to show every
-    // tenant's accounts.
+    // tenant's accounts (needed so the modal can offer accounts for whichever
+    // company a super_admin picks).
     if (activeCompanyId) {
       query = query.in('id', companyAccountIds)
     }
     const { data } = await query
     if (data) setAccounts(data)
+  }
+
+  // Companies for the article's owning-tenant picker. RLS returns every
+  // company to a super_admin and only their own to a company_admin.
+  async function fetchCompanies() {
+    const { data } = await supabase.from('companies').select('id, name').order('name')
+    if (data) setCompanies(data)
   }
 
   // Fetch articles from Supabase
@@ -276,10 +288,11 @@ export default function KnowledgeBasePage() {
       .select('*')
       .order('updated_at', { ascending: false })
 
-    // Scope to the active tenant's accounts OR shared rows (account_id IS NULL).
-    // Combined view (super_admin, activeCompanyId === null) runs unscoped.
+    // Company-scoped. A selected tenant filters by company_id; the super_admin
+    // combined view (activeCompanyId === null) runs unscoped. RLS still limits a
+    // company_admin to their own company regardless of this client filter.
     if (activeCompanyId) {
-      query = query.or(companyAccountIds.map(id => `account_id.eq.${id}`).concat('account_id.is.null').join(','))
+      query = query.eq('company_id', activeCompanyId)
     }
 
     const { data, error: fetchError } = await query
@@ -297,6 +310,7 @@ export default function KnowledgeBasePage() {
   useEffect(() => {
     fetchArticles()
     fetchAccounts()
+    fetchCompanies()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdmin, companyAccountIds, activeCompanyId])
 
@@ -310,9 +324,15 @@ export default function KnowledgeBasePage() {
 
   // Helper to get account name from id
   function getAccountName(accountId: string | null): string {
-    if (!accountId) return 'General (Shared)'
+    if (!accountId) return 'All accounts'
     const acc = accounts.find(a => a.id === accountId)
     return acc ? acc.name : 'Unknown'
+  }
+
+  function getCompanyName(companyId: string | null): string {
+    if (!companyId) return 'Unknown'
+    const c = companies.find(c => c.id === companyId)
+    return c ? c.name : 'Unknown'
   }
 
   // Filtered articles
@@ -323,17 +343,15 @@ export default function KnowledgeBasePage() {
         article.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         article.content.toLowerCase().includes(searchQuery.toLowerCase())
       const matchesCategory = !categoryFilter || article.category === categoryFilter
-      const matchesAccount =
-        !accountFilter ||
-        (accountFilter === 'general' ? !article.account_id : article.account_id === accountFilter)
-      return matchesSearch && matchesCategory && matchesAccount
+      const matchesCompany = !companyFilter || article.company_id === companyFilter
+      return matchesSearch && matchesCategory && matchesCompany
     })
-  }, [articles, searchQuery, categoryFilter, accountFilter, accounts])
+  }, [articles, searchQuery, categoryFilter, companyFilter])
 
   // Reset page on filter change
   useEffect(() => {
     setKbPage(1)
-  }, [searchQuery, categoryFilter, accountFilter])
+  }, [searchQuery, categoryFilter, companyFilter])
 
   const totalKbPages = Math.ceil(filteredArticles.length / KB_PAGE_SIZE)
   const paginatedArticles = useMemo(() => {
@@ -405,7 +423,11 @@ export default function KnowledgeBasePage() {
 
   function handleOpenAdd() {
     setEditingId(null)
-    setEditForm({ title: '', content: '', category: 'General', tags: '', account_id: companyAccountIds.length > 0 ? companyAccountIds[0] : '' })
+    // Default the owning company to the active tenant (super_admin) or the
+    // caller's own company (company_admin → the single company they can read).
+    // Scope defaults to "whole company" (account_id = '').
+    const defaultCompany = activeCompanyId ?? (companies[0]?.id ?? '')
+    setEditForm({ title: '', content: '', category: 'General', tags: '', account_id: '', company_id: defaultCompany })
     setEditModalOpen(true)
   }
 
@@ -417,6 +439,7 @@ export default function KnowledgeBasePage() {
       category: article.category || 'General',
       tags: (article.tags || []).join(', '),
       account_id: article.account_id || '',
+      company_id: article.company_id || '',
     })
     setEditModalOpen(true)
     setModalOpen(false)
@@ -430,6 +453,15 @@ export default function KnowledgeBasePage() {
     const wordCount = editForm.content.split(/\s+/).length
 
     const accountId = editForm.account_id || null
+    // company_id is the tenant key and is REQUIRED. Super_admins choose it; a
+    // company_admin's `companies` list is just their own company, so the modal
+    // default already holds the right id.
+    const companyId = editForm.company_id || companies[0]?.id || null
+    if (!companyId) {
+      toast.error('Please select a company for this article.')
+      setSaving(false)
+      return
+    }
 
     if (editingId) {
       // Update existing article
@@ -441,6 +473,7 @@ export default function KnowledgeBasePage() {
           category: editForm.category,
           tags,
           word_count: wordCount,
+          company_id: companyId,
           account_id: accountId,
           updated_at: new Date().toISOString(),
         })
@@ -448,6 +481,7 @@ export default function KnowledgeBasePage() {
 
       if (updateError) {
         console.error('Failed to update article:', updateError.message)
+        toast.error(updateError.message)
       }
     } else {
       // Create new article
@@ -459,12 +493,14 @@ export default function KnowledgeBasePage() {
           category: editForm.category,
           tags,
           word_count: wordCount,
+          company_id: companyId,
           account_id: accountId,
           is_active: true,
         })
 
       if (insertError) {
         console.error('Failed to create article:', insertError.message)
+        toast.error(insertError.message)
       }
     }
 
@@ -678,16 +714,15 @@ export default function KnowledgeBasePage() {
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
-        {isAdmin && (
+        {isSuper && companies.length > 1 && (
         <div className="w-full sm:w-48">
           <Select
             options={[
               { value: '', label: 'All Companies' },
-              { value: 'general', label: 'General (Shared)' },
-              ...accounts.map(acc => ({ value: acc.id, label: acc.name })),
+              ...companies.map(c => ({ value: c.id, label: c.name })),
             ]}
-            value={accountFilter}
-            onChange={(e) => setAccountFilter(e.target.value)}
+            value={companyFilter}
+            onChange={(e) => setCompanyFilter(e.target.value)}
           />
         </div>
         )}
@@ -721,7 +756,7 @@ export default function KnowledgeBasePage() {
                 </Button>
               ) : undefined
             }
-            hint={articles.length === 0 ? 'Tip: articles scoped to a company are used only for that account.' : undefined}
+            hint={articles.length === 0 ? 'Tip: articles belong to a company; set a Scope to limit one to a single account.' : undefined}
           />
         ) : (
           <><Table>
@@ -749,14 +784,14 @@ export default function KnowledgeBasePage() {
                     </button>
                   </TableCell>
                   <TableCell>
-                    <span className={cn(
-                      'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
-                      article.account_id
-                        ? 'bg-teal-50 text-teal-700'
-                        : 'bg-gray-100 text-gray-600'
-                    )}>
-                      {getAccountName(article.account_id)}
-                    </span>
+                    <div className="flex flex-col gap-0.5">
+                      <span className="inline-flex w-fit items-center rounded-full bg-teal-50 px-2 py-0.5 text-xs font-medium text-teal-700">
+                        {getCompanyName(article.company_id)}
+                      </span>
+                      <span className="text-[11px] text-gray-400">
+                        {article.account_id ? getAccountName(article.account_id) : 'All accounts'}
+                      </span>
+                    </div>
                   </TableCell>
                   <TableCell>
                     <Badge variant={getCategoryVariant(article.category)} size="sm">
@@ -860,7 +895,10 @@ export default function KnowledgeBasePage() {
           <div className="space-y-4">
             <div className="flex items-center gap-3">
               <Badge variant="default" size="sm">
-                {getAccountName(selectedArticle.account_id)}
+                {getCompanyName(selectedArticle.company_id)}
+              </Badge>
+              <Badge variant="default" size="sm">
+                {selectedArticle.account_id ? getAccountName(selectedArticle.account_id) : 'All accounts'}
               </Badge>
               <Badge variant={getCategoryVariant(selectedArticle.category)}>
                 {selectedArticle.category}
@@ -923,7 +961,7 @@ export default function KnowledgeBasePage() {
             <Button variant="secondary" onClick={() => setEditModalOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSaveArticle} loading={saving} disabled={!editForm.title.trim() || !editForm.content.trim()}>
+            <Button onClick={handleSaveArticle} loading={saving} disabled={!editForm.title.trim() || !editForm.content.trim() || (isAdmin && !editForm.company_id)}>
               <CheckCircle2 className="h-4 w-4" />
               {editingId ? 'Save Changes' : 'Create Article'}
             </Button>
@@ -942,19 +980,38 @@ export default function KnowledgeBasePage() {
             />
           </div>
           {isAdmin && (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Company *</label>
-            <select
-              value={editForm.account_id}
-              onChange={(e) => setEditForm(prev => ({ ...prev, account_id: e.target.value }))}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
-            >
-              <option value="">General (Shared across all companies)</option>
-              {accounts.map(acc => <option key={acc.id} value={acc.id}>{acc.name}</option>)}
-            </select>
-            <p className="mt-1 text-xs text-gray-400">
-              Select which company this article belongs to. &quot;General&quot; articles are shared across all companies.
-            </p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Company *</label>
+              <select
+                value={editForm.company_id}
+                onChange={(e) => setEditForm(prev => ({ ...prev, company_id: e.target.value, account_id: '' }))}
+                disabled={!isSuper}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500 disabled:bg-gray-50 disabled:text-gray-500"
+              >
+                {isSuper && <option value="">Select a company…</option>}
+                {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+              <p className="mt-1 text-xs text-gray-400">
+                The tenant that owns this article. {isSuper ? 'Pick any company.' : 'Locked to your company.'}
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Scope</label>
+              <select
+                value={editForm.account_id}
+                onChange={(e) => setEditForm(prev => ({ ...prev, account_id: e.target.value }))}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+              >
+                <option value="">Whole company (all accounts)</option>
+                {accounts
+                  .filter(a => !editForm.company_id || a.company_id === editForm.company_id)
+                  .map(acc => <option key={acc.id} value={acc.id}>{acc.name}</option>)}
+              </select>
+              <p className="mt-1 text-xs text-gray-400">
+                Use it company-wide, or limit it to one account.
+              </p>
+            </div>
           </div>
           )}
           <div>
