@@ -21,6 +21,7 @@ import {
 } from '@/components/dashboard/inbox-facets-sidebar'
 import type { InboxFacets } from '@/app/api/inbox/facets/route'
 import { createClient } from '@/lib/supabase-client'
+import { decodeHtmlEntities } from '@/lib/utils'
 import { useToast } from '@/components/ui/toast'
 import { useRealtimeMessages } from '@/hooks/useRealtimeMessages'
 import type { InboxItem, Priority, SavedView, SavedViewFilters } from '@/types/database'
@@ -425,37 +426,46 @@ export default function InboxPage() {
       // Also fetch newsletter + spam counts for the badges. We inner-join
       // conversations and filter merged_into_id IS NULL so the badge totals
       // match the visible list (which drops merged conversations).
+      // Tab badges count DISTINCT CONVERSATIONS, not messages. The list
+      // collapses email down to one row per conversation, so a message-based
+      // count (e.g. 177 newsletter messages) could never be reconciled with the
+      // list's "27 of 27" conversations and looked like a bug. We fetch the
+      // qualifying conversation_id rows and dedupe client-side (cheap at this
+      // scale); the .limit guards against runaway result sets.
       let newsletterCountQuery = supabase
         .from('messages')
-        .select('id, conversations!messages_conversation_id_fkey!inner(merged_into_id)', { count: 'exact', head: true })
+        .select('conversation_id, conversations!messages_conversation_id_fkey!inner(merged_into_id)')
         .eq('direction', 'inbound')
         .eq('is_spam', true)
         .in('spam_reason', ['newsletter', 'marketing', 'automated_notification', 'ai_classified_newsletter'])
         .is('conversations.merged_into_id', null)
+        .limit(5000)
       if (activeCompanyId) {
         newsletterCountQuery = newsletterCountQuery.in('account_id', resolvedAccountIds)
       }
 
       let spamCountQuery = supabase
         .from('messages')
-        .select('id, conversations!messages_conversation_id_fkey!inner(merged_into_id)', { count: 'exact', head: true })
+        .select('conversation_id, conversations!messages_conversation_id_fkey!inner(merged_into_id)')
         .eq('direction', 'inbound')
         .eq('is_spam', true)
         .not('spam_reason', 'in', '(newsletter,marketing,automated_notification,ai_classified_newsletter)')
         .is('conversations.merged_into_id', null)
+        .limit(5000)
       if (activeCompanyId) {
         spamCountQuery = spamCountQuery.in('account_id', resolvedAccountIds)
       }
 
-      // Inbox count = inbound messages that are NOT marked as spam. Used to
-      // populate the badge on the "Inbox" tab so all three tabs show counts
-      // consistently (#5.7).
+      // Inbox count = distinct conversations with inbound, non-spam messages.
+      // Used to populate the badge on the "Inbox" tab so all three tabs show
+      // counts consistently (#5.7).
       let inboxCountQuery = supabase
         .from('messages')
-        .select('id, conversations!messages_conversation_id_fkey!inner(merged_into_id)', { count: 'exact', head: true })
+        .select('conversation_id, conversations!messages_conversation_id_fkey!inner(merged_into_id)')
         .eq('direction', 'inbound')
         .eq('is_spam', false)
         .is('conversations.merged_into_id', null)
+        .limit(5000)
       if (activeCompanyId) {
         inboxCountQuery = inboxCountQuery.in('account_id', resolvedAccountIds)
       }
@@ -471,9 +481,13 @@ export default function InboxPage() {
         throw messagesResult.error
       }
 
-      setNewsletterCount(newsletterCountResult.count ?? 0)
-      setSpamCount(spamCountResult.count ?? 0)
-      setInboxCount(inboxCountResult.count ?? 0)
+      // Dedupe conversation_id rows → distinct-conversation badge counts that
+      // line up with the collapsed list.
+      const distinctConvos = (rows: Array<{ conversation_id: string | null }> | null | undefined) =>
+        new Set((rows ?? []).map((r) => r.conversation_id).filter(Boolean)).size
+      setNewsletterCount(distinctConvos(newsletterCountResult.data as Array<{ conversation_id: string | null }> | null))
+      setSpamCount(distinctConvos(spamCountResult.data as Array<{ conversation_id: string | null }> | null))
+      setInboxCount(distinctConvos(inboxCountResult.data as Array<{ conversation_id: string | null }> | null))
 
       const data = messagesResult.data
       if (!data) {
@@ -515,7 +529,7 @@ export default function InboxPage() {
           sender_name: msg.sender_name,
           account_name: account?.name ?? 'Unknown Account',
           account_id: msg.account_id,
-          subject_or_preview: msg.email_subject || msg.message_text || '',
+          subject_or_preview: decodeHtmlEntities(msg.email_subject || msg.message_text || ''),
           body_preview: msg.message_text ? String(msg.message_text).replace(/\s+/g, ' ').trim().substring(0, 280) : null,
           category: classification?.category ?? null,
           sentiment: classification?.sentiment ?? null,
@@ -641,7 +655,7 @@ export default function InboxPage() {
             account_name: account?.name || 'Unknown',
             channel: msg.channel,
             sender_name: msg.sender_name,
-            subject_or_preview: msg.email_subject || msg.message_text?.substring(0, 100) || 'No preview',
+            subject_or_preview: decodeHtmlEntities(msg.email_subject || msg.message_text?.substring(0, 100) || 'No preview'),
             body_preview: msg.message_text ? String(msg.message_text).replace(/\s+/g, ' ').trim().substring(0, 280) : null,
             timestamp: msg.received_at || msg.timestamp,
             time_waiting: msg.received_at || msg.timestamp,
@@ -1295,7 +1309,7 @@ export default function InboxPage() {
             <span className="font-semibold text-gray-900">{filteredItems.length}</span>{' '}
             of{' '}
             <span className="font-semibold text-gray-900">{items.length}</span>{' '}
-            {items.length === 1 ? 'message' : 'messages'}
+            {items.length === 1 ? 'conversation' : 'conversations'}
           </p>
           {/* View mode toggle — hidden on mobile (split view not usable) */}
           <div className="hidden sm:flex items-center rounded-lg border border-gray-200 bg-gray-50 p-1">

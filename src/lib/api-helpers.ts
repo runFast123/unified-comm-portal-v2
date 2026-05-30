@@ -12,6 +12,7 @@ import {
 } from '@/lib/ai-usage'
 import { withCircuitBreaker, CircuitBreakerOpenError as _CircuitBreakerOpenError } from '@/lib/ai-circuit-breaker'
 import type { Account } from '@/types/database'
+import { decodeHtmlEntities } from '@/lib/utils'
 
 // Re-export so callers can `import { AIBudgetExceededError } from '@/lib/api-helpers'`
 export { AIBudgetExceededError } from '@/lib/ai-usage'
@@ -727,19 +728,17 @@ export async function verifyAccountAccess(
 
 // ─── HTML Stripping ─────────────────────────────────────────────────
 export function stripHtml(html: string): string {
-  return html
+  const stripped = html
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/p>/gi, '\n')
     .replace(/<\/div>/gi, '\n')
     .replace(/<[^>]+>/g, '')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
+  // Decode entities AFTER tag removal — handles named (&nbsp; &amp; …) plus
+  // numeric (&#160;) and hex (&#x27;) codes that newsletter HTML uses heavily,
+  // so raw entity strings never get stored in message_text or shown in the UI.
+  return decodeHtmlEntities(stripped)
     .replace(/\n{3,}/g, '\n\n')
     .trim()
 }

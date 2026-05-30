@@ -36,7 +36,11 @@ export function InboxKanban({ items }: InboxKanbanProps) {
   })
 
   return (
-    <div className="flex gap-3 overflow-x-auto pb-4 min-h-[400px]">
+    // Relative wrapper carries a right-edge fade that signals the status
+    // columns scroll horizontally — the full set can exceed the viewport width
+    // and "Escalated"/later columns were getting clipped with no affordance.
+    <div className="relative">
+      <div className="flex gap-3 overflow-x-auto pb-4 min-h-[400px] scroll-smooth">
       {COLUMNS.map(col => (
         <div key={col.key} className={cn('flex-shrink-0 w-64 rounded-xl border-t-4 border border-gray-200 flex flex-col', col.color)}>
           {/* Column header */}
@@ -92,6 +96,9 @@ export function InboxKanban({ items }: InboxKanbanProps) {
           </div>
         </div>
       ))}
+      </div>
+      {/* Right-edge fade: a passive cue that more columns exist to the right. */}
+      <div className="pointer-events-none absolute right-0 top-0 bottom-4 w-10 bg-gradient-to-l from-white via-white/70 to-transparent" />
     </div>
   )
 }

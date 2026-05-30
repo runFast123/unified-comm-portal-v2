@@ -92,3 +92,36 @@ export function truncate(str: string, length: number): string {
   if (str.length <= length) return str
   return str.slice(0, length) + '...'
 }
+
+/**
+ * Decode HTML entities for plain-text display (inbox previews, subjects, board
+ * cards, etc.). Handles named entities (&nbsp; &amp; &lt; &gt; &quot; &apos;)
+ * AND numeric (&#160;) and hex (&#x27;) entities, which newsletter / marketing
+ * HTML emails use heavily. Without this, raw `&#160;` / `&#x27;` strings leak
+ * straight into the UI and look broken.
+ *
+ * Numeric/hex are decoded first so a literal `&amp;#160;` doesn't double-decode,
+ * and NBSP (U+00A0) is normalised to a regular space so previews collapse
+ * cleanly. Safe on null/undefined (returns '').
+ */
+export function decodeHtmlEntities(input: string | null | undefined): string {
+  if (!input) return ''
+  const fromCodePoint = (cp: number): string => {
+    if (!Number.isFinite(cp) || cp <= 0 || cp > 0x10ffff) return ''
+    try {
+      return String.fromCodePoint(cp)
+    } catch {
+      return ''
+    }
+  }
+  return input
+    .replace(/&#x([0-9a-fA-F]+);/g, (_m, hex) => fromCodePoint(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_m, dec) => fromCodePoint(parseInt(dec, 10)))
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&apos;/gi, "'")
+    .replace(/&amp;/gi, '&')
+    .replace(/ /g, ' ')
+}
