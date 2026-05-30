@@ -96,5 +96,23 @@ export async function GET(request: Request) {
 
   const { data: invitations } = await invQuery
 
-  return NextResponse.json({ users: data ?? [], invitations: invitations ?? [] })
+  // Companies list for the Add User modal. A super_admin can place a new user
+  // into ANY company, so they get the full list; a company_admin is pinned to
+  // their own company server-side but we still return it (label display).
+  let companies: Array<{ id: string; name: string }> = []
+  if (isSuperAdmin(profile?.role)) {
+    const { data: comps } = await admin
+      .from('companies')
+      .select('id, name')
+      .order('name', { ascending: true })
+    companies = (comps as Array<{ id: string; name: string }> | null) ?? []
+  } else if (profile?.company_id) {
+    const { data: comps } = await admin
+      .from('companies')
+      .select('id, name')
+      .eq('id', profile.company_id)
+    companies = (comps as Array<{ id: string; name: string }> | null) ?? []
+  }
+
+  return NextResponse.json({ users: data ?? [], invitations: invitations ?? [], companies })
 }

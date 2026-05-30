@@ -40,6 +40,7 @@ interface Account {
   id: string
   name: string
   is_active?: boolean
+  company_id?: string | null
 }
 
 function getRoleBadge(role: UserRole) {
@@ -244,6 +245,11 @@ export default function UsersPage() {
   const [inviteAccountId, setInviteAccountId] = useState('')
   const [inviting, setInviting] = useState(false)
   const [inviteError, setInviteError] = useState<string | null>(null)
+  // Company assignment for new invites. Only super_admins choose it (a
+  // company_admin is pinned to their own company server-side). The list comes
+  // from /api/admin/users; the picker defaults to the active tenant on open.
+  const [companies, setCompanies] = useState<Array<{ id: string; name: string }>>([])
+  const [inviteCompanyId, setInviteCompanyId] = useState<string>('')
 
   // Fallback notice shown above the table when the invite email could NOT be
   // sent (Supabase SMTP not configured). Holds the email + shareable signup
@@ -282,7 +288,7 @@ export default function UsersPage() {
     // IDs (empty array → zero rows, correct for a zero-account tenant).
     let accountsQuery = supabase
       .from('accounts')
-      .select('id, name, is_active')
+      .select('id, name, is_active, company_id')
       .order('name')
     if (activeCompanyId) {
       accountsQuery = accountsQuery.in('id', companyAccountIds)
@@ -303,6 +309,7 @@ export default function UsersPage() {
             full_name: string | null
             created_at: string
           }>
+          companies?: Array<{ id: string; name: string }>
           error?: string
         }
         if (!r.ok) {
@@ -311,6 +318,7 @@ export default function UsersPage() {
         return {
           users: (json.users ?? []) as User[],
           invitations: json.invitations ?? [],
+          companies: json.companies ?? [],
         }
       }),
       accountsQuery,
@@ -319,6 +327,7 @@ export default function UsersPage() {
     if (usersResult.status === 'fulfilled') {
       const fetched = usersResult.value.users
       setPendingInvitations(usersResult.value.invitations)
+      setCompanies(usersResult.value.companies)
       setUsers(fetched)
       // Seed drafts so inline controls have stable state
       const seed: Record<string, RowDraft> = {}
@@ -514,6 +523,12 @@ export default function UsersPage() {
   // See src/app/api/users/invite/route.ts.
   const handleInvite = useCallback(async () => {
     if (!inviteEmail) return
+    // Super_admins must pick which company the user belongs to (company_admins
+    // are pinned to their own company server-side, so they get no picker).
+    if (canInviteSuperAdmin && !inviteCompanyId) {
+      setInviteError('Please select a company for this user.')
+      return
+    }
     setInviting(true)
     setInviteError(null)
 
@@ -526,6 +541,10 @@ export default function UsersPage() {
           full_name: inviteName.trim() || null,
           role: inviteRole,
           account_id: inviteAccountId || null,
+          // Only a super_admin may target a company. company_admin invites are
+          // pinned to their own company server-side; sending a different id
+          // would 403, so we omit it for them entirely.
+          ...(canInviteSuperAdmin ? { company_id: inviteCompanyId || null } : {}),
         }),
       })
       const data = await res.json()
@@ -544,6 +563,7 @@ export default function UsersPage() {
       setInviteName('')
       setInviteRole('company_member')
       setInviteAccountId('')
+      setInviteCompanyId('')
       setInviteError(null)
       setShowInvite(false)
 
@@ -583,7 +603,7 @@ export default function UsersPage() {
     } finally {
       setInviting(false)
     }
-  }, [inviteEmail, inviteName, inviteRole, inviteAccountId, toast, fetchData])
+  }, [inviteEmail, inviteName, inviteRole, inviteAccountId, inviteCompanyId, canInviteSuperAdmin, toast, fetchData])
 
   // Delete a real user. Called from the confirm modal. The server enforces all
   // the hard guards (self-delete, tenant/privilege bound, last-super-admin);
@@ -672,7 +692,7 @@ export default function UsersPage() {
             Manage portal users, roles, and account assignments
           </p>
         </div>
-        <Button onClick={() => setShowInvite(true)}>
+        <Button onClick={() => { setInviteCompanyId(activeCompanyId ?? ''); setInviteAccountId(''); setInviteError(null); setShowInvite(true) }}>
           <UserPlus className="h-4 w-4" /> Add User
         </Button>
       </div>
@@ -1050,6 +1070,22 @@ export default function UsersPage() {
             onChange={(e) => setInviteRole(e.target.value as UserRole)}
             options={inviteRoleOptions}
           />
+          {canInviteSuperAdmin && (
+            <Select
+              label="Company"
+              value={inviteCompanyId}
+              onChange={(e) => {
+                setInviteCompanyId(e.target.value)
+                // The previously-selected account may belong to a different
+                // company — clear it so we never submit a cross-company pair.
+                setInviteAccountId('')
+              }}
+              options={[
+                { value: '', label: '— Select a company —' },
+                ...companies.map((c) => ({ value: c.id, label: c.name })),
+              ]}
+            />
+          )}
           <Select
             label="Account"
             value={inviteAccountId}
@@ -1058,6 +1094,15 @@ export default function UsersPage() {
               { value: '', label: '— No account —' },
               ...accounts
                 .filter((a) => a.is_active !== false)
+                // For a super_admin, only show accounts in the chosen company
+                // (the backend rejects a cross-company account anyway). For a
+                // company_admin the list is already their company's accounts.
+                .filter(
+                  (a) =>
+                    !canInviteSuperAdmin ||
+                    !inviteCompanyId ||
+                    a.company_id === inviteCompanyId,
+                )
                 .map((a) => ({ value: a.id, label: a.name })),
             ]}
           />
