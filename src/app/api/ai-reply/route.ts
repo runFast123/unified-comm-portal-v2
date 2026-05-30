@@ -473,13 +473,21 @@ export async function POST(request: Request) {
       try { await supabase.from('kb_hits').insert(kbHits) } catch { /* ignore */ }
     }
 
-    // If trust mode is on, send the reply directly via SMTP / Graph / Meta.
-    // The ai_replies row was inserted above as `pending_approval`; we only
-    // flip it to `sent` after the channel send actually succeeds. If the
-    // send branch is skipped (missing participant) or returns !ok, we leave
-    // the row as `pending_approval` but stamp delivery_status='failed' so
+    // Trust-mode AUTO-SEND applies ONLY to the automatic pipeline (inbound
+    // message → webhook → classify → ai-reply, authenticated with the webhook
+    // secret → isInternalCall). When a HUMAN clicks "Generate AI reply" they
+    // want a DRAFT to review — never an instant send — so we require
+    // `isInternalCall` here. Without it, manually generating a draft on a
+    // trust-mode account sent the reply immediately with NO approval step
+    // (the reported bug). Manual drafts always land as `pending_approval`; the
+    // agent reviews and sends them via the composer / approve flow.
+    //
+    // On the auto path: the ai_replies row was inserted above as
+    // `pending_approval`; we flip it to `sent` only after the channel send
+    // actually succeeds. If the send branch is skipped (missing participant) or
+    // returns !ok, the row stays `pending_approval` with delivery_status set so
     // ops can see the attempt happened.
-    if (account.ai_trust_mode && aiReply) {
+    if (account.ai_trust_mode && aiReply && isInternalCall) {
       try {
         const { data: convForReply } = await supabase
           .from('conversations')
