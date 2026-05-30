@@ -166,7 +166,9 @@ export default function SheetsPage() {
       sheet_id: sheetId,
       sheet_name: detectedName,
       sheet_url: newSheetUrl,
-      account_id: companyAccountIds.length > 0 ? companyAccountIds[0] : (newSheetAccountId || null),
+      // Honor the explicit account picker first; only fall back to the active
+      // tenant's first account (then null for super_admin combined view).
+      account_id: newSheetAccountId || (companyAccountIds.length > 0 ? companyAccountIds[0] : null),
       sync_status: 'paused' as SyncStatus,
       row_count: 0,
       sync_schedule: 'Every 30 minutes',

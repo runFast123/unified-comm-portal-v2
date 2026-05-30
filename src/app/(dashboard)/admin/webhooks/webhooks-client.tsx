@@ -25,6 +25,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@
 import { EmptyState } from '@/components/ui/empty-state'
 import { useToast } from '@/components/ui/toast'
 import { Badge } from '@/components/ui/badge'
+import { useUser } from '@/context/user-context'
 
 export interface WebhookRow {
   id: string
@@ -71,6 +72,10 @@ function statusOf(w: WebhookRow): { label: string; variant: 'success' | 'warning
 export function WebhooksClient({ initialWebhooks, knownEvents, canCreate }: Props) {
   const router = useRouter()
   const { toast } = useToast()
+  // Active tenant (super_admin company switcher). Sent on create so a
+  // super_admin's webhook lands under the VIEWED company, not their home one.
+  // The route ignores it for company_admins (pinned server-side).
+  const { activeCompanyId } = useUser()
   const [webhooks, setWebhooks] = useState<WebhookRow[]>(initialWebhooks)
 
   // Create modal
@@ -118,7 +123,7 @@ export function WebhooksClient({ initialWebhooks, knownEvents, canCreate }: Prop
       const res = await fetch('/api/admin/webhooks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: createUrl.trim(), events: createEvents }),
+        body: JSON.stringify({ url: createUrl.trim(), events: createEvents, ...(activeCompanyId ? { company_id: activeCompanyId } : {}) }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -148,7 +153,7 @@ export function WebhooksClient({ initialWebhooks, knownEvents, canCreate }: Prop
     } finally {
       setCreating(false)
     }
-  }, [createUrl, createEvents, router])
+  }, [createUrl, createEvents, router, activeCompanyId])
 
   const handleToggleActive = useCallback(
     async (w: WebhookRow) => {

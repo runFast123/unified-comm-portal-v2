@@ -230,9 +230,17 @@ export default function NotificationsClient({ companyAccountIds }: Notifications
         }
         setStatusMessage('Rule updated successfully.')
       } else {
+        // account_id is the tenant key for a rule. The company-scoped RLS
+        // rejects an INSERT whose account_id isn't one of the caller's company
+        // accounts — so a NULL account_id (the form has no account picker) used
+        // to make every company_admin "create" silently fail. Default to the
+        // active tenant's first account so the rule is created and tenant-scoped.
+        const resolvedAccountId =
+          dbRecord.account_id ??
+          (companyAccountIds && companyAccountIds.length > 0 ? companyAccountIds[0] : null)
         const { error } = await supabase
           .from('notification_rules')
-          .insert({ ...dbRecord, is_active: true })
+          .insert({ ...dbRecord, account_id: resolvedAccountId, is_active: true })
 
         if (error) {
           setStatusMessage(`Failed to create rule: ${error.message}`)

@@ -19,6 +19,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@
 import { EmptyState } from '@/components/ui/empty-state'
 import { useToast } from '@/components/ui/toast'
 import { Badge } from '@/components/ui/badge'
+import { useUser } from '@/context/user-context'
 
 export interface TokenRow {
   id: string
@@ -48,6 +49,10 @@ function formatDate(iso: string | null): string {
 export function ApiTokensClient({ initialTokens, knownScopes, canCreate }: Props) {
   const router = useRouter()
   const { toast } = useToast()
+  // Active tenant (super_admin company switcher). Sent on create so a token a
+  // super_admin mints lands under the VIEWED company, not their home one. The
+  // route ignores it for company_admins (pinned server-side).
+  const { activeCompanyId } = useUser()
   const [tokens, setTokens] = useState<TokenRow[]>(initialTokens)
 
   // Create-modal state.
@@ -86,6 +91,7 @@ export function ApiTokensClient({ initialTokens, knownScopes, canCreate }: Props
           name: createName.trim(),
           scopes: createScopes,
           expires_at: createExpires ? new Date(createExpires).toISOString() : null,
+          ...(activeCompanyId ? { company_id: activeCompanyId } : {}),
         }),
       })
       const data = await res.json()
@@ -121,7 +127,7 @@ export function ApiTokensClient({ initialTokens, knownScopes, canCreate }: Props
     } finally {
       setCreating(false)
     }
-  }, [createName, createScopes, createExpires, router])
+  }, [createName, createScopes, createExpires, router, activeCompanyId])
 
   const handleRevoke = useCallback(
     async (token: TokenRow) => {

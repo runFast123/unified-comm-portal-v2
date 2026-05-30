@@ -13,9 +13,10 @@
  */
 
 import { redirect } from 'next/navigation'
+import { cookies } from 'next/headers'
 import Link from 'next/link'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase-server'
-import { getCurrentUser } from '@/lib/auth'
+import { getCurrentUser, isSuperAdmin } from '@/lib/auth'
 import { companyCSATAggregate, agentCSATAggregate, type CSATAggregate } from '@/lib/csat'
 import { Card } from '@/components/ui/card'
 
@@ -86,7 +87,15 @@ export default async function CSATAdminPage({
   }
 
   const admin = await createServiceRoleClient()
-  const companyId = profile.company_id
+  // Honor the company switcher for super_admins so they can view ANY tenant's
+  // CSAT, not just their home company. company_admins stay pinned to their own
+  // company (the cookie is ignored for them).
+  let companyId = profile.company_id
+  if (isSuperAdmin(profile.role)) {
+    const cookieStore = await cookies()
+    const selected = cookieStore.get('selected_company_id')?.value
+    if (selected && selected.trim()) companyId = selected.trim()
+  }
   const sp = await searchParams
   const agentId = sp?.agent ?? null
 

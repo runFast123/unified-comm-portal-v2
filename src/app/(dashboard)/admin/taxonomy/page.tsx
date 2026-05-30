@@ -14,6 +14,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
+import { useUser } from '@/context/user-context'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
@@ -56,6 +57,11 @@ const DEFAULT_COLOR = '#6b7280'
 
 export default function TaxonomyPage() {
   const { toast } = useToast()
+  // Scope every read/create to the tenant the super_admin is currently viewing
+  // (the company switcher). Without this the page always managed the caller's
+  // OWN company's taxonomy regardless of the active tenant. company_admins are
+  // pinned to their company server-side, so this is a no-op for them.
+  const { activeCompanyId } = useUser()
 
   // ── Data ──────────────────────────────────────────────────────────
   const [statuses, setStatuses] = useState<CompanyStatus[]>([])
@@ -78,9 +84,10 @@ export default function TaxonomyPage() {
   const reloadAll = useCallback(async () => {
     setLoading(true)
     try {
+      const qs = activeCompanyId ? `?company_id=${encodeURIComponent(activeCompanyId)}` : ''
       const [sRes, tRes] = await Promise.all([
-        fetch('/api/company-statuses'),
-        fetch('/api/company-tags'),
+        fetch(`/api/company-statuses${qs}`),
+        fetch(`/api/company-tags${qs}`),
       ])
       const sJson = (await sRes.json()) as { statuses?: CompanyStatus[]; error?: string }
       const tJson = (await tRes.json()) as { tags?: CompanyTag[]; error?: string }
@@ -93,10 +100,11 @@ export default function TaxonomyPage() {
     } finally {
       setLoading(false)
     }
-  }, [toast])
+  }, [toast, activeCompanyId])
 
   useEffect(() => {
     void reloadAll()
+  // reloadAll depends on activeCompanyId, so switching tenant re-fetches.
   }, [reloadAll])
 
   // ── Sorted views ──────────────────────────────────────────────────
@@ -138,6 +146,9 @@ export default function TaxonomyPage() {
           name: statusForm.name.trim(),
           color: statusForm.color,
           description: statusForm.description.trim() || null,
+          // super_admin: create under the active tenant. company_admin path
+          // ignores this and uses its own company server-side.
+          ...(activeCompanyId ? { company_id: activeCompanyId } : {}),
         }),
       })
       const json = (await res.json()) as { error?: string }
@@ -219,6 +230,9 @@ export default function TaxonomyPage() {
           name: tagForm.name.trim(),
           color: tagForm.color,
           description: tagForm.description.trim() || null,
+          // super_admin: create under the active tenant. company_admin path
+          // ignores this and uses its own company server-side.
+          ...(activeCompanyId ? { company_id: activeCompanyId } : {}),
         }),
       })
       const json = (await res.json()) as { error?: string }
