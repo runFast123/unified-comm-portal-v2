@@ -1,0 +1,149 @@
+import type { Metadata } from 'next'
+import Link from 'next/link'
+import {
+  Inbox,
+  Sparkles,
+  Share2,
+  Gauge,
+  BookOpen,
+  Building2,
+  Mail,
+  MessageSquare,
+  MessagesSquare,
+  ShieldCheck,
+  Users,
+  Tag,
+  Bell,
+  ClipboardList,
+  Bot,
+  ArrowRight,
+  Check,
+} from 'lucide-react'
+import { PageHeader } from '@/components/marketing/page-header'
+import { Reveal } from '@/components/marketing/reveal'
+
+export const metadata: Metadata = {
+  title: 'Features',
+  description:
+    'Explore Unified Communication Portal: one shared inbox for email, Teams and WhatsApp, AI-drafted replies, smart routing, SLA & CSAT tracking, knowledge base, templates and true multi-tenant isolation.',
+  alternates: { canonical: '/features' },
+}
+
+const GROUPS = [
+  {
+    eyebrow: 'One inbox',
+    title: 'Bring every channel together',
+    body: 'Email, Microsoft Teams and WhatsApp arrive in the same threaded workspace — automatically de-duplicated and organised so nothing is missed.',
+    items: [
+      { icon: Mail, title: 'Email', body: 'Full IMAP/SMTP sync with proper threading, attachments and Message-ID de-duplication.' },
+      { icon: MessagesSquare, title: 'Microsoft Teams', body: 'Internal escalations and team chatter alongside customer conversations.' },
+      { icon: MessageSquare, title: 'WhatsApp', body: 'Meet customers on the channel they already use, in the same shared inbox.' },
+      { icon: Inbox, title: 'Unified threads', body: 'One continuous history per customer, no matter how many channels they touch.' },
+    ],
+  },
+  {
+    eyebrow: 'Productivity',
+    title: 'Move faster, together',
+    body: 'Built-in collaboration keeps your whole team aligned on every conversation, with the tools to triage and resolve at speed.',
+    items: [
+      { icon: Share2, title: 'Assignment & routing', body: 'Send conversations to the right person and avoid two agents replying at once.' },
+      { icon: Tag, title: 'Statuses & tags', body: 'Organise by status and custom tags so your queue always reflects reality.' },
+      { icon: BookOpen, title: 'Knowledge base', body: 'A shared source of truth so answers stay accurate and on-brand.' },
+      { icon: ClipboardList, title: 'Reply templates', body: 'Save and reuse your best responses for instant, consistent replies.' },
+    ],
+  },
+  {
+    eyebrow: 'Intelligence',
+    title: 'AI that helps, never overrides',
+    body: 'The assistant drafts replies from the full conversation context — your team always reviews and approves before anything is sent.',
+    items: [
+      { icon: Bot, title: 'AI-drafted replies', body: 'A ready-to-edit response in seconds, grounded in the whole thread.' },
+      { icon: Sparkles, title: 'Tone & suggestions', body: 'Smart wording and template suggestions to match your voice.' },
+      { icon: ShieldCheck, title: 'Approval-gated sending', body: 'AI never auto-sends — a human approves every customer message.' },
+      { icon: Bell, title: 'Notifications', body: 'Stay on top of new messages, assignments and mentions in real time.' },
+    ],
+  },
+  {
+    eyebrow: 'Trust & scale',
+    title: 'Enterprise-ready foundations',
+    body: 'Run many brands from one platform with measurable service quality and airtight data separation.',
+    items: [
+      { icon: Building2, title: 'Multi-tenant', body: 'Each company is fully isolated with row-level security — data never crosses.' },
+      { icon: Users, title: 'Roles & permissions', body: 'From member to supervisor, admin and super admin — scoped to each tenant.' },
+      { icon: Gauge, title: 'SLA tracking', body: 'Keep your promises with response-time timers and clear visibility.' },
+      { icon: ClipboardList, title: 'CSAT surveys', body: 'Measure satisfaction automatically after every resolved conversation.' },
+    ],
+  },
+]
+
+export default function FeaturesPage() {
+  return (
+    <>
+      <PageHeader
+        eyebrow="Features"
+        title="One platform for every conversation"
+        subtitle="From a unified inbox to AI-assisted replies and true multi-tenancy — everything your support team needs, in one place."
+      />
+
+      <div className="space-y-20 bg-white py-20 sm:space-y-28 sm:py-28">
+        {GROUPS.map((g, gi) => (
+          <section key={g.title} className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8" aria-label={g.title}>
+            <Reveal className="mx-auto max-w-2xl text-center">
+              <span className="text-sm font-semibold uppercase tracking-wider text-teal-600">{g.eyebrow}</span>
+              <h2 className="mt-3 text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">{g.title}</h2>
+              <p className="mt-4 text-lg text-gray-600">{g.body}</p>
+            </Reveal>
+            <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+              {g.items.map((item, i) => (
+                <Reveal key={item.title} delay={(i % 4) * 80}>
+                  <div className="group h-full rounded-2xl border border-gray-200 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-teal-200 hover:shadow-xl hover:shadow-teal-900/5">
+                    <div className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-teal-50 to-emerald-50 text-teal-700 ring-1 ring-teal-100 transition-colors group-hover:from-teal-600 group-hover:to-teal-700 group-hover:text-white">
+                      <item.icon className="h-5 w-5" />
+                    </div>
+                    <h3 className="mt-4 text-base font-semibold text-gray-900">{item.title}</h3>
+                    <p className="mt-2 text-sm leading-relaxed text-gray-600">{item.body}</p>
+                  </div>
+                </Reveal>
+              ))}
+            </div>
+            {gi < GROUPS.length - 1 && (
+              <div className="mx-auto mt-20 h-px max-w-5xl bg-gradient-to-r from-transparent via-gray-200 to-transparent sm:mt-28" />
+            )}
+          </section>
+        ))}
+      </div>
+
+      {/* CTA */}
+      <section className="bg-gray-50/70 py-20">
+        <div className="mx-auto max-w-3xl px-4 text-center sm:px-6 lg:px-8">
+          <Reveal>
+            <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
+              See it on your own channels
+            </h2>
+            <p className="mx-auto mt-4 max-w-xl text-lg text-gray-600">
+              Request a demo and we’ll show you Unified connected to a live inbox.
+            </p>
+            <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+              <Link
+                href="/contact"
+                className="group inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-teal-700 to-teal-600 px-6 py-3.5 text-base font-semibold text-white shadow-lg shadow-teal-700/25 transition-all hover:shadow-xl"
+              >
+                Request a demo
+                <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
+              </Link>
+              <Link
+                href="/pricing"
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white px-6 py-3.5 text-base font-semibold text-gray-800 transition-colors hover:border-teal-300 hover:bg-teal-50/50 hover:text-teal-700"
+              >
+                View pricing
+              </Link>
+            </div>
+            <p className="mt-6 inline-flex items-center justify-center gap-1.5 text-sm text-gray-400">
+              <Check className="h-4 w-4 text-teal-600" /> Invite-only · onboarding included
+            </p>
+          </Reveal>
+        </div>
+      </section>
+    </>
+  )
+}

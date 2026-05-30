@@ -262,3 +262,93 @@ a, button, input, select, textarea {
     scroll-behavior: auto !important;
   }
 }
+
+/* ============================================
+   MARKETING / LANDING PAGE
+   ============================================ */
+
+/* Scroll-reveal: hidden by default, animates in when <Reveal> adds .is-visible */
+.reveal {
+  opacity: 0;
+  transform: translateY(28px);
+  transition: opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1), transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
+}
+.reveal.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Animated aurora blobs behind the hero */
+@keyframes blob-drift {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(30px, -40px) scale(1.1); }
+  66% { transform: translate(-20px, 30px) scale(0.95); }
+}
+.animate-blob { animation: blob-drift 18s ease-in-out infinite; }
+
+/* Slow float for hero mockups / chips */
+@keyframes float-y {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-14px); }
+}
+.animate-float { animation: float-y 6s ease-in-out infinite; }
+.animate-float-slow { animation: float-y 9s ease-in-out infinite; }
+
+/* Animated gradient text */
+@keyframes gradient-pan {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+.text-gradient {
+  background: linear-gradient(110deg, #0f766e, #14b8a6, #10b981, #0f766e);
+  background-size: 250% 250%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  animation: gradient-pan 6s ease infinite;
+}
+
+/* Infinite marquee (logos / channels) */
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.animate-marquee {
+  animation: marquee 28s linear infinite;
+}
+.marquee-mask {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 12%, #000 88%, transparent);
+  mask-image: linear-gradient(to right, transparent, #000 12%, #000 88%, transparent);
+}
+
+/* Soft dotted grid background */
+.bg-dot-grid {
+  background-image: radial-gradient(circle, rgba(15, 118, 110, 0.10) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+/* Shine sweep on primary buttons / cards */
+@keyframes shine-sweep {
+  0% { transform: translateX(-120%) skewX(-15deg); }
+  60%, 100% { transform: translateX(220%) skewX(-15deg); }
+}
+.shine::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+  transform: translateX(-120%) skewX(-15deg);
+}
+.shine:hover::after {
+  animation: shine-sweep 0.9s ease;
+}
+
+/* Gentle entrance for hero (no scroll trigger needed) */
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-rise { animation: rise-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) both; }

@@ -97,22 +97,40 @@ export async function middleware(request: NextRequest) {
     return redirect
   }
 
+  // Public, unauthenticated-accessible routes. The marketing site (landing +
+  // feature/pricing/about/contact/legal pages) must be crawlable and viewable
+  // without a session, and search engines need robots.txt / sitemap.xml.
+  const PUBLIC_PATHS = new Set([
+    '/',
+    '/login',
+    '/signup',
+    // Invite set-password landing — the Supabase invite link carries its token
+    // in the URL *hash*, which the server (and therefore this middleware) can't
+    // see, so getUser() finds no session here. Without this allow-list the
+    // invitee would be bounced to /login before the client can exchange the
+    // hash token for a session. The token is the auth.
+    '/accept-invite',
+    // Marketing pages.
+    '/features',
+    '/pricing',
+    '/about',
+    '/contact',
+    '/privacy',
+    '/terms',
+    // SEO files (served by app/sitemap.ts and app/robots.ts).
+    '/sitemap.xml',
+    '/robots.txt',
+  ])
+
   // Redirect unauthenticated users to login
   if (
     !user &&
-    pathname !== '/login' &&
-    pathname !== '/signup' &&
+    !PUBLIC_PATHS.has(pathname) &&
     !pathname.startsWith('/api/') &&
     !pathname.startsWith('/_next/') &&
     // Public CSAT survey landing — customers click these from email and
     // never authenticate. The token in the URL is the auth.
-    !pathname.startsWith('/csat/') &&
-    // Invite set-password landing — the Supabase invite link carries its
-    // token in the URL *hash*, which the server (and therefore this
-    // middleware) can't see, so getUser() finds no session here. Without
-    // this allow-list the invitee would be bounced to /login before the
-    // client can exchange the hash token for a session. The token is the auth.
-    pathname !== '/accept-invite'
+    !pathname.startsWith('/csat/')
   ) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
