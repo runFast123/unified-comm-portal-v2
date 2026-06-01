@@ -24,7 +24,7 @@ interface SearchResultItem {
 }
 
 const SECTION_LABELS: Record<string, string> = {
-  message: 'Messages',
+  message: 'Conversations',
   kb_article: 'Knowledge Base',
 }
 
@@ -98,14 +98,7 @@ export function GlobalSearch({ variant = 'desktop' }: GlobalSearchProps) {
       const supabase = createClient()
       const searchTerm = `%${trimmed}%`
 
-      let messagesQuery = supabase
-        .from('messages')
-        .select('id, conversation_id, email_subject, sender_name, message_text, channel')
-        .or(`sender_name.ilike.${searchTerm},email_subject.ilike.${searchTerm},message_text.ilike.${searchTerm}`)
-        .eq('direction', 'inbound')
-        .order('received_at', { ascending: false })
-        .limit(5)
-
+      // Knowledge base: client-side ilike (small table). Tenant-scoped below.
       let kbQuery = supabase
         .from('kb_articles')
         .select('id, title, content, category')
@@ -114,31 +107,40 @@ export function GlobalSearch({ variant = 'desktop' }: GlobalSearchProps) {
         .order('updated_at', { ascending: false })
         .limit(5)
 
-      // Tenant scope: when a tenant is selected, restrict messages to its
-      // accounts and KB articles to its accounts OR shared rows (account_id
-      // IS NULL). Combined view (super_admin, activeCompanyId === null) runs
-      // unscoped.
+      // Tenant scope for KB: own accounts OR shared rows (account_id IS NULL).
+      // Combined view (super_admin, activeCompanyId === null) runs unscoped.
       if (activeCompanyId) {
-        messagesQuery = messagesQuery.in('account_id', companyAccountIds)
         kbQuery = kbQuery.or(companyAccountIds.map(id => `account_id.eq.${id}`).concat('account_id.is.null').join(','))
       }
 
-      const [messagesRes, kbRes] = await Promise.all([messagesQuery, kbQuery])
+      // Conversations: server-side Postgres full-text search — ranked, with a
+      // highlighted snippet and message-body recall (far better than ilike).
+      // Tenant scope is enforced inside the RPC; ?company_id narrows to the
+      // active switcher company.
+      const params = new URLSearchParams({ q: trimmed, limit: '6' })
+      if (activeCompanyId) params.set('company_id', activeCompanyId)
+      const convPromise = fetch(`/api/search?${params.toString()}`)
+        .then((r) => (r.ok ? r.json() : { results: [] }))
+        .catch(() => ({ results: [] }))
+
+      const [convRes, kbRes] = await Promise.all([convPromise, kbQuery])
 
       const items: SearchResultItem[] = []
 
-      // Message results
-      ;(messagesRes.data ?? []).forEach((m: any) => {
-        const cleanSender = (m.sender_name || 'Unknown')
+      // Conversation (full-text) results
+      ;((convRes as { results?: any[] }).results ?? []).forEach((c: any) => {
+        const cleanName = (c.participant_name || c.participant_email || 'Unknown')
           .replace(/<[^>]+>/g, '')
           .replace(/^["']+|["']+$/g, '')
           .trim()
+        // headline carries <mark> tags from ts_headline — strip for plain render.
+        const snippet = (c.headline || '').replace(/<\/?mark>/g, '').trim()
         items.push({
-          id: `msg-${m.id}`,
+          id: `conv-${c.id}`,
           type: 'message',
-          title: m.email_subject || (m.message_text || '').slice(0, 60) || '(No subject)',
-          subtitle: `${cleanSender} via ${m.channel}`,
-          href: `/conversations/${m.conversation_id || m.id}`,
+          title: snippet || cleanName || '(conversation)',
+          subtitle: `${cleanName}${c.channel ? ` via ${c.channel}` : ''}`,
+          href: `/conversations/${c.id}`,
         })
       })
 
