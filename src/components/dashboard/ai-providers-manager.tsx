@@ -6,6 +6,7 @@ import {
   Plus,
   Pencil,
   Trash2,
+  Copy,
   Eye,
   EyeOff,
   Zap,
@@ -46,6 +47,9 @@ export interface AiProviderRow {
   is_active: boolean
   has_api_key: boolean
   api_key_masked: string | null
+  last_tested_at?: string | null
+  last_test_ok?: boolean | null
+  last_test_error?: string | null
 }
 
 interface AIProvidersManagerProps {
@@ -81,6 +85,21 @@ export function formatMaskedKey(
   if (masked && masked.trim()) return masked.trim()
   if (hasApiKey) return '••••••••'
   return 'No API key'
+}
+
+/** Compact relative time for the "last tested" badge. Pure + exported for tests. */
+export function timeAgo(iso: string | null | undefined): string {
+  if (!iso) return ''
+  const t = Date.parse(iso)
+  if (Number.isNaN(t)) return ''
+  const s = Math.max(0, Math.floor((Date.now() - t) / 1000))
+  if (s < 60) return 'just now'
+  const m = Math.floor(s / 60)
+  if (m < 60) return `${m}m ago`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `${h}h ago`
+  const d = Math.floor(h / 24)
+  return `${d}d ago`
 }
 
 const EMPTY_FORM: ProviderForm = {
@@ -145,6 +164,8 @@ export function AIProvidersManager({ companyId }: AIProvidersManagerProps) {
 
   // Per-row pending state for "set active" / delete so spinners are scoped.
   const [rowBusy, setRowBusy] = useState<string | null>(null)
+  const [testingRow, setTestingRow] = useState<string | null>(null)
+  const [testingAll, setTestingAll] = useState(false)
   const [banner, setBanner] = useState<
     { kind: 'success' | 'error'; text: string } | null
   >(null)
@@ -512,6 +533,71 @@ export function AIProvidersManager({ companyId }: AIProvidersManagerProps) {
     [withScope, mode, closeForm, flashBanner, fetchProviders]
   )
 
+  // Health-check a saved provider in place using its STORED key, then refetch
+  // so the persisted status badge updates.
+  const handleTestRow = useCallback(
+    async (row: AiProviderRow) => {
+      setTestingRow(row.id)
+      try {
+        const res = await fetch(withScope(`/api/ai-providers/${row.id}/test`), {
+          method: 'POST',
+        })
+        const data = await res.json().catch(() => ({}))
+        if (data?.ok) {
+          flashBanner('success', `"${row.name}" connection OK`)
+        } else {
+          flashBanner('error', `"${row.name}": ${data?.error || 'connection failed'}`)
+        }
+      } catch (err) {
+        flashBanner('error', err instanceof Error ? err.message : 'Test failed')
+      } finally {
+        setTestingRow(null)
+        await fetchProviders()
+      }
+    },
+    [withScope, flashBanner, fetchProviders]
+  )
+
+  const handleTestAll = useCallback(async () => {
+    setTestingAll(true)
+    try {
+      await Promise.all(
+        providers.map((p) =>
+          fetch(withScope(`/api/ai-providers/${p.id}/test`), { method: 'POST' }).catch(
+            () => {}
+          )
+        )
+      )
+      flashBanner('success', 'Tested all providers')
+    } finally {
+      setTestingAll(false)
+      await fetchProviders()
+    }
+  }, [providers, withScope, flashBanner, fetchProviders])
+
+  // Clone an existing provider into a new draft. The key is left blank — stored
+  // keys never reach the browser, so the user re-enters it.
+  const handleDuplicate = useCallback(
+    (row: AiProviderRow) => {
+      const preset = getPreset(row.provider_key) ?? presetByBaseUrl(row.base_url)
+      setMode({ type: 'create' })
+      setForm({
+        providerKey: (preset?.key ?? 'custom') as AiProviderKey,
+        name: `${row.name} (copy)`.slice(0, 80),
+        baseUrl: row.base_url ?? '',
+        apiKey: '',
+        model: row.model ?? '',
+        maxTokens: String(row.max_tokens ?? 4096),
+        temperature: String(row.temperature ?? 1.0),
+      })
+      setShowApiKey(false)
+      setFormError(null)
+      setTestResult(null)
+      resetModelLoader()
+    },
+    [resetModelLoader]
+  )
+
   return (
     <Card
       title="AI Providers"
@@ -545,10 +631,28 @@ export function AIProvidersManager({ companyId }: AIProvidersManagerProps) {
               : `${providers.length} provider${providers.length === 1 ? '' : 's'} configured`}
           </p>
           {mode === null && (
-            <Button size="sm" onClick={openCreate} disabled={loading}>
-              <Plus className="h-4 w-4" />
-              Add provider
-            </Button>
+            <div className="flex items-center gap-2">
+              {providers.length > 0 && (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={handleTestAll}
+                  disabled={testingAll || loading}
+                  title="Test every provider's connection"
+                >
+                  {testingAll ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Zap className="h-4 w-4" />
+                  )}
+                  Test all
+                </Button>
+              )}
+              <Button size="sm" onClick={openCreate} disabled={loading}>
+                <Plus className="h-4 w-4" />
+                Add provider
+              </Button>
+            </div>
           )}
         </div>
 
@@ -631,6 +735,25 @@ export function AIProvidersManager({ companyId }: AIProvidersManagerProps) {
                             Active
                           </Badge>
                         ) : null}
+                        {p.last_test_ok === true ? (
+                          <span
+                            title={
+                              p.last_tested_at
+                                ? `Verified ${timeAgo(p.last_tested_at)}`
+                                : 'Connection verified'
+                            }
+                            className="inline-flex items-center gap-1 rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-[11px] font-medium text-green-700"
+                          >
+                            <CheckCircle2 className="h-3 w-3" /> Verified
+                          </span>
+                        ) : p.last_test_ok === false ? (
+                          <span
+                            title={p.last_test_error ?? 'Connection failed'}
+                            className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700"
+                          >
+                            <AlertCircle className="h-3 w-3" /> Failed
+                          </span>
+                        ) : null}
                       </div>
                       <dl className="mt-2 grid grid-cols-1 gap-x-6 gap-y-1 text-xs text-gray-600 sm:grid-cols-2">
                         <div className="flex gap-1.5">
@@ -670,6 +793,20 @@ export function AIProvidersManager({ companyId }: AIProvidersManagerProps) {
                           Set active
                         </Button>
                       )}
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => handleTestRow(p)}
+                        disabled={testingRow === p.id || !p.has_api_key}
+                        title="Test this provider using its saved key"
+                      >
+                        {testingRow === p.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Zap className="h-3.5 w-3.5" />
+                        )}
+                        Test
+                      </Button>
                       <button
                         type="button"
                         onClick={() => openEdit(p)}
@@ -679,6 +816,16 @@ export function AIProvidersManager({ companyId }: AIProvidersManagerProps) {
                         className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 ring-1 ring-gray-200 transition-colors hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         <Pencil className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDuplicate(p)}
+                        disabled={isBusy}
+                        aria-label={`Duplicate ${p.name}`}
+                        title="Duplicate"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 ring-1 ring-gray-200 transition-colors hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <Copy className="h-4 w-4" />
                       </button>
                       <button
                         type="button"

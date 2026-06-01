@@ -16,6 +16,7 @@
 import { NextResponse } from 'next/server'
 import { requireCompanyAdmin } from '@/lib/tenant-guard'
 import { createServiceRoleClient } from '@/lib/supabase-server'
+import { validateProviderBaseUrl } from '@/lib/ssrf'
 
 interface Body {
   base_url?: string
@@ -59,15 +60,12 @@ export async function POST(request: Request) {
     )
   }
 
-  let url: URL
-  try {
-    url = new URL(baseUrl.replace(/\/+$/, '') + '/models')
-  } catch {
-    return NextResponse.json({ error: 'Invalid base_url' }, { status: 400 })
+  // SSRF guard (same policy as /api/test-ai): HTTPS only, no private/metadata hosts.
+  const ssrfError = validateProviderBaseUrl(baseUrl)
+  if (ssrfError) {
+    return NextResponse.json({ error: ssrfError }, { status: 400 })
   }
-  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
-    return NextResponse.json({ error: 'base_url must be http(s)' }, { status: 400 })
-  }
+  const url = new URL(baseUrl.replace(/\/+$/, '') + '/models')
 
   try {
     const res = await fetch(url, {

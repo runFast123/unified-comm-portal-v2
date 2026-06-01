@@ -39,7 +39,7 @@ const DEFAULT_TEMPERATURE = 1.0
 // Columns that are safe to read back. NOTE: never select api_key into a
 // response shape — only its derived has_api_key / api_key_masked.
 const SELECT_COLUMNS =
-  'id, company_id, name, provider_key, base_url, model, max_tokens, temperature, is_active, created_by, created_at, updated_at'
+  'id, company_id, name, provider_key, base_url, model, max_tokens, temperature, is_active, created_by, created_at, updated_at, last_tested_at, last_test_ok, last_test_error'
 // Includes api_key so the handler can derive the mask; stripped before responding.
 const SELECT_COLUMNS_WITH_KEY = `${SELECT_COLUMNS}, api_key`
 
