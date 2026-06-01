@@ -34,6 +34,7 @@ import {
   Copy,
   X,
   Trash2,
+  KeyRound,
 } from 'lucide-react'
 
 interface Account {
@@ -254,10 +255,19 @@ export default function UsersPage() {
   // Fallback notice shown above the table when the invite email could NOT be
   // sent (Supabase SMTP not configured). Holds the email + shareable signup
   // link so the admin can copy it; null when there's nothing to show.
+  // `mode` distinguishes a brand-new invite link ('invite' — "they'll inherit
+  // the assigned role on signup") from an admin-regenerated link for someone who
+  // already exists ('reset' — just "set a new password"), so the banner copy
+  // stays accurate for both.
   const [inviteFallbackLink, setInviteFallbackLink] = useState<
-    { email: string; url: string } | null
+    { email: string; url: string; mode?: 'invite' | 'reset' } | null
   >(null)
   const [fallbackCopied, setFallbackCopied] = useState(false)
+  // Tracks the in-flight "regenerate set-password link" request. Holds a user id
+  // (table row) or an `invitation:<email>` marker (pending-invitations card), or
+  // null when idle — so only the clicked button spins and all link buttons
+  // disable while one request is in flight.
+  const [linkingId, setLinkingId] = useState<string | null>(null)
 
   // Delete-user flow. `deleteTarget` drives the confirm modal (null = closed);
   // `deletingId` tracks the in-flight request (a user id, an `invitation:<email>`
@@ -661,6 +671,51 @@ export default function UsersPage() {
     [toast, fetchData]
   )
 
+  // Regenerate a fresh set-password / reset link for an existing user (or a
+  // pending invitation) and surface it in the share banner. Supabase
+  // invite/recovery tokens are single-use and expire, so the original link
+  // dies once clicked — this is how an admin hands out a working one again
+  // without deleting & re-creating the user. `marker` is the user id or
+  // `invitation:<email>` so the right button shows a spinner.
+  const generateResetLink = useCallback(
+    async (
+      target: { user_id?: string; email: string },
+      marker: string,
+      mode: 'invite' | 'reset'
+    ) => {
+      setLinkingId(marker)
+      try {
+        const res = await fetch('/api/users/reset-link', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(
+            target.user_id ? { user_id: target.user_id } : { email: target.email }
+          ),
+        })
+        const data = await res.json()
+        if (!res.ok) {
+          toast.error(data?.error || 'Could not generate a set-password link')
+          return
+        }
+        const email = (data.email as string) || target.email
+        setInviteFallbackLink({ email, url: data.link, mode })
+        setFallbackCopied(false)
+        toast.success(`Fresh set-password link ready for ${email}.`)
+        // Bring the share banner (rendered above the table) into view.
+        if (typeof window !== 'undefined') {
+          window.scrollTo({ top: 0, behavior: 'smooth' })
+        }
+      } catch (err) {
+        toast.error(
+          err instanceof Error ? err.message : 'Could not generate a set-password link'
+        )
+      } finally {
+        setLinkingId(null)
+      }
+    },
+    [toast]
+  )
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-24">
@@ -807,6 +862,26 @@ export default function UsersPage() {
                 </span>
                 <Button
                   variant="ghost"
+                  disabled={linkingId !== null}
+                  loading={linkingId === `invitation:${inv.email}`}
+                  onClick={() =>
+                    generateResetLink(
+                      { email: inv.email },
+                      `invitation:${inv.email}`,
+                      'invite'
+                    )
+                  }
+                  className="!py-1 !px-2 !text-amber-700 hover:!bg-amber-100"
+                  aria-label={`Get a set-password link for ${inv.email}`}
+                  title={`Generate a fresh set-password link for ${inv.email}`}
+                >
+                  {linkingId === `invitation:${inv.email}` ? null : (
+                    <KeyRound className="h-3.5 w-3.5" />
+                  )}
+                  Get link
+                </Button>
+                <Button
+                  variant="ghost"
                   disabled={deletingId !== null}
                   loading={deletingId === `invitation:${inv.email}`}
                   onClick={() => revokeInvitation(inv.email)}
@@ -832,9 +907,19 @@ export default function UsersPage() {
           <Mail className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
           <div className="min-w-0 flex-1">
             <p className="text-sm font-medium text-amber-900">
-              Send this set-password link to{' '}
-              <span className="font-semibold">{inviteFallbackLink.email}</span> — it confirms
-              their email and lets them choose a password:
+              {inviteFallbackLink.mode === 'reset' ? (
+                <>
+                  Send this password link to{' '}
+                  <span className="font-semibold">{inviteFallbackLink.email}</span> — it lets
+                  them set a new password and sign in. The previous link is now invalid:
+                </>
+              ) : (
+                <>
+                  Send this set-password link to{' '}
+                  <span className="font-semibold">{inviteFallbackLink.email}</span> — it confirms
+                  their email and lets them choose a password:
+                </>
+              )}
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <code className="max-w-full truncate rounded border border-amber-200 bg-white px-2 py-1 text-xs text-amber-900">
@@ -863,7 +948,9 @@ export default function UsersPage() {
               </Button>
             </div>
             <p className="mt-2 text-xs text-amber-800">
-              They&apos;ll inherit the assigned role &amp; account when they sign up with this email.
+              {inviteFallbackLink.mode === 'reset'
+                ? 'Single-use and time-limited — generate a new one here any time it expires.'
+                : 'They’ll inherit the assigned role & account when they sign up with this email.'}
             </p>
           </div>
           <button
@@ -994,6 +1081,25 @@ export default function UsersPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-2">
+                        <Button
+                          variant="secondary"
+                          disabled={linkingId !== null}
+                          loading={linkingId === user.id}
+                          onClick={() =>
+                            generateResetLink(
+                              { user_id: user.id, email: user.email },
+                              user.id,
+                              'reset'
+                            )
+                          }
+                          className="!py-1.5 !px-2.5"
+                          aria-label={`Generate a set-password link for ${user.email}`}
+                          title={`Generate a fresh set-password / reset link for ${user.email}${
+                            user.last_login_at ? '' : ' (they haven’t logged in yet)'
+                          }`}
+                        >
+                          {linkingId === user.id ? null : <KeyRound className="h-3.5 w-3.5" />}
+                        </Button>
                         <Button
                           variant={dirty ? 'primary' : 'secondary'}
                           disabled={!dirty || saving}
