@@ -7,6 +7,7 @@ import {
   FileText,
   Tags,
   ArrowRightLeft,
+  Zap,
   Bell,
   PenLine,
   ChevronRight,
@@ -63,6 +64,12 @@ export function TenantSettingsLinks({ companyId }: TenantSettingsLinksProps) {
       label: 'Routing Rules',
       description: 'Auto-assignment rules',
       icon: ArrowRightLeft,
+    },
+    {
+      href: `/admin/macros?company_id=${companyId}`,
+      label: 'Macros',
+      description: 'One-click conversation action bundles',
+      icon: Zap,
     },
     {
       href: `/admin/notifications?company_id=${companyId}`,

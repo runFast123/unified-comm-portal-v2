@@ -32,6 +32,7 @@ import {
   Smile,
   Webhook,
   Clock,
+  Zap,
   type LucideIcon,
 } from 'lucide-react'
 import { signOut } from '@/lib/auth-actions'
@@ -109,6 +110,7 @@ const ADMIN_ITEMS: NavItem[] = [
   { label: 'Channels', href: '/admin/channels', icon: Plug },
   { label: 'Users', href: '/admin/users', icon: UserCog },
   { label: 'Routing', href: '/admin/routing', icon: GitBranch },
+  { label: 'Macros', href: '/admin/macros', icon: Zap },
   { label: 'Templates', href: '/admin/templates', icon: FileText },
   { label: 'Statuses & Tags', href: '/admin/taxonomy', icon: Tags },
   { label: 'Company Signatures', href: '/admin/company-signatures', icon: FileText },
