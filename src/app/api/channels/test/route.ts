@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase-server'
 import { verifyEmailConfig, verifyTeamsConfig, verifyWhatsAppConfig } from '@/lib/channel-sender'
-import { checkRateLimit } from '@/lib/api-helpers'
+import { checkRateLimit, verifyAccountAccess } from '@/lib/api-helpers'
 import {
   getChannelConfig,
   type Channel,
@@ -36,6 +36,13 @@ export async function POST(request: Request) {
     const { channel, account_id } = body
     if (!channel || !['email', 'teams', 'whatsapp'].includes(channel)) {
       return NextResponse.json({ error: 'channel must be email|teams|whatsapp' }, { status: 400 })
+    }
+
+    // Tenant scope: when falling back to an account's SAVED credentials, ensure
+    // the caller's company owns it — otherwise this becomes a cross-tenant
+    // credential-validity oracle (and triggers live auth with their secrets).
+    if (account_id && !(await verifyAccountAccess(user.id, account_id))) {
+      return NextResponse.json({ error: 'Forbidden: account scope mismatch' }, { status: 403 })
     }
 
     switch (channel) {

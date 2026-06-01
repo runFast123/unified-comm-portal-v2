@@ -7,9 +7,14 @@ async function requireAdmin() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { ok: false as const, status: 401, error: 'Unauthorized' }
   const admin = await createServiceRoleClient()
-  const { data: profile } = await admin.from('users').select('role').eq('id', user.id).maybeSingle()
+  const { data: profile } = await admin.from('users').select('role, company_id').eq('id', user.id).maybeSingle()
   if (!['admin','super_admin','company_admin'].includes(profile?.role ?? '')) return { ok: false as const, status: 403, error: 'Admin only' }
-  return { ok: true as const, userId: user.id }
+  return {
+    ok: true as const,
+    userId: user.id,
+    role: (profile?.role as string | null) ?? null,
+    companyId: (profile?.company_id as string | null) ?? null,
+  }
 }
 
 // GET /api/channels/reusable-tenants?channel=teams
@@ -28,12 +33,19 @@ export async function GET(request: Request) {
   }
 
   const admin = await createServiceRoleClient()
-  const { data: accounts, error } = await admin
+  let accountsQuery = admin
     .from('accounts')
     .select('id, name')
     .eq('channel_type', 'teams')
     .eq('is_active', true)
     .order('name')
+  // Tenant scope: a company_admin may only reuse Azure creds from their OWN
+  // company's accounts. Only super_admin sees every tenant's Teams accounts.
+  if (gate.role !== 'super_admin') {
+    if (!gate.companyId) return NextResponse.json({ tenants: [] })
+    accountsQuery = accountsQuery.eq('company_id', gate.companyId)
+  }
+  const { data: accounts, error } = await accountsQuery
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   // Pre-fetch which accounts actually have a DB-saved config row so we skip

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase-server'
 import { getChannelConfig, saveChannelConfig } from '@/lib/channel-config'
+import { verifyAccountAccess } from '@/lib/api-helpers'
 import { getAzureOAuth } from '@/lib/integration-settings'
 import { getRequestId } from '@/lib/request-id'
 import { logError } from '@/lib/logger'
@@ -83,6 +84,12 @@ export async function POST(request: Request) {
       if (!source || source.channel_type !== 'teams' || !source.is_active) {
         return NextResponse.json({ error: 'Source account not found or not a Teams account' }, { status: 400 })
       }
+      // Tenant scope: only copy Azure credentials from an account the caller's
+      // company owns (super_admin may copy across tenants). Without this a
+      // company_admin could clone another tenant's Teams app secret.
+      if (!(await verifyAccountAccess(gate.userId, reuse_tenant_from_account_id))) {
+        return NextResponse.json({ error: 'Forbidden: source account scope mismatch' }, { status: 403 })
+      }
       const srcCfg = await getChannelConfig(source.id, 'teams')
       if (!srcCfg?.azure_tenant_id || !srcCfg.azure_client_id || !srcCfg.azure_client_secret) {
         return NextResponse.json({ error: 'Source account has no Azure credentials to copy' }, { status: 400 })
@@ -131,12 +138,21 @@ export async function POST(request: Request) {
       }
     }
 
+    // Resolve which company this new account belongs to: super_admin uses the
+    // active company from the switcher cookie; company_admin uses their own.
+    // Without this the row lands with company_id = null — invisible to the
+    // company-scoped RLS views that power the UI.
+    const companyCookie = await cookies()
+    const targetCompanyId =
+      (companyCookie.get('selected_company_id')?.value || gate.companyId) ?? null
+
     const admin = await createServiceRoleClient()
     const insertRow: Record<string, unknown> = {
       name: name.trim(),
       channel_type,
       phase1_enabled: true,
       is_active: true,
+      ...(targetCompanyId ? { company_id: targetCompanyId } : {}),
     }
     // Identifier fields: only set when actually provided. OAuth create flow
     // leaves these null; the provider callback fills them in from the
@@ -250,6 +266,13 @@ export async function DELETE(request: Request) {
   const admin = await createServiceRoleClient()
   const { data: existing } = await admin.from('accounts').select('name, channel_type').eq('id', id).maybeSingle()
   if (!existing) return NextResponse.json({ error: 'Account not found', request_id: requestId }, { status: 404 })
+
+  // Tenant scope: a company_admin may only delete accounts in their own
+  // company (super_admin may delete any). Without this, deleting by id alone
+  // lets one tenant destroy another tenant's account (cascading data).
+  if (!(await verifyAccountAccess(gate.userId, id))) {
+    return NextResponse.json({ error: 'Forbidden: account scope mismatch', request_id: requestId }, { status: 403 })
+  }
 
   const { error } = await admin.from('accounts').delete().eq('id', id)
   if (error) {

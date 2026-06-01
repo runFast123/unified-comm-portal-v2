@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase-server'
 import { getChannelConfig, saveChannelConfig, type EmailConfig } from '@/lib/channel-config'
+import { verifyAccountAccess } from '@/lib/api-helpers'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,6 +29,12 @@ async function doDisconnect(request: Request) {
   const accountId = url.searchParams.get('account_id')
   if (!accountId) {
     return NextResponse.json({ error: 'account_id required' }, { status: 400 })
+  }
+
+  // Tenant scope: this route uses the service-role client, so verify the
+  // caller's company owns the account before reading/rewriting its config.
+  if (!(await verifyAccountAccess(gate.userId, accountId))) {
+    return NextResponse.json({ error: 'Forbidden: account scope mismatch' }, { status: 403 })
   }
 
   const existing = (await getChannelConfig(accountId, 'email')) as EmailConfig | null

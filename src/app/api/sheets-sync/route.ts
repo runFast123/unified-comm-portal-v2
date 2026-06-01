@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServiceRoleClient, createServerSupabaseClient } from '@/lib/supabase-server'
 import type { GoogleSheetsSync, SyncStatus } from '@/types/database'
+import { getAllowedAccountIds, getCurrentUser, isCompanyAdmin } from '@/lib/auth'
 
 /**
  * GET handler: returns current sync status for all sheets.
@@ -16,10 +17,19 @@ export async function GET() {
 
     const supabase = await createServiceRoleClient()
 
-    const { data, error } = await supabase
+    // Tenant scope: only return sheet configs for accounts in the caller's
+    // company (super_admin sees all). The service-role client bypasses RLS.
+    const allowed = await getAllowedAccountIds(user.id)
+    if (allowed && allowed.size === 0) {
+      return NextResponse.json({ sheets: [] }, { status: 200 })
+    }
+    let query = supabase
       .from('google_sheets_sync')
       .select('*')
       .order('created_at', { ascending: false })
+    if (allowed) query = query.in('account_id', [...allowed])
+
+    const { data, error } = await query
 
     if (error) {
       console.error('Failed to fetch sheet sync statuses:', error)
@@ -50,12 +60,23 @@ export async function POST(request: Request) {
     const expectedSecret = process.env.WEBHOOK_SECRET
     const isInternalCall = !!expectedSecret && webhookSecret === expectedSecret
 
+    let allowedAccounts: Set<string> | null = null // null = all (internal cron / super_admin)
     if (!isInternalCall) {
       // Check for authenticated user session
       const authSupabase = await createServerSupabaseClient()
       const { data: { user } } = await authSupabase.auth.getUser()
       if (!user) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+      // Triggering a sync writes into imported_records — restrict to admins and
+      // scope to the caller's company so one tenant can't sync another's sheets.
+      const profile = await getCurrentUser(user.id)
+      if (!isCompanyAdmin(profile?.role ?? null)) {
+        return NextResponse.json({ error: 'Admin only' }, { status: 403 })
+      }
+      allowedAccounts = await getAllowedAccountIds(user.id)
+      if (allowedAccounts && allowedAccounts.size === 0) {
+        return NextResponse.json({ message: 'No sheets to sync', synced: [] }, { status: 200 })
       }
     }
 
@@ -73,6 +94,10 @@ export async function POST(request: Request) {
       query = query.eq('id', sheet_sync_id)
     } else {
       query = query.eq('sync_status', 'active')
+    }
+    // Tenant scope for user-initiated syncs (internal cron keeps full scope).
+    if (allowedAccounts) {
+      query = query.in('account_id', [...allowedAccounts])
     }
 
     const { data: sheets, error: fetchError } = await query

@@ -6,6 +6,7 @@ import {
   deleteChannelConfig,
   type Channel,
 } from '@/lib/channel-config'
+import { verifyAccountAccess } from '@/lib/api-helpers'
 
 const CHANNELS: Channel[] = ['email', 'teams', 'whatsapp']
 
@@ -56,6 +57,13 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'channel must be email|teams|whatsapp' }, { status: 400 })
   }
 
+  // Tenant scope: the service-role client below bypasses RLS, so confirm the
+  // caller's company owns this account (super_admin passes). Without this a
+  // company_admin could read any tenant's masked credentials by account_id.
+  if (!(await verifyAccountAccess(gate.ctx.userId, accountId))) {
+    return NextResponse.json({ error: 'Forbidden: account scope mismatch' }, { status: 403 })
+  }
+
   const result = await getMaskedChannelConfig(accountId, channel)
   return NextResponse.json(result)
 }
@@ -74,6 +82,11 @@ export async function POST(request: Request) {
     }
     if (!config || typeof config !== 'object') {
       return NextResponse.json({ error: 'config object required' }, { status: 400 })
+    }
+
+    // Tenant scope: block writing credentials to another company's account.
+    if (!(await verifyAccountAccess(gate.ctx.userId, account_id))) {
+      return NextResponse.json({ error: 'Forbidden: account scope mismatch' }, { status: 403 })
     }
 
     // Minimal shape validation per channel
@@ -113,6 +126,11 @@ export async function DELETE(request: Request) {
   if (!accountId) return NextResponse.json({ error: 'account_id required' }, { status: 400 })
   if (!channel || !CHANNELS.includes(channel)) {
     return NextResponse.json({ error: 'channel must be email|teams|whatsapp' }, { status: 400 })
+  }
+
+  // Tenant scope: block deleting another company's channel config.
+  if (!(await verifyAccountAccess(gate.ctx.userId, accountId))) {
+    return NextResponse.json({ error: 'Forbidden: account scope mismatch' }, { status: 403 })
   }
 
   await deleteChannelConfig(accountId, channel)
