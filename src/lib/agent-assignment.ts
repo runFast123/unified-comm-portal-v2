@@ -15,6 +15,7 @@
 // `assigned_to` unchanged" rather than clobbering an existing assignee.
 
 import { createServiceRoleClient } from '@/lib/supabase-server'
+import { isCompanyAdmin, COMPANY_ADMIN_ROLE_NAMES } from '@/lib/roles'
 
 interface AgentRow {
   id: string
@@ -40,43 +41,56 @@ function scopeKey(scope: PickScope): string | null {
  * Team-scoped pool:
  *   The `users` table currently has no `team` column, so "team membership"
  *   cannot be enforced strictly. Fallback strategy:
- *     1. All non-admin active users in the requesting account (and its
- *        sibling accounts via `company_id`).
- *     2. If that set is empty, fall back to all active admins.
+ *     1. All non-admin active users in the requesting account's company.
+ *     2. If that set is empty, fall back to all active company admins.
  *   When a `team` column is added to `users` later, swap step (1) for an
  *   `eq('team', scope.team)` filter.
  *
  * Account-scoped pool:
- *   All active users belonging to the account or any sibling account that
- *   shares the same `company_id`.
+ *   All active users in the account's company. Membership is keyed on
+ *   `company_id`, NOT `account_id`: company membership grants access to every
+ *   account in the company, so agents typically have `company_id` set and
+ *   `account_id = null` (see getAllowedAccountIds in src/lib/auth.ts).
+ *   Accounts with no company fall back to a plain `account_id` match (legacy
+ *   single-account tenants).
  */
 async function fetchCandidatePool(
   supabase: Awaited<ReturnType<typeof createServiceRoleClient>>,
   scope: PickScope
 ): Promise<AgentRow[]> {
-  // First: figure out the relevant set of account_ids.
+  // First: resolve the account to its company. Company membership — not
+  // account membership — is what grants an agent access to an account's
+  // conversations, so the company id is the primary key for finding
+  // candidates. Accounts with no company are legacy single-account tenants.
+  let companyId: string | null = null
   let accountIds: string[] = []
   if (scope.account_id) {
     const { data: acctRow } = await supabase
       .from('accounts')
-      .select('id, company_id')
+      .select('company_id')
       .eq('id', scope.account_id)
       .maybeSingle()
 
-    if (acctRow?.company_id) {
-      const { data: siblings } = await supabase
-        .from('accounts')
-        .select('id')
-        .eq('company_id', acctRow.company_id)
-      accountIds = (siblings || []).map((r) => r.id as string)
-    } else {
-      accountIds = [scope.account_id]
-    }
+    companyId = (acctRow?.company_id as string | null | undefined) ?? null
+    if (!companyId) accountIds = [scope.account_id]
   }
 
-  // Pull active users on those accounts.
+  // Pull active candidate users.
+  //
+  // Prefer company_id: company membership spans ALL of a company's accounts,
+  // so agents typically have company_id set and account_id = null. Filtering
+  // by account_id — as this did originally — silently misses every
+  // company-scoped agent and leaves the pool empty, so round-robin assigns no
+  // one. Fall back to account_id only for tenants whose account has no company.
   let users: AgentRow[] = []
-  if (accountIds.length > 0) {
+  if (companyId) {
+    const { data } = await supabase
+      .from('users')
+      .select('id, role, is_active, account_id')
+      .eq('company_id', companyId)
+      .eq('is_active', true)
+    users = (data || []) as AgentRow[]
+  } else if (accountIds.length > 0) {
     const { data } = await supabase
       .from('users')
       .select('id, role, is_active, account_id')
@@ -85,17 +99,20 @@ async function fetchCandidatePool(
     users = (data || []) as AgentRow[]
   }
 
-  // Team scope: filter to non-admins from the account pool. If empty,
-  // fall back to admins (any account) so an unconfigured team still gets
-  // someone responsible.
+  // Team scope: filter to non-admins from the company pool. If empty,
+  // fall back to company admins (any account) so an unconfigured team still
+  // gets someone responsible. Both predicates source their role set from
+  // src/lib/roles.ts so modern (company_admin) and legacy (admin) names both
+  // resolve — hard-coding 'admin' here meant the fallback found nobody on
+  // tenants that use the modern role names.
   if (scope.team) {
-    const nonAdmins = users.filter((u) => !['admin','super_admin','company_admin'].includes(u.role))
+    const nonAdmins = users.filter((u) => !isCompanyAdmin(u.role))
     if (nonAdmins.length > 0) return nonAdmins
 
     const { data: admins } = await supabase
       .from('users')
       .select('id, role, is_active, account_id')
-      .eq('role', 'admin')
+      .in('role', [...COMPANY_ADMIN_ROLE_NAMES])
       .eq('is_active', true)
     return (admins || []) as AgentRow[]
   }

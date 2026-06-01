@@ -109,6 +109,10 @@ export function createMockSupabase(opts: CreateMockSupabaseOptions = {}): MockSu
         filters.push({ kind: 'ilike', col, value })
         return chain
       },
+      not: (col: string, _op: string, value: unknown) => {
+        filters.push({ kind: 'not', col, value })
+        return chain
+      },
       order: (_col: string, _opts?: unknown) => chain,
       limit: (_n: number) => chain,
       insert: (payload: unknown) => {
@@ -118,6 +122,14 @@ export function createMockSupabase(opts: CreateMockSupabaseOptions = {}): MockSu
         return chain
       },
       update: (payload: unknown) => {
+        mode = 'update'
+        mutationPayload = payload
+        calls.push({ table, op: 'update', payload, filters })
+        return chain
+      },
+      // upsert is recorded as an update (insert-or-update). Callers that need
+      // to assert the written row can read it via `updatesFor(table)`.
+      upsert: (payload: unknown, _opts?: unknown) => {
         mode = 'update'
         mutationPayload = payload
         calls.push({ table, op: 'update', payload, filters })

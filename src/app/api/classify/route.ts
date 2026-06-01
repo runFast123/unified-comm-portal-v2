@@ -5,6 +5,7 @@ import { AIBudgetExceededError } from '@/lib/ai-usage'
 import { CircuitBreakerOpenError } from '@/lib/ai-circuit-breaker'
 import { logInfo, logError } from '@/lib/logger'
 import { getRequestId } from '@/lib/request-id'
+import { ASSIGNABLE_AGENT_ROLE_NAMES } from '@/lib/roles'
 import type { Category, Sentiment, Urgency } from '@/types/database'
 
 const DEFAULT_CLASSIFICATION_PROMPT = `You are a customer message classifier for a telecommunications company. Analyze the customer message and return a JSON object with the following fields:
@@ -301,11 +302,16 @@ export async function POST(request: Request) {
           if (conv && !conv.assigned_to) {
             // Find least-loaded active agent — scoped to the same company
             // as the originating account so we never auto-assign cross-tenant.
+            // Role set comes from src/lib/roles.ts so modern (company_admin /
+            // supervisor / company_member) and legacy (admin / reviewer) names
+            // both match — the old ['admin','reviewer'] literal matched nobody
+            // on tenants using the modern role names, so urgent conversations
+            // were never auto-assigned.
             let agentsQuery = supabase
               .from('users')
               .select('id, full_name')
               .eq('is_active', true)
-              .in('role', ['admin', 'reviewer'])
+              .in('role', [...ASSIGNABLE_AGENT_ROLE_NAMES])
             if (accountCompanyId) {
               agentsQuery = agentsQuery.eq('company_id', accountCompanyId)
             }
