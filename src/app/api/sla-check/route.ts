@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase-server'
 import { validateWebhookSecret } from '@/lib/api-helpers'
+import { logAudit } from '@/lib/audit'
+import { isWithinBusinessHours, businessMillisElapsed } from '@/lib/business-hours'
 
 /**
  * Accept either `X-Webhook-Secret` (internal callers) or
@@ -40,10 +42,10 @@ export async function POST(request: Request) {
 
     const supabase = await createServiceRoleClient()
 
-    // 1. Get all accounts with SLA settings
+    // 1. Get all accounts with SLA settings (+ company_id for business hours)
     const { data: accounts, error: accountsError } = await supabase
       .from('accounts')
-      .select('id, sla_critical_hours, sla_auto_escalate')
+      .select('id, sla_critical_hours, sla_auto_escalate, company_id')
       .eq('is_active', true)
 
     if (accountsError) {
@@ -55,6 +57,35 @@ export async function POST(request: Request) {
       return NextResponse.json({ escalated: 0, message: 'No active accounts' })
     }
 
+    // 1b. Preload each company's business_hours in ONE query (avoid N+1).
+    // null/absent = 24/7 (preserves legacy wall-clock behavior).
+    const companyIds = [
+      ...new Set(
+        accounts
+          .map((a: { company_id: string | null }) => a.company_id)
+          .filter((id): id is string => !!id)
+      ),
+    ]
+    const businessHoursByCompany = new Map<string, unknown>()
+    if (companyIds.length > 0) {
+      const { data: companies, error: companiesError } = await supabase
+        .from('companies')
+        .select('id, business_hours')
+        .in('id', companyIds)
+      if (companiesError) {
+        console.error('SLA check: failed to fetch company business hours', companiesError)
+      } else {
+        for (const c of companies ?? []) {
+          businessHoursByCompany.set(
+            (c as { id: string }).id,
+            (c as { business_hours: unknown }).business_hours ?? null
+          )
+        }
+      }
+    }
+
+    const now = new Date()
+
     let totalEscalated = 0
     const escalationDetails: { account_id: string; conversation_ids: string[] }[] = []
 
@@ -63,12 +94,23 @@ export async function POST(request: Request) {
       if (!account.sla_auto_escalate) continue
 
       const criticalHours = account.sla_critical_hours ?? 4
-      const cutoff = new Date(Date.now() - criticalHours * 60 * 60 * 1000).toISOString()
+      const businessHours = account.company_id
+        ? businessHoursByCompany.get(account.company_id) ?? null
+        : null
 
-      // 2. Find pending inbound messages older than sla_critical_hours
+      // Business-hours gate: when business hours ARE configured, don't newly
+      // escalate while the desk is currently closed — wait until it reopens.
+      // With no config, isWithinBusinessHours() returns true (24/7), a no-op.
+      if (!isWithinBusinessHours(businessHours, now)) continue
+
+      // Wall-clock pre-filter (cheap, index-backed): a message can only be in
+      // BUSINESS-time breach if it's at least this old in real time.
+      const cutoff = new Date(now.getTime() - criticalHours * 60 * 60 * 1000).toISOString()
+
+      // 2. Find pending inbound messages older than sla_critical_hours.
       const { data: breachedMessages, error: msgError } = await supabase
         .from('messages')
-        .select('conversation_id')
+        .select('conversation_id, received_at')
         .eq('account_id', account.id)
         .eq('direction', 'inbound')
         .eq('reply_required', true)
@@ -82,19 +124,32 @@ export async function POST(request: Request) {
 
       if (!breachedMessages || breachedMessages.length === 0) continue
 
-      // Get unique conversation IDs
-      const conversationIds = [
-        ...new Set(breachedMessages.map((m: { conversation_id: string }) => m.conversation_id)),
-      ]
+      // Keep only conversations whose OLDEST breaching message has accrued more
+      // than sla_critical_hours of BUSINESS time. With no config this reduces to
+      // exactly the legacy wall-clock condition.
+      const criticalMs = criticalHours * 60 * 60 * 1000
+      const oldestByConversation = new Map<string, number>()
+      for (const m of breachedMessages as { conversation_id: string; received_at: string }[]) {
+        const ts = new Date(m.received_at).getTime()
+        const prev = oldestByConversation.get(m.conversation_id)
+        if (prev === undefined || ts < prev) oldestByConversation.set(m.conversation_id, ts)
+      }
 
-      // 3. Escalate conversations that are not already escalated or resolved
+      const conversationIds = [...oldestByConversation.entries()]
+        .filter(([, oldestTs]) => businessMillisElapsed(businessHours, new Date(oldestTs), now) >= criticalMs)
+        .map(([conversationId]) => conversationId)
+
+      if (conversationIds.length === 0) continue
+
+      // 3. Escalate — excluding already escalated/resolved/archived AND anything
+      // parked as waiting-on-customer (the conversations.status enum value).
       const { data: updated, error: updateError } = await supabase
         .from('conversations')
         .update({ status: 'escalated' })
         .in('id', conversationIds)
         // PostgREST `in` filter: parenthesized, comma-separated, no spaces
-      .not('status', 'in', '(escalated,resolved,archived)')
-        .select('id')
+        .not('status', 'in', '(escalated,resolved,archived,waiting_on_customer)')
+        .select('id, account_id, participant_name, channel')
 
       if (updateError) {
         console.error(`SLA check: failed to escalate conversations for account ${account.id}`, updateError)
@@ -108,6 +163,33 @@ export async function POST(request: Request) {
           account_id: account.id,
           conversation_ids: updated!.map((c: { id: string }) => c.id),
         })
+
+        // 4. Escalation notification per conversation via the existing audit_log
+        // mechanism. Fire-and-forget; company_id passed explicitly because the
+        // cron runs as service-role with no acting user.
+        for (const c of updated as {
+          id: string
+          account_id: string
+          participant_name: string | null
+          channel: string | null
+        }[]) {
+          void logAudit({
+            user_id: null,
+            company_id: account.company_id ?? null,
+            action: 'conversation_escalated',
+            entity_type: 'conversation',
+            entity_id: c.id,
+            details: {
+              reason: 'sla_auto_escalation',
+              account_id: c.account_id,
+              channel: c.channel,
+              participant_name: c.participant_name,
+              sla_critical_hours: criticalHours,
+              business_hours_aware: businessHours != null,
+              escalated_at: now.toISOString(),
+            },
+          })
+        }
       }
     }
 

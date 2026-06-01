@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import { MacroRunner } from '@/components/dashboard/macro-runner'
 import {
   CheckCircle,
   CheckCheck,
@@ -1924,6 +1925,7 @@ export function ConversationActions({
             {loading === 'resolve' ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={14} />}
             Resolve
           </Button>
+          <MacroRunner conversationId={conversationId} onApplied={() => router.refresh()} />
         </div>
       </div>
     </div>
