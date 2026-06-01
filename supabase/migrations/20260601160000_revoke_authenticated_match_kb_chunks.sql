@@ -1,0 +1,14 @@
+-- Security hardening: match_kb_chunks (from 20260601130000_kb_rag.sql) is
+-- SECURITY DEFINER and scopes results by the p_company_id PARAMETER rather than
+-- auth.uid(). With EXECUTE granted to `authenticated`, a signed-in user could
+-- call it via PostgREST RPC with ANOTHER company's id and read that tenant's KB
+-- chunk text. The application only ever calls it through the service-role client
+-- (src/lib/kb-retrieval.ts) after resolving the company server-side from a
+-- verified account, so the `authenticated` grant is pure attack surface.
+--
+-- Revoke it; service_role (the real caller) retains EXECUTE. This mirrors the
+-- earlier revokes on merge_conversations / unmerge_conversations /
+-- seed_company_defaults. NOTE: search_conversations is intentionally NOT
+-- revoked — it scopes by auth.uid()/current_user_company_id() internally and is
+-- invoked on the USER client by /api/search, so authenticated must keep EXECUTE.
+REVOKE EXECUTE ON FUNCTION public.match_kb_chunks(vector(1536), uuid, int) FROM authenticated;
