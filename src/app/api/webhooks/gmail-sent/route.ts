@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase-server'
 import { validateWebhookSecret, stripHtml } from '@/lib/api-helpers'
+import { normalizeMessageId } from '@/lib/email-threading'
 
 /**
  * POST /api/webhooks/gmail-sent
@@ -27,6 +28,7 @@ export async function POST(request: Request) {
       body: emailBody,
       thread_id,
       message_id,
+      rfc_message_id,
       sent_at,
       from_address,
       _test,
@@ -37,6 +39,14 @@ export async function POST(request: Request) {
       body: string
       thread_id: string
       message_id: string
+      /**
+       * The RFC 5322 `Message-ID:` header of the sent mail. Distinct from
+       * `message_id` (which is Gmail's INTERNAL id, message.getId()). This is
+       * the key the IMAP Sent-folder reconcile + the partial unique index use,
+       * so we dedup/store on it to collapse the two sync paths onto one row.
+       * Optional for back-compat with older Apps Script deployments.
+       */
+      rfc_message_id?: string
       sent_at: string
       from_address: string
       _test?: boolean
@@ -84,12 +94,12 @@ export async function POST(request: Request) {
 
       // Use the matched account
       return await processReply(supabase, accountByEmail, {
-        thread_id, message_id, sender, to, subject, emailBody, sent_at,
+        thread_id, message_id, rfc_message_id, sender, to, subject, emailBody, sent_at,
       })
     }
 
     return await processReply(supabase, account, {
-      thread_id, message_id, sender, to, subject, emailBody, sent_at,
+      thread_id, message_id, rfc_message_id, sender, to, subject, emailBody, sent_at,
     })
   } catch (error) {
     console.error('Gmail sent webhook error:', error)
@@ -103,6 +113,7 @@ async function processReply(
   data: {
     thread_id: string
     message_id: string
+    rfc_message_id?: string
     sender: string
     to: string
     subject: string
@@ -110,7 +121,7 @@ async function processReply(
     sent_at: string
   }
 ) {
-  const { thread_id, message_id, sender, to, subject, emailBody, sent_at } = data
+  const { thread_id, message_id, rfc_message_id, sender, to, subject, emailBody, sent_at } = data
 
   // 2. Find existing conversation by thread_id
   const { data: existingMessage } = await supabase
@@ -132,8 +143,46 @@ async function processReply(
 
   const conversationId = existingMessage.conversation_id
 
-  // 3. Check if we already have this outbound message (dedup by message_id)
-  if (message_id) {
+  // 3. Dedup. The SAME outbound reply can reach the portal via two paths:
+  //    (a) this webhook (Gmail push → Apps Script), and
+  //    (b) the IMAP Sent-folder reconcile in the poller.
+  //    They MUST key on the same identifier or the reply is stored twice.
+  //
+  //    The canonical shared key is the RFC 5322 Message-ID — that's what the
+  //    poller stores in `email_message_id` and what the partial unique index
+  //    `uniq_messages_account_email_message_id (account_id, email_message_id)`
+  //    enforces. The Apps Script now sends it as `rfc_message_id`. We normalize
+  //    it the same way the poller does (strip angle brackets) so the values are
+  //    byte-identical and converge on a single row.
+  //
+  //    `message_id` is Gmail's INTERNAL id (message.getId()) — a different
+  //    namespace the poller never sees, so it can't dedup across paths. We keep
+  //    it in `teams_message_id` only as a back-compat fallback for replies that
+  //    arrive without an `rfc_message_id` (older Apps Script deployments).
+  const emailMessageId = normalizeMessageId(rfc_message_id)
+
+  if (emailMessageId) {
+    // Preferred path: match the RFC Message-ID, account-scoped exactly like the
+    // poller's reconcile and the unique index. A Sent-folder reconcile that
+    // already stored this reply is found here, so we skip the duplicate insert.
+    const { data: existingByMsgId } = await supabase
+      .from('messages')
+      .select('id')
+      .eq('account_id', account.id)
+      .eq('channel', 'email')
+      .eq('email_message_id', emailMessageId)
+      .limit(1)
+      .maybeSingle()
+
+    if (existingByMsgId) {
+      return NextResponse.json(
+        { status: 'duplicate', message: 'Reply already synced' },
+        { status: 200 }
+      )
+    }
+  } else if (message_id) {
+    // Back-compat fallback (no RFC Message-ID in the payload): dedup on the
+    // Gmail internal id stored in teams_message_id, scoped to this conversation.
     const { data: existingOutbound } = await supabase
       .from('messages')
       .select('id')
@@ -166,7 +215,11 @@ async function processReply(
     direction: 'outbound',
     email_subject: subject || null,
     email_thread_id: thread_id,
-    teams_message_id: message_id || null, // Store Gmail message ID for dedup
+    // Converge with the IMAP Sent reconcile + the partial unique index: store
+    // the normalized RFC Message-ID. This is what collapses the two write paths
+    // onto one row (and lets the unique index reject a concurrent duplicate).
+    email_message_id: emailMessageId,
+    teams_message_id: message_id || null, // Keep Gmail internal id for back-compat dedup
     replied: true,
     reply_required: false,
     timestamp,
@@ -174,6 +227,15 @@ async function processReply(
   })
 
   if (insertError) {
+    // 23505 → the (account_id, email_message_id) unique index caught a
+    // concurrent insert of this exact reply (the poller's Sent reconcile won
+    // the race). Idempotent: treat as already-synced, not an error.
+    if ((insertError as { code?: string }).code === '23505') {
+      return NextResponse.json(
+        { status: 'duplicate', message: 'Reply already synced' },
+        { status: 200 }
+      )
+    }
     console.error('Failed to insert outbound message:', insertError)
     return NextResponse.json(
       { error: 'Failed to store reply: ' + insertError.message },

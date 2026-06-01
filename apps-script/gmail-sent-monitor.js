@@ -92,6 +92,11 @@ function checkSentEmails() {
         body: message.getPlainBody() || message.getBody(),
         thread_id: thread.getId(),
         message_id: messageId,
+        // The RFC 5322 Message-ID header — distinct from getId() (Gmail's
+        // internal id). The portal's IMAP Sent-folder reconcile dedups on THIS
+        // value, so sending it lets both sync paths collapse onto a single
+        // message row instead of creating duplicate replies.
+        rfc_message_id: extractRfcMessageId(message),
         sent_at: message.getDate().toISOString(),
         // The "from" address helps the portal match to the right account
         from_address: Session.getActiveUser().getEmail(),
@@ -129,6 +134,30 @@ function checkSentEmails() {
   // Keep only the last 200 processed IDs to avoid growing forever
   const allProcessed = [...new Set([...processedIds, ...newProcessedIds])].slice(-200);
   PropertiesService.getScriptProperties().setProperty(processedKey, JSON.stringify(allProcessed));
+}
+
+/**
+ * Extract the RFC 5322 `Message-ID:` header from a sent Gmail message.
+ *
+ * IMPORTANT: message.getId() returns Gmail's INTERNAL message id, which is a
+ * different namespace from the RFC `Message-ID:` header. The portal's IMAP
+ * Sent-folder reconcile keys its dedup (and the DB unique index) on the RFC
+ * Message-ID, so we must send THAT for the two sync paths to converge on one
+ * row. We read it from the raw RFC content and isolate the header block (the
+ * part before the first blank line) so a quoted "Message-ID:" inside the body
+ * can never be mistaken for the real header. Returns '' if unavailable — the
+ * portal then falls back to its legacy dedup.
+ */
+function extractRfcMessageId(message) {
+  try {
+    const raw = message.getRawContent();
+    if (!raw) return '';
+    const headerBlock = raw.split(/\r?\n\r?\n/)[0] || '';
+    const match = headerBlock.match(/^Message-ID:[ \t]*(.+)$/im);
+    return match ? match[1].trim() : '';
+  } catch (e) {
+    return '';
+  }
 }
 
 // ============================================================================
@@ -189,6 +218,7 @@ function testConnection() {
           body: 'This is a test message to verify the Apps Script connection.',
           thread_id: 'test-thread-' + Date.now(),
           message_id: 'test-msg-' + Date.now(),
+          rfc_message_id: '<test-rfc-' + Date.now() + '@mail.gmail.com>',
           sent_at: new Date().toISOString(),
           from_address: Session.getActiveUser().getEmail(),
           _test: true,
