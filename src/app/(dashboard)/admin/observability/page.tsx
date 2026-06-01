@@ -191,9 +191,12 @@ async function loadDashboardData(): Promise<DashboardData> {
     safe<AiUsageRow>(
       admin
         .from('ai_usage')
-        .select('account_id, estimated_cost_usd, created_at')
-        .gte('created_at', twentyFourHoursAgo)
-        .order('created_at', { ascending: false })
+        // ai_usage's timestamp column is `ts` (NOT created_at) — alias it so
+        // the downstream r.created_at usage keeps working. The previous query
+        // selected/filtered a non-existent column, so this panel was empty.
+        .select('account_id, estimated_cost_usd, created_at:ts')
+        .gte('ts', twentyFourHoursAgo)
+        .order('ts', { ascending: false })
         .limit(20000)
     ),
     safe<AuditRow>(

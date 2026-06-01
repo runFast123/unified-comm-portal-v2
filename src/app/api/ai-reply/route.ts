@@ -7,6 +7,7 @@ import { sendEmail, sendTeams, sendWhatsApp } from '@/lib/channel-sender'
 import { logInfo, logError } from '@/lib/logger'
 import { getRequestId } from '@/lib/request-id'
 import type { ChannelType, AIReplyStatus } from '@/types/database'
+import { checkAiQuota, checkCompanyRateLimit } from '@/lib/tenant-quota'
 
 const CHANNEL_SYSTEM_PROMPTS: Record<ChannelType, string> = {
   email: `You are a professional customer service agent replying to a customer email for a telecommunications company.
@@ -90,6 +91,35 @@ export async function POST(request: Request) {
 
     if (convCheck.account_id !== account_id) {
       return NextResponse.json({ error: 'Conversation does not belong to this account' }, { status: 403 })
+    }
+
+    // Per-tenant monthly AI quota (company-scoped). The automatic/webhook path
+    // soft-skips (200) so message ingestion is never blocked; the human
+    // "Generate" path returns 429 so the UI can surface the cap.
+    {
+      const { data: quotaAcct } = await supabase
+        .from('accounts')
+        .select('company_id')
+        .eq('id', account_id)
+        .maybeSingle()
+      const quotaCompanyId = (quotaAcct?.company_id as string | null) ?? null
+      if (quotaCompanyId) {
+        // Per-tenant burst cap (noisy-neighbor): limit a company's AI calls/min
+        // across ALL its accounts, on top of the per-account limiter above.
+        if (!(await checkCompanyRateLimit(quotaCompanyId, 'ai', 300, 60))) {
+          return NextResponse.json(
+            { skipped: true, reason: 'company_ai_rate_limited' },
+            { status: isInternalCall ? 200 : 429 }
+          )
+        }
+        const quota = await checkAiQuota(quotaCompanyId)
+        if (!quota.allowed) {
+          return NextResponse.json(
+            { skipped: true, reason: 'ai_quota_exceeded', used: quota.used, limit: quota.limit, resets_at: quota.resetsAt },
+            { status: isInternalCall ? 200 : 429 }
+          )
+        }
+      }
     }
 
     // Prevent duplicate AI replies

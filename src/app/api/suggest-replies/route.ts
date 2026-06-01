@@ -3,6 +3,7 @@ import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supab
 import { callAI } from '@/lib/api-helpers'
 import { AIBudgetExceededError } from '@/lib/ai-usage'
 import { CircuitBreakerOpenError } from '@/lib/ai-circuit-breaker'
+import { checkAiQuota } from '@/lib/tenant-quota'
 
 export async function POST(request: Request) {
   try {
@@ -33,6 +34,35 @@ Example output: ["Thank you for reaching out. I'll look into this right away.", 
       .eq('id', conversation_id)
       .maybeSingle()
     const accountIdForBudget = convRow?.account_id ?? undefined
+
+    // Per-tenant monthly AI quota. Soft-fall back to canned suggestions (like
+    // the budget path) so the agent UI never goes empty.
+    if (accountIdForBudget) {
+      const { data: quotaAcct } = await admin
+        .from('accounts')
+        .select('company_id')
+        .eq('id', accountIdForBudget)
+        .maybeSingle()
+      const quotaCompanyId = (quotaAcct?.company_id as string | null) ?? null
+      if (quotaCompanyId) {
+        const quota = await checkAiQuota(quotaCompanyId)
+        if (!quota.allowed) {
+          return NextResponse.json({
+            ai_suggestions: [
+              'Thank you for reaching out. How can I help you?',
+              "I'll look into this and get back to you shortly.",
+              'Could you provide more details so I can assist you better?',
+            ],
+            templates: [],
+            skipped: true,
+            reason: 'ai_quota_exceeded',
+            used: quota.used,
+            limit: quota.limit,
+            resets_at: quota.resetsAt,
+          })
+        }
+      }
+    }
 
     let aiResponse: string
     try {
