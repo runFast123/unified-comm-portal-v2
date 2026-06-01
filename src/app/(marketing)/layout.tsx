@@ -1,5 +1,6 @@
 import { MarketingNav } from '@/components/marketing/marketing-nav'
 import { MarketingFooter } from '@/components/marketing/marketing-footer'
+import { AuthHashRedirect } from '@/components/marketing/auth-hash-redirect'
 import { SITE_URL, SITE_NAME, SITE_DESCRIPTION } from '@/lib/site'
 
 const orgJsonLd = {
@@ -28,6 +29,9 @@ const orgJsonLd = {
 export default function MarketingLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col bg-white text-gray-900">
+      {/* Forward stranded Supabase invite/recovery tokens (or expired-link
+          errors) that land on the Site-URL root to the set-password page. */}
+      <AuthHashRedirect />
       <script
         type="application/ld+json"
         // eslint-disable-next-line react/no-danger
