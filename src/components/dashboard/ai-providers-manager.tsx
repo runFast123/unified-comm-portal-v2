@@ -16,6 +16,7 @@ import {
   X,
   CheckCircle2,
   ExternalLink,
+  RefreshCw,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -135,6 +136,13 @@ export function AIProvidersManager({ companyId }: AIProvidersManagerProps) {
     { ok: boolean; message: string } | null
   >(null)
 
+  // Live model list fetched from the provider's GET /models endpoint (so the
+  // admin can pick from a real dropdown instead of typing the model name).
+  const [fetchedModels, setFetchedModels] = useState<string[] | null>(null)
+  const [loadingModels, setLoadingModels] = useState(false)
+  const [modelsError, setModelsError] = useState<string | null>(null)
+  const [customModel, setCustomModel] = useState(false)
+
   // Per-row pending state for "set active" / delete so spinners are scoped.
   const [rowBusy, setRowBusy] = useState<string | null>(null)
   const [banner, setBanner] = useState<
@@ -198,13 +206,20 @@ export function AIProvidersManager({ companyId }: AIProvidersManagerProps) {
   // other model name is still allowed.
   const modelSuggestions = activePreset?.models ?? []
 
+  const resetModelLoader = useCallback(() => {
+    setFetchedModels(null)
+    setCustomModel(false)
+    setModelsError(null)
+  }, [])
+
   const openCreate = useCallback(() => {
     setMode({ type: 'create' })
     setForm(formToCreateForm())
     setShowApiKey(false)
     setFormError(null)
     setTestResult(null)
-  }, [])
+    resetModelLoader()
+  }, [resetModelLoader])
 
   const openEdit = useCallback((row: AiProviderRow) => {
     setMode({ type: 'edit', row })
@@ -212,7 +227,8 @@ export function AIProvidersManager({ companyId }: AIProvidersManagerProps) {
     setShowApiKey(false)
     setFormError(null)
     setTestResult(null)
-  }, [])
+    resetModelLoader()
+  }, [resetModelLoader])
 
   const closeForm = useCallback(() => {
     setMode(null)
@@ -226,6 +242,11 @@ export function AIProvidersManager({ companyId }: AIProvidersManagerProps) {
   // the user typed by hand).
   const onPresetChange = useCallback(
     (key: AiProviderKey) => {
+      // A different provider means a different model catalogue — clear any
+      // models loaded for the previous one.
+      setFetchedModels(null)
+      setCustomModel(false)
+      setModelsError(null)
       const next = getPreset(key)
       setForm((prev) => {
         const prevPreset = getPreset(prev.providerKey)
@@ -292,6 +313,50 @@ export function AIProvidersManager({ companyId }: AIProvidersManagerProps) {
       setTesting(false)
     }
   }, [form.baseUrl, form.apiKey, form.model])
+
+  // Pull the provider's live model list (GET /models) so the user picks from a
+  // dropdown instead of typing. Uses the key in the form, or the saved key
+  // (by id) when editing without re-entering it.
+  const handleLoadModels = useCallback(async () => {
+    setLoadingModels(true)
+    setModelsError(null)
+    try {
+      const reqBody: Record<string, unknown> = {}
+      if (form.apiKey.trim()) {
+        reqBody.base_url = form.baseUrl
+        reqBody.api_key = form.apiKey.trim()
+      } else if (editingRow?.has_api_key) {
+        reqBody.id = editingRow.id
+        reqBody.base_url = form.baseUrl
+      } else {
+        setModelsError("Enter the API key first to load this provider's models.")
+        return
+      }
+      const res = await fetch(withScope('/api/ai-providers/models'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(reqBody),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setModelsError(data?.error || `Could not load models (${res.status})`)
+        return
+      }
+      const models: string[] = Array.isArray(data.models) ? data.models : []
+      if (models.length === 0) {
+        setModelsError('Provider returned no models — you can still type a model name.')
+        return
+      }
+      setFetchedModels(models)
+      setCustomModel(false)
+      // Only auto-fill when empty; never overwrite a model the user already set.
+      setForm((p) => ({ ...p, model: p.model.trim() ? p.model : models[0] }))
+    } catch (err) {
+      setModelsError(err instanceof Error ? err.message : 'Could not load models')
+    } finally {
+      setLoadingModels(false)
+    }
+  }, [form.apiKey, form.baseUrl, editingRow, withScope])
 
   const handleSave = useCallback(async () => {
     setFormError(null)
@@ -765,34 +830,106 @@ export function AIProvidersManager({ companyId }: AIProvidersManagerProps) {
                 )}
               </div>
 
-              {/* Model — free text with datalist suggestions */}
+              {/* Model — load the live list from the provider, or type a custom name */}
               <div>
-                <label
-                  htmlFor="ai-provider-model"
-                  className="mb-1.5 block text-sm font-medium text-gray-700"
-                >
-                  Model
-                </label>
-                <input
-                  id="ai-provider-model"
-                  list="ai-provider-model-options"
-                  value={form.model}
-                  onChange={(e) =>
-                    setForm((p) => ({ ...p, model: e.target.value }))
-                  }
-                  placeholder="Type or pick a model name"
-                  autoComplete="off"
-                  className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 transition-colors focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
-                />
-                <datalist id="ai-provider-model-options">
-                  {modelSuggestions.map((m) => (
-                    <option key={m} value={m} />
-                  ))}
-                </datalist>
-                <p className="mt-1.5 text-xs text-gray-500">
-                  Any model name your provider supports works — suggestions are
-                  just a starting point.
-                </p>
+                <div className="mb-1.5 flex items-center justify-between gap-2">
+                  <label
+                    htmlFor="ai-provider-model"
+                    className="block text-sm font-medium text-gray-700"
+                  >
+                    Model
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleLoadModels}
+                    disabled={
+                      loadingModels ||
+                      !form.baseUrl.trim() ||
+                      (!form.apiKey.trim() && !editingRow?.has_api_key)
+                    }
+                    title="Fetch the available models from this provider using your API key"
+                    className="inline-flex items-center gap-1 text-xs font-medium text-teal-700 transition-colors hover:underline disabled:cursor-not-allowed disabled:text-gray-400 disabled:no-underline"
+                  >
+                    {loadingModels ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-3.5 w-3.5" />
+                    )}
+                    {loadingModels ? 'Loading…' : 'Load models'}
+                  </button>
+                </div>
+
+                {fetchedModels && fetchedModels.length > 0 && !customModel ? (
+                  <>
+                    <select
+                      id="ai-provider-model"
+                      value={form.model}
+                      onChange={(e) =>
+                        setForm((p) => ({ ...p, model: e.target.value }))
+                      }
+                      className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 transition-colors focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+                    >
+                      {/* Preserve a current value that isn't in the fetched list. */}
+                      {form.model && !fetchedModels.includes(form.model) && (
+                        <option value={form.model}>{form.model} (current)</option>
+                      )}
+                      {fetchedModels.map((m) => (
+                        <option key={m} value={m}>
+                          {m}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="mt-1.5 flex items-center justify-between gap-2">
+                      <p className="text-xs text-gray-500">
+                        {fetchedModels.length} model{fetchedModels.length === 1 ? '' : 's'} loaded from this provider.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setCustomModel(true)}
+                        className="text-xs font-medium text-teal-700 hover:underline"
+                      >
+                        Enter a custom model
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <input
+                      id="ai-provider-model"
+                      list="ai-provider-model-options"
+                      value={form.model}
+                      onChange={(e) =>
+                        setForm((p) => ({ ...p, model: e.target.value }))
+                      }
+                      placeholder="Type a model name, or click “Load models”"
+                      autoComplete="off"
+                      className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 transition-colors focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+                    />
+                    <datalist id="ai-provider-model-options">
+                      {(fetchedModels ?? modelSuggestions).map((m) => (
+                        <option key={m} value={m} />
+                      ))}
+                    </datalist>
+                    <div className="mt-1.5 flex items-center justify-between gap-2">
+                      <p className="text-xs text-gray-500">
+                        Click <span className="font-medium">Load models</span> to pick from your provider&apos;s list — or type any model name.
+                      </p>
+                      {fetchedModels && fetchedModels.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setCustomModel(false)}
+                          className="text-xs font-medium text-teal-700 hover:underline"
+                        >
+                          Back to model list
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )}
+
+                {modelsError && (
+                  <p className="mt-1.5 text-xs text-amber-700">{modelsError}</p>
+                )}
               </div>
 
               {/* Max tokens + temperature */}
