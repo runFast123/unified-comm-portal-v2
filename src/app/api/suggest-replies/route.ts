@@ -4,6 +4,7 @@ import { callAI } from '@/lib/api-helpers'
 import { AIBudgetExceededError } from '@/lib/ai-usage'
 import { CircuitBreakerOpenError } from '@/lib/ai-circuit-breaker'
 import { checkAiQuota } from '@/lib/tenant-quota'
+import { retrieveKbContext } from '@/lib/kb-retrieval'
 
 export async function POST(request: Request) {
   try {
@@ -19,7 +20,7 @@ export async function POST(request: Request) {
     }
 
     // Generate 3 short suggested replies using AI
-    const prompt = `You are a customer support assistant. Based on the customer's message, generate exactly 3 short, professional reply options. Each should be 1-2 sentences max. Return ONLY a JSON array of 3 strings, no markdown.
+    let prompt = `You are a customer support assistant. Based on the customer's message, generate exactly 3 short, professional reply options. Each should be 1-2 sentences max. Return ONLY a JSON array of 3 strings, no markdown.
 
 Customer message: "${message_text.substring(0, 300)}"
 ${category ? `Category: ${category}` : ''}
@@ -35,32 +36,46 @@ Example output: ["Thank you for reaching out. I'll look into this right away.", 
       .maybeSingle()
     const accountIdForBudget = convRow?.account_id ?? undefined
 
-    // Per-tenant monthly AI quota. Soft-fall back to canned suggestions (like
-    // the budget path) so the agent UI never goes empty.
+    // Resolve the conversation's company once (used for the AI quota + KB grounding).
+    let companyId: string | null = null
     if (accountIdForBudget) {
       const { data: quotaAcct } = await admin
         .from('accounts')
         .select('company_id')
         .eq('id', accountIdForBudget)
         .maybeSingle()
-      const quotaCompanyId = (quotaAcct?.company_id as string | null) ?? null
-      if (quotaCompanyId) {
-        const quota = await checkAiQuota(quotaCompanyId)
-        if (!quota.allowed) {
-          return NextResponse.json({
-            ai_suggestions: [
-              'Thank you for reaching out. How can I help you?',
-              "I'll look into this and get back to you shortly.",
-              'Could you provide more details so I can assist you better?',
-            ],
-            templates: [],
-            skipped: true,
-            reason: 'ai_quota_exceeded',
-            used: quota.used,
-            limit: quota.limit,
-            resets_at: quota.resetsAt,
-          })
-        }
+      companyId = (quotaAcct?.company_id as string | null) ?? null
+    }
+
+    // Per-tenant monthly AI quota. Soft-fall back to canned suggestions (like
+    // the budget path) so the agent UI never goes empty.
+    if (companyId) {
+      const quota = await checkAiQuota(companyId)
+      if (!quota.allowed) {
+        return NextResponse.json({
+          ai_suggestions: [
+            'Thank you for reaching out. How can I help you?',
+            "I'll look into this and get back to you shortly.",
+            'Could you provide more details so I can assist you better?',
+          ],
+          templates: [],
+          skipped: true,
+          reason: 'ai_quota_exceeded',
+          used: quota.used,
+          limit: quota.limit,
+          resets_at: quota.resetsAt,
+        })
+      }
+    }
+
+    // KB grounding (RAG): when embeddings are enabled + indexed, pull the most
+    // relevant Knowledge Base passages for this company and add them to the
+    // prompt. Fully no-op when OPENAI_API_KEY is unset (suggestions as before).
+    if (companyId) {
+      const { enabled, chunks } = await retrieveKbContext(message_text, companyId, 4)
+      if (enabled && chunks.length > 0) {
+        const kb = chunks.map((c, i) => `[${i + 1}] ${c.content}`).join('\n\n')
+        prompt += `\n\nRelevant knowledge base passages (ground your suggestions in these; do not contradict them):\n${kb}`
       }
     }
 

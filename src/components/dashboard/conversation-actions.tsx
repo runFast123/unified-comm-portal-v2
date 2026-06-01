@@ -292,10 +292,10 @@ export function ConversationActions({
         name: participantName || null,
         email: participantEmail || null,
       },
-      // user.full_name / user.email are filled by the server only when a
-      // template comes from the API; client-side composer doesn't have a
-      // profile reference handy, so we fall back to the participant.
-      user: null,
+      // Fill {{user.full_name}} from the signed-in agent — the composer DOES
+      // have this (the currentUserName prop), so agent-name variables resolve
+      // instead of rendering empty.
+      user: { full_name: currentUserName || null },
       company: { name: accountClean },
       conversation: { subject: emailSubject || null },
     })
@@ -304,7 +304,7 @@ export function ConversationActions({
       .replace(/\{\{account_name\}\}/gi, accountClean)
       .replace(/\{\{email_subject\}\}/gi, emailSubject || '')
       .replace(/\{\{channel\}\}/gi, channel)
-  }, [participantName, participantEmail, accountName, emailSubject, channel])
+  }, [participantName, participantEmail, accountName, emailSubject, channel, currentUserName])
 
   // Template state
   const [templates, setTemplates] = useState<ReplyTemplate[]>([])
