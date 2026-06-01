@@ -66,23 +66,35 @@ function AcceptInviteCard() {
       return
     }
 
+    // Catch the session the instant the token→session exchange completes.
+    // detectSessionInUrl runs asynchronously, and onAuthStateChange fires for
+    // the resulting SIGNED_IN / PASSWORD_RECOVERY event even if our getSession
+    // polls happen to race ahead of it.
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (cancelled || !session) return
+      setPhase((p) => (p === 'success' ? p : 'ready'))
+    })
+
     async function waitForSession() {
-      for (let attempt = 0; attempt < 5; attempt++) {
+      for (let attempt = 0; attempt < 8; attempt++) {
         const { data } = await supabase.auth.getSession()
         if (cancelled) return
         if (data.session) {
-          setPhase('ready')
+          setPhase((p) => (p === 'success' ? p : 'ready'))
           return
         }
         // Short backoff to let detectSessionInUrl finish the hash exchange.
         await new Promise((r) => setTimeout(r, 400))
       }
-      if (!cancelled) setPhase('invalid')
+      // No session and no explicit error hash: the token was missing, already
+      // used, or expired.
+      if (!cancelled) setPhase((p) => (p === 'ready' || p === 'success' ? p : 'invalid'))
     }
 
     void waitForSession()
     return () => {
       cancelled = true
+      sub.subscription.unsubscribe()
     }
   }, [supabase])
 
@@ -101,16 +113,42 @@ function AcceptInviteCard() {
       }
 
       setPhase('saving')
-      const { error: updateError } = await supabase.auth.updateUser({ password })
-      if (updateError) {
-        setError(updateError.message)
+
+      // Make sure we still hold a live session before updating. A recovery /
+      // invite session can lapse while the form sits open, and a no-session
+      // updateUser would silently leave the OLD password in place — exactly the
+      // failure that let a "set" password never actually save.
+      const { data: sessionData } = await supabase.auth.getSession()
+      if (!sessionData.session) {
+        setError('Your set-password link has expired. Ask your admin for a fresh link.')
+        setPhase('invalid')
+        return
+      }
+
+      const { data, error: updateError } = await supabase.auth.updateUser({ password })
+      if (updateError || !data?.user) {
+        setError(
+          updateError?.message ||
+            'Could not set your password. Request a fresh link and try again.'
+        )
         setPhase('ready')
         return
       }
 
+      // Password committed. Drop the temporary recovery/invite session and send
+      // them to the login form to sign in with their NEW password. This proves
+      // the new password works and removes the "I'm in the app but my password
+      // never changed" ambiguity that made the old password keep working.
+      await supabase.auth.signOut().catch(() => {})
       setPhase('success')
-      // Brief success state, then into the app.
-      setTimeout(() => router.push('/dashboard'), 1200)
+      setTimeout(
+        () =>
+          router.push(
+            '/login?message=' +
+              encodeURIComponent('Password set! Please sign in with your new password.')
+          ),
+        1200
+      )
     },
     [password, confirm, supabase, router]
   )
@@ -172,7 +210,7 @@ function AcceptInviteCard() {
               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-teal-50">
                 <CheckCircle2 className="h-7 w-7 text-teal-600" />
               </div>
-              <p className="text-sm font-medium text-gray-800">Password set! Taking you in…</p>
+              <p className="text-sm font-medium text-gray-800">Password set! Taking you to sign in…</p>
               <Loader2 className="h-4 w-4 animate-spin text-teal-600" />
             </div>
           )}
