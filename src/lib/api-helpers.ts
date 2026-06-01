@@ -428,6 +428,29 @@ async function getAIConfig(accountId?: string): Promise<AIConfig> {
     }
 
     if (companyId) {
+      // 0. Multi-provider store (Admin > AI Settings > Providers): prefer the
+      // company's ACTIVE ai_providers row. Falls through to the legacy
+      // ai_config provider columns when none is configured, so existing
+      // tenants keep working until they add a provider here.
+      const { data: provider } = await supabase
+        .from('ai_providers')
+        .select('base_url, api_key, model, max_tokens, temperature')
+        .eq('company_id', companyId)
+        .eq('is_active', true)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (provider?.api_key) {
+        return {
+          base_url: provider.base_url,
+          api_key: provider.api_key,
+          model: provider.model,
+          max_tokens: provider.max_tokens,
+          temperature: Number(provider.temperature),
+        }
+      }
+
       const { data: scoped } = await supabase
         .from('ai_config')
         .select('base_url, api_key, model, max_tokens, temperature')
