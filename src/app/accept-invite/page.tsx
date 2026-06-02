@@ -72,7 +72,9 @@ function AcceptInviteCard() {
     // polls happen to race ahead of it.
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       if (cancelled || !session) return
-      setPhase((p) => (p === 'success' ? p : 'ready'))
+      // Only open the initial gate (checking → ready). Never let a late auth
+      // event override a terminal/in-progress phase (saving/success/invalid).
+      setPhase((p) => (p === 'checking' ? 'ready' : p))
     })
 
     async function waitForSession() {
@@ -80,15 +82,16 @@ function AcceptInviteCard() {
         const { data } = await supabase.auth.getSession()
         if (cancelled) return
         if (data.session) {
-          setPhase((p) => (p === 'success' ? p : 'ready'))
+          setPhase((p) => (p === 'checking' ? 'ready' : p))
           return
         }
         // Short backoff to let detectSessionInUrl finish the hash exchange.
         await new Promise((r) => setTimeout(r, 400))
       }
       // No session and no explicit error hash: the token was missing, already
-      // used, or expired.
-      if (!cancelled) setPhase((p) => (p === 'ready' || p === 'success' ? p : 'invalid'))
+      // used, or expired. Only fail if we're still on the initial gate — don't
+      // clobber a phase a concurrent auth event already advanced.
+      if (!cancelled) setPhase((p) => (p === 'checking' ? 'invalid' : p))
     }
 
     void waitForSession()
@@ -140,6 +143,12 @@ function AcceptInviteCard() {
       // the new password works and removes the "I'm in the app but my password
       // never changed" ambiguity that made the old password keep working.
       await supabase.auth.signOut().catch(() => {})
+      // Drop any residual recovery/invite token still in the URL hash so the
+      // navigation to /login can't be re-forwarded back here by the login
+      // page's hash handler (it would strand the user on a now-consumed token).
+      if (typeof window !== 'undefined' && window.location.hash) {
+        window.history.replaceState(null, '', window.location.pathname + window.location.search)
+      }
       setPhase('success')
       setTimeout(
         () =>

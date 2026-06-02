@@ -911,7 +911,7 @@ export default function UsersPage() {
                 <>
                   Send this password link to{' '}
                   <span className="font-semibold">{inviteFallbackLink.email}</span> — it lets
-                  them set a new password and sign in. The previous link is now invalid:
+                  them set a new password and sign in:
                 </>
               ) : (
                 <>

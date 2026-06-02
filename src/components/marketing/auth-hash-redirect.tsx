@@ -29,8 +29,11 @@ export function AuthHashRedirect() {
       params.has('access_token') &&
       (type === 'invite' || type === 'recovery' || type === 'signup')
     // Supabase auth errors (e.g. expired/used link) land here as
-    // #error=...&error_code=otp_expired&error_description=...
-    const isAuthError = params.has('error_code') || params.has('error_description')
+    // #error=...&error_code=otp_expired&error_description=... — match all three
+    // keys so a bare #error=access_denied is forwarded too (mirrors the broader
+    // predicate /accept-invite's readHashError uses).
+    const isAuthError =
+      params.has('error') || params.has('error_code') || params.has('error_description')
     if (isInviteToken || isAuthError) {
       router.replace('/accept-invite' + hash)
     }
