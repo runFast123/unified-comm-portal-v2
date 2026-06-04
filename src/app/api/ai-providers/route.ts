@@ -26,6 +26,7 @@ import { cookies } from 'next/headers'
 import { createServiceRoleClient } from '@/lib/supabase-server'
 import { requireUser, requireCompanyAdmin } from '@/lib/tenant-guard'
 import { getPreset } from '@/lib/ai-providers'
+import { validateProviderBaseUrl } from '@/lib/ssrf'
 
 const MAX_NAME_LEN = 80
 const MAX_URL_LEN = 2048
@@ -150,6 +151,11 @@ export async function POST(request: Request) {
   if (baseUrl.length > MAX_URL_LEN) {
     return NextResponse.json({ error: `base_url must be <= ${MAX_URL_LEN} chars` }, { status: 400 })
   }
+  // SSRF guard: this base_url is later fetched server-side by callAI, so
+  // validate it at WRITE time (HTTPS only, no private/loopback/metadata/
+  // rebinding) — otherwise a stored URL bypasses the test-time checks.
+  const baseUrlErr = await validateProviderBaseUrl(baseUrl)
+  if (baseUrlErr) return NextResponse.json({ error: baseUrlErr }, { status: 400 })
 
   const apiKey = typeof body.api_key === 'string' ? body.api_key.trim() : ''
   if (!apiKey) return NextResponse.json({ error: 'api_key is required' }, { status: 400 })

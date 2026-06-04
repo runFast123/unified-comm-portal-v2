@@ -28,6 +28,20 @@ const GdprSchema = z.object({
 
 type Row = Record<string, unknown>
 
+// PostgREST serializes `.in()` lists into the query string; cap each batch so a
+// prolific data subject (hundreds of conversations) can't overflow the URL limit.
+const IN_CHUNK = 150
+function chunk<T>(arr: T[], n: number): T[][] {
+  const out: T[][] = []
+  for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n))
+  return out
+}
+// Escape LIKE metacharacters so an email is matched LITERALLY (but
+// case-insensitively, via ilike — participant_email is stored mixed-case).
+function escapeLike(s: string): string {
+  return s.replace(/[%_\\]/g, '\\$&')
+}
+
 export async function POST(request: Request) {
   const gate = await requireCompanyAdmin()
   if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: gate.status })
@@ -67,8 +81,16 @@ export async function POST(request: Request) {
   // ── Matched conversations (full rows), scoped to the caller's accounts ──
   const convRows: Row[] = []
   const seen = new Set<string>()
-  const matchConvs = async (col: 'participant_email' | 'participant_phone', val: string) => {
-    let q = admin.from('conversations').select('*').eq(col, val)
+  const matchConvs = async (
+    col: 'participant_email' | 'participant_phone',
+    val: string,
+    caseInsensitive: boolean
+  ) => {
+    let q = admin.from('conversations').select('*')
+    // participant_email is stored MIXED-CASE, but the request email was
+    // lowercased — match case-insensitively or a subject ingested as
+    // `John@X.com` is silently missed (export/erase would no-op + report success).
+    q = caseInsensitive ? q.ilike(col, escapeLike(val)) : q.eq(col, val)
     if (scoped) q = q.in('account_id', scoped)
     const { data } = await q
     for (const r of (data ?? []) as Row[]) {
@@ -79,35 +101,41 @@ export async function POST(request: Request) {
       }
     }
   }
-  if (email) await matchConvs('participant_email', email)
-  if (phone) await matchConvs('participant_phone', phone)
+  if (email) await matchConvs('participant_email', email, true)
+  if (phone) await matchConvs('participant_phone', phone, false)
   const convIds = [...seen]
   const contactIds = [
     ...new Set(convRows.map((r) => r.contact_id as string | null).filter((x): x is string => !!x)),
   ]
 
   if (action === 'export') {
-    // Messages in the matched conversations.
-    let messages: Row[] = []
-    if (convIds.length) {
+    // Messages in the matched conversations (chunked so a heavy subject can't
+    // overflow the PostgREST URL length; total capped so the response is bounded).
+    const messages: Row[] = []
+    let messagesTruncated = false
+    for (const ids of chunk(convIds, IN_CHUNK)) {
       const { data } = await admin
         .from('messages')
         .select(
           'id, conversation_id, channel, sender_name, sender_type, direction, message_text, email_subject, whatsapp_media_url, attachments, timestamp, received_at'
         )
-        .in('conversation_id', convIds)
+        .in('conversation_id', ids)
         .order('timestamp', { ascending: true })
         .limit(5000)
-      messages = (data ?? []) as Row[]
+      messages.push(...((data ?? []) as Row[]))
+      if (messages.length >= 20000) {
+        messagesTruncated = true
+        break
+      }
     }
 
-    // CSAT responses tied to the subject's email, within scope.
+    // CSAT responses tied to the subject's email, within scope (case-insensitive).
     let csat: Row[] = []
     if (email) {
       let q = admin
         .from('csat_surveys')
         .select('id, conversation_id, customer_email, rating, feedback, sent_at, responded_at')
-        .eq('customer_email', email)
+        .ilike('customer_email', escapeLike(email))
       if (scoped) q = q.in('account_id', scoped)
       const { data } = await q
       csat = (data ?? []) as Row[]
@@ -142,6 +170,7 @@ export async function POST(request: Request) {
       data_subject: { email: email || null, phone: phone || null },
       scope: { company_id: ctx.companyId, super_admin: ctx.isSuperAdmin },
       counts: { conversations: convRows.length, messages: messages.length, csat: csat.length, contacts: contacts.length },
+      truncated: messagesTruncated,
       conversations: convRows,
       messages,
       csat,
@@ -154,20 +183,14 @@ export async function POST(request: Request) {
   let erasedMsgs = 0
   let erasedCsat = 0
 
-  if (convIds.length) {
-    const { data: uc } = await admin
-      .from('conversations')
-      .update({
-        participant_name: '[erased]',
-        participant_email: null,
-        participant_phone: null,
-        ai_summary: null,
-      })
-      .in('id', convIds)
-      .select('id')
-    erasedConvs = (uc ?? []).length
-
-    const { data: um } = await admin
+  // Order matters for safe re-runs: scrub MESSAGES first, THEN anonymize the
+  // conversations. If we nulled the conversation email first and the message
+  // update then failed, a re-run could no longer match the (now-anonymized)
+  // conversation by email and would orphan its PII-bearing messages forever.
+  // These are separate statements (not one transaction), so each is chunked and
+  // its error surfaced — a failure stops loudly and the op is safe to re-run.
+  for (const ids of chunk(convIds, IN_CHUNK)) {
+    const { data: um, error: umErr } = await admin
       .from('messages')
       .update({
         sender_name: '[erased]',
@@ -176,18 +199,50 @@ export async function POST(request: Request) {
         whatsapp_media_url: null,
         attachments: [],
       })
-      .in('conversation_id', convIds)
+      .in('conversation_id', ids)
       .select('id')
-    erasedMsgs = (um ?? []).length
+    if (umErr) {
+      return NextResponse.json(
+        { error: 'Erase failed while scrubbing messages — partial state, safe to re-run.' },
+        { status: 500 }
+      )
+    }
+    erasedMsgs += (um ?? []).length
+  }
+
+  for (const ids of chunk(convIds, IN_CHUNK)) {
+    const { data: uc, error: ucErr } = await admin
+      .from('conversations')
+      .update({
+        participant_name: '[erased]',
+        participant_email: null,
+        participant_phone: null,
+        ai_summary: null,
+      })
+      .in('id', ids)
+      .select('id')
+    if (ucErr) {
+      return NextResponse.json(
+        { error: 'Erase failed while anonymizing conversations — partial state, safe to re-run.' },
+        { status: 500 }
+      )
+    }
+    erasedConvs += (uc ?? []).length
   }
 
   if (email) {
     let q = admin
       .from('csat_surveys')
       .update({ customer_email: null, feedback: null })
-      .eq('customer_email', email)
+      .ilike('customer_email', escapeLike(email))
     if (scoped) q = q.in('account_id', scoped)
-    const { data: us } = await q.select('id')
+    const { data: us, error: usErr } = await q.select('id')
+    if (usErr) {
+      return NextResponse.json(
+        { error: 'Erase failed while scrubbing CSAT — partial state, safe to re-run.' },
+        { status: 500 }
+      )
+    }
     erasedCsat = (us ?? []).length
   }
 

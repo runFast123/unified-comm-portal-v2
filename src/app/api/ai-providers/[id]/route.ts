@@ -21,6 +21,7 @@ import { NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase-server'
 import { requireCompanyAdmin } from '@/lib/tenant-guard'
 import { getPreset } from '@/lib/ai-providers'
+import { validateProviderBaseUrl } from '@/lib/ssrf'
 
 const MAX_NAME_LEN = 80
 const MAX_URL_LEN = 2048
@@ -127,6 +128,9 @@ export async function PATCH(
     if (trimmed.length > MAX_URL_LEN) {
       return NextResponse.json({ error: `base_url must be <= ${MAX_URL_LEN} chars` }, { status: 400 })
     }
+    // SSRF guard: stored base_url is fetched server-side by callAI later.
+    const baseUrlErr = await validateProviderBaseUrl(trimmed)
+    if (baseUrlErr) return NextResponse.json({ error: baseUrlErr }, { status: 400 })
     patch.base_url = trimmed
   }
 
