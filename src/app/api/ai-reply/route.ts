@@ -325,10 +325,14 @@ export async function POST(request: Request) {
     // Fetch company-specific imported data from Google Sheets
     let sheetContext = ''
     try {
+      // Scope strictly to THIS account. imported_records has no company_id, so
+      // the previous `account_id.is.null` branch pulled null-account rows from
+      // EVERY tenant into this company's AI context — a cross-tenant leak (the
+      // same class fixed for KB articles above). Only this account's rows.
       const { data: importedRecords } = await supabase
         .from('imported_records')
         .select('entity_name, category, data_json')
-        .or(`account_id.eq.${account_id},account_id.is.null`)
+        .eq('account_id', account_id)
         .order('imported_at', { ascending: false })
         .limit(20)
 

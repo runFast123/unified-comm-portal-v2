@@ -1,11 +1,33 @@
 'use server'
 
 import { redirect } from 'next/navigation'
+import { headers } from 'next/headers'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { checkRateLimit } from '@/lib/rate-limiter'
+
+/** Best-effort client IP from the proxy headers (Vercel sets x-forwarded-for). */
+async function clientIp(): Promise<string> {
+  const h = await headers()
+  return (
+    h.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+    h.get('x-real-ip')?.trim() ||
+    'unknown'
+  )
+}
 
 export async function signIn(formData: FormData) {
-  const email = formData.get('email') as string
+  const email = ((formData.get('email') as string) || '').trim().toLowerCase()
   const password = formData.get('password') as string
+
+  // Throttle credential attempts per-email and per-IP to blunt brute-force /
+  // credential-stuffing at the app layer (GoTrue's own throttling is coarse).
+  // The limiter fails OPEN, so an outage never locks legitimate users out.
+  const ip = await clientIp()
+  const ipCheck = await checkRateLimit(`login:ip:${ip}`, 30, 60)
+  const emailCheck = email ? await checkRateLimit(`login:email:${email}`, 10, 60) : null
+  if (!ipCheck.allowed || (emailCheck && !emailCheck.allowed)) {
+    return { error: 'Too many sign-in attempts. Please wait a minute and try again.' }
+  }
 
   const supabase = await createServerSupabaseClient()
 
@@ -22,9 +44,17 @@ export async function signIn(formData: FormData) {
 }
 
 export async function signUp(formData: FormData) {
-  const email = formData.get('email') as string
+  const email = ((formData.get('email') as string) || '').trim().toLowerCase()
   const password = formData.get('password') as string
   const fullName = formData.get('fullName') as string
+
+  // Per-IP throttle so the public signup form can't be used to hammer GoTrue
+  // (account-enumeration / mail-bombing). Fails open.
+  const ip = await clientIp()
+  const ipCheck = await checkRateLimit(`signup:ip:${ip}`, 10, 300)
+  if (!ipCheck.allowed) {
+    return { error: 'Too many sign-up attempts. Please wait a few minutes and try again.' }
+  }
 
   const supabase = await createServerSupabaseClient()
 

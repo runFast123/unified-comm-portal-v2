@@ -2,15 +2,24 @@
 // `conversation_time_entries` table.
 //
 // Sessions life-cycle:
-//   1. `startSession`   - inserts a row with `started_at = now()`, `ended_at = NULL`.
-//                         Auto-closes any prior open session for this user+conv.
-//   2. `heartbeat`      - bumps `ended_at = now()` so the GC won't reap the row.
+//   1. `startSession`   - inserts a row with `started_at = now()`, `ended_at`
+//                         and `duration_seconds` both NULL. Auto-closes any
+//                         prior OPEN session for this user+conv.
+//   2. `heartbeat`      - bumps `ended_at = now()` as a liveness marker so the
+//                         GC can bill through the last-seen-alive moment.
 //   3. `closeSession`   - sets `ended_at = now()` + computes `duration_seconds`.
 //                         Idempotent: a session that's already closed stays put.
-//   4. `garbageCollectStaleSessions` - cron-driven. Closes any session whose
-//                         last `ended_at` (or `started_at` if no heartbeat)
-//                         is more than STALE_THRESHOLD_SECONDS old, billing
-//                         the elapsed time minus the stale tail.
+//   4. `garbageCollectStaleSessions` - cron-driven. Closes any OPEN session
+//                         whose last-alive (`ended_at`, or `started_at` if never
+//                         heartbeated) is more than STALE_THRESHOLD_SECONDS old,
+//                         billing through that last-alive moment.
+//
+// INVARIANT: a session is OPEN ⇔ `duration_seconds IS NULL`. `ended_at` is a
+// MUTABLE liveness marker (bumped by every heartbeat), NOT the open/closed
+// signal — finalizing (close/GC) is what sets `duration_seconds`. Using
+// `ended_at IS NULL` as the open guard was a bug: the first heartbeat set
+// `ended_at`, after which close/GC could never finalize the row and the session
+// was mis-billed as ~one heartbeat (~60s) long regardless of real duration.
 //
 // Aggregates:
 //   - `aggregateForConversation` - total seconds across all users for one conv.
@@ -138,7 +147,7 @@ export async function startSession(
     .select('id, started_at')
     .eq('user_id', userId)
     .eq('conversation_id', conversationId)
-    .is('ended_at', null)
+    .is('duration_seconds', null) // OPEN = not yet finalized
 
   if (opens && opens.length > 0) {
     for (const row of opens as Array<{ id: string; started_at: string }>) {
@@ -147,7 +156,7 @@ export async function startSession(
         .from('conversation_time_entries')
         .update({ ended_at: nowIso, duration_seconds: duration })
         .eq('id', row.id)
-        .is('ended_at', null) // CAS — don't clobber if cron beat us
+        .is('duration_seconds', null) // CAS — don't clobber if cron beat us
     }
   }
 
@@ -184,7 +193,7 @@ export async function heartbeat(
     .from('conversation_time_entries')
     .update({ ended_at: nowIso })
     .eq('id', sessionId)
-    .is('ended_at', null) // only extend OPEN sessions
+    .is('duration_seconds', null) // only extend OPEN (un-finalized) sessions
     .select('id')
     .maybeSingle()
   if (error) return false
@@ -207,12 +216,12 @@ export async function closeSession(
   // Read first so we know started_at.
   const { data: row } = await client
     .from('conversation_time_entries')
-    .select('id, started_at, ended_at')
+    .select('id, started_at, duration_seconds')
     .eq('id', sessionId)
     .maybeSingle()
   if (!row) return null
-  const r = row as { id: string; started_at: string; ended_at: string | null }
-  if (r.ended_at) return null // already closed — idempotent
+  const r = row as { id: string; started_at: string; duration_seconds: number | null }
+  if (r.duration_seconds != null) return null // already finalized — idempotent
 
   const nowIso = new Date().toISOString()
   const duration = diffSeconds(r.started_at, nowIso)
@@ -220,7 +229,7 @@ export async function closeSession(
     .from('conversation_time_entries')
     .update({ ended_at: nowIso, duration_seconds: duration })
     .eq('id', sessionId)
-    .is('ended_at', null) // CAS
+    .is('duration_seconds', null) // CAS
     .select('id')
     .maybeSingle()
   if (error || !updated) return null
@@ -244,15 +253,14 @@ export async function garbageCollectStaleSessions(
     now.getTime() - STALE_THRESHOLD_SECONDS * 1000
   ).toISOString()
 
-  // Only need rows that are still open AND haven't been touched recently.
-  // We compare on `started_at` because that's always set; we could compare
-  // on COALESCE(ended_at, started_at) via .or() but the simpler strategy
-  // is "fetch open rows older than cutoff and decide per-row" since the
-  // expected backlog at any moment is tiny.
+  // OPEN (un-finalized) rows that STARTED before the stale cutoff. A row that
+  // started after the cutoff can't be stale yet — its last-alive is >= its
+  // started_at, which is still inside the window. `ended_at` (the last
+  // heartbeat) is what we bill through; we evaluate staleness per-row below.
   const { data, error } = await client
     .from('conversation_time_entries')
     .select('id, started_at, ended_at')
-    .is('ended_at', null)
+    .is('duration_seconds', null)
     .lte('started_at', staleCutoffIso)
     .limit(GC_BATCH_LIMIT)
   if (error) return { closed: 0, failed: 1 }
@@ -263,39 +271,20 @@ export async function garbageCollectStaleSessions(
     ended_at: string | null
   }>
 
-  // We need to ALSO consider rows that were heartbeated but stopped recently.
-  // Above query missed those if started_at > staleCutoff but heartbeats stopped
-  // before. Pull a second pass for OPEN rows whose started_at is more recent
-  // but might still be stale via ended_at. We piggyback by selecting all
-  // open rows with at least one heartbeat (ended_at IS NOT NULL is impossible
-  // since we filter by that) — so we compare by selecting where started_at
-  // OR ended_at is stale. Postgres .or() filter handles this:
-  const { data: data2 } = await client
-    .from('conversation_time_entries')
-    .select('id, started_at, ended_at')
-    .is('ended_at', null)
-    .gt('started_at', staleCutoffIso)
-    .limit(GC_BATCH_LIMIT)
-  // The above pulls fresh open rows; we just need to compare each one's
-  // implicit "last alive" (started_at, since ended_at is NULL while open).
-  // If ended_at is NULL, last alive == started_at, which we already know
-  // is > cutoff -> NOT stale. Skip.
-  // (No-op block kept for documentation; nothing to add.)
-  void data2
-
   let closed = 0
   let failed = 0
   for (const row of candidates) {
-    // Last known alive moment: use ended_at (last heartbeat) if present,
-    // else started_at. While the row is open ended_at IS NULL, so this
-    // reduces to started_at for un-heartbeated sessions.
+    // Last known alive moment: the last heartbeat (`ended_at`) if any, else
+    // `started_at`. If that's still newer than the cutoff the session was
+    // heartbeated recently and is NOT stale — leave it open.
     const lastAliveIso = row.ended_at ?? row.started_at
+    if (lastAliveIso > staleCutoffIso) continue
     const duration = diffSeconds(row.started_at, lastAliveIso)
     const { data: updated, error: updErr } = await client
       .from('conversation_time_entries')
       .update({ ended_at: lastAliveIso, duration_seconds: duration })
       .eq('id', row.id)
-      .is('ended_at', null) // CAS
+      .is('duration_seconds', null) // CAS
       .select('id')
       .maybeSingle()
     if (updErr) {
@@ -342,14 +331,12 @@ export async function aggregateForConversation(
   let total = 0
   let entryCount = 0
   for (const r of rows) {
-    // Prefer the denormalized duration; fall back to live calculation
-    // for sessions still open so the running total includes "right now".
+    // Closed rows carry the denormalized duration. OPEN rows (duration_seconds
+    // NULL) are billed live — up to the last heartbeat (`ended_at`) if present,
+    // else elapsed-since-start so the running total includes "right now".
     let secs = r.duration_seconds ?? 0
-    if (r.duration_seconds == null && r.ended_at == null) {
-      // open session — count time elapsed so far
-      secs = diffSeconds(r.started_at, new Date().toISOString())
-    } else if (r.duration_seconds == null && r.ended_at) {
-      secs = diffSeconds(r.started_at, r.ended_at)
+    if (r.duration_seconds == null) {
+      secs = diffSeconds(r.started_at, r.ended_at ?? new Date().toISOString())
     }
     total += secs
     entryCount++

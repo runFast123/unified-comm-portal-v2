@@ -1213,11 +1213,15 @@ export function ConversationActions({
         .eq('id', conversationId)
       if (error) throw error
 
-      // 2. Auto-assign to first admin user
+      // 2. Auto-assign to a company admin. Match the full admin-role catalogue
+      //    (modern `company_admin` + legacy `admin`) — hard-coding 'admin' meant
+      //    escalations on tenants using the modern role names found nobody, so
+      //    the urgent ticket sat unassigned with no alert sent. RLS scopes this
+      //    client query to the caller's own company.
       const { data: adminUser } = await supabase
         .from('users')
         .select('id, email, full_name')
-        .eq('role', 'admin')
+        .in('role', ['company_admin', 'admin'])
         .eq('is_active', true)
         .limit(1)
         .maybeSingle()

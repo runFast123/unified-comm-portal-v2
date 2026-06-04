@@ -407,7 +407,7 @@ describe('garbageCollectStaleSessions', () => {
     expect(row.duration_seconds).toBe(0)
   })
 
-  it('bills through last heartbeat for sessions that were heartbeated', async () => {
+  it('bills a heartbeated-then-abandoned session through its last heartbeat', async () => {
     const client = makeClient()
     const start = new Date(Date.now() - 10 * 60 * 1000).toISOString() // 10 min ago
     const lastHb = new Date(Date.now() - 8 * 60 * 1000).toISOString() // 8 min ago
@@ -417,22 +417,21 @@ describe('garbageCollectStaleSessions', () => {
       user_id: 'u',
       account_id: 'a',
       started_at: start,
+      // heartbeat bumped ended_at; duration_seconds still NULL ⇒ OPEN.
       ended_at: lastHb,
       duration_seconds: null,
       source: 'auto',
       notes: null,
       created_at: start,
     })
-    // closeSession-by-update writes to ended_at, but the row currently has
-    // ended_at IS NOT NULL so it's not "open" — GC should NOT touch it.
-    // Instead we simulate the realistic case where heartbeat hasn't fired
-    // yet -- ended_at must be NULL. Let's reset and use the supported
-    // signal: pretend heartbeat had fired but ended_at was reset to NULL
-    // is not realistic. The real check: rows with ended_at NULL get the
-    // started_at-only treatment (above test). So this test asserts the
-    // helper SKIPS rows that have a non-null ended_at (already closed).
+    // The session is OPEN (duration_seconds NULL) and its last heartbeat is
+    // older than the stale window, so GC must finalize it — billing the span
+    // from start through the last heartbeat (~2 min), NOT through "now".
     const result = await garbageCollectStaleSessions(client)
-    expect(result.closed).toBe(0)
+    expect(result.closed).toBe(1)
+    const row = state.entries[0]
+    expect(row.duration_seconds).toBe(120)
+    expect(row.ended_at).toBe(lastHb)
   })
 
   it('leaves fresh open sessions alone', async () => {

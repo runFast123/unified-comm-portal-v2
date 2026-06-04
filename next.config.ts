@@ -8,6 +8,29 @@ const nextConfig: NextConfig = {
     },
   },
   serverExternalPackages: ['jspdf', 'jspdf-autotable'],
+  // Baseline HTTP security headers applied to every route. (CSP is intentionally
+  // omitted here — it needs a report-only rollout first to avoid breaking inline
+  // styles/scripts — and is tracked as a follow-up.)
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          {
+            key: 'Permissions-Policy',
+            value: 'camera=(), microphone=(), geolocation=(), browsing-topics=()',
+          },
+          {
+            key: 'Strict-Transport-Security',
+            value: 'max-age=31536000; includeSubDomains',
+          },
+        ],
+      },
+    ]
+  },
 }
 
 export default withSentryConfig(nextConfig, {
