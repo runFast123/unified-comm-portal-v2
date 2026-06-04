@@ -44,8 +44,12 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    // Validate webhook secret
-    // TODO: also verify Meta X-Hub-Signature-256 using WHATSAPP_APP_SECRET env
+    // Authenticate the caller. This endpoint ingests a CUSTOM relay payload
+    // ({ sender_phone, text, account_id, … }), NOT Meta's raw webhook envelope,
+    // so the shared X-Webhook-Secret is the correct trust boundary here. Meta's
+    // X-Hub-Signature-256 would only apply if Meta posted its envelope directly
+    // — in that case it pairs with the GET hub.challenge handler above and would
+    // be HMAC-verified against WHATSAPP_APP_SECRET before parsing.
     if (!validateWebhookSecret(request)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
