@@ -53,7 +53,7 @@ export async function POST(
     }
   }
 
-  const ssrfError = validateProviderBaseUrl(baseUrl)
+  const ssrfError = await validateProviderBaseUrl(baseUrl)
   if (ssrfError) {
     await persist(false, ssrfError)
     return NextResponse.json({ ok: false, error: ssrfError }, { status: 200 })

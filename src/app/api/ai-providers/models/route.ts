@@ -60,8 +60,9 @@ export async function POST(request: Request) {
     )
   }
 
-  // SSRF guard (same policy as /api/test-ai): HTTPS only, no private/metadata hosts.
-  const ssrfError = validateProviderBaseUrl(baseUrl)
+  // SSRF guard (same policy as /api/test-ai): HTTPS only, DNS-resolved, no
+  // private/loopback/link-local/metadata targets.
+  const ssrfError = await validateProviderBaseUrl(baseUrl)
   if (ssrfError) {
     return NextResponse.json({ error: ssrfError }, { status: 400 })
   }

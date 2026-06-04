@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { validateProviderBaseUrl } from '@/lib/ssrf'
 
 export async function POST(request: Request) {
   try {
@@ -20,24 +21,12 @@ export async function POST(request: Request) {
       )
     }
 
-    // SSRF protection: only allow HTTPS and block private IP ranges
-    try {
-      const url = new URL(base_url)
-      if (url.protocol !== 'https:') {
-        return NextResponse.json({ error: 'Only HTTPS URLs are allowed' }, { status: 400 })
-      }
-      const hostname = url.hostname
-      const blocked = /^(127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|0\.|localhost|::1|\[::1\])/
-      if (blocked.test(hostname)) {
-        return NextResponse.json({ error: 'Private/local URLs are not allowed' }, { status: 400 })
-      }
-      // Block cloud metadata endpoints (SSRF protection)
-      const blockedHostnames = ['metadata.google.internal', 'metadata.aws', 'metadata.google']
-      if (blockedHostnames.some(h => hostname === h || hostname.endsWith('.' + h))) {
-        return NextResponse.json({ error: 'Cloud metadata endpoints are not allowed' }, { status: 400 })
-      }
-    } catch {
-      return NextResponse.json({ error: 'Invalid URL format' }, { status: 400 })
+    // SSRF protection: HTTPS only, DNS-resolved, no private/loopback/link-local
+    // or cloud-metadata targets (shared strong validator — replaces the old
+    // literal-hostname denylist that missed decimal/IPv6 literals + rebinding).
+    const ssrfError = await validateProviderBaseUrl(base_url)
+    if (ssrfError) {
+      return NextResponse.json({ error: ssrfError }, { status: 400 })
     }
 
     // Call the AI API from the server (avoids CORS)
