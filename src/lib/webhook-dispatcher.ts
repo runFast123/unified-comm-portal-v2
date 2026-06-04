@@ -23,6 +23,7 @@ import crypto from 'crypto'
 
 import { createServiceRoleClient } from '@/lib/supabase-server'
 import { logError, logInfo } from '@/lib/logger'
+import { validatePublicHttpsUrl } from '@/lib/url-validator'
 
 // ── Tunables ────────────────────────────────────────────────────────
 
@@ -68,6 +69,12 @@ interface DispatchOptions {
    * actually waiting 30 seconds.
    */
   sleepImpl?: (ms: number) => Promise<void>
+  /**
+   * Inject the dispatch-time URL re-validator (DNS-rebinding guard). Production
+   * passes nothing → the real DNS-resolving `validatePublicHttpsUrl` is used;
+   * tests inject a stub so they stay offline + deterministic.
+   */
+  validateUrlImpl?: (url: string) => Promise<{ ok: true } | { ok: false; error: string }>
 }
 
 // ── Signature ───────────────────────────────────────────────────────
@@ -146,6 +153,7 @@ async function dispatchToSubscription(
 ): Promise<void> {
   const fetchImpl = opts.fetchImpl ?? fetch
   const sleepImpl = opts.sleepImpl ?? defaultSleep
+  const validateUrl = opts.validateUrlImpl ?? validatePublicHttpsUrl
 
   // Body shape is stable: { event, delivered_at, data }. Customers verify
   // the signature against the raw bytes of this body.
@@ -162,36 +170,50 @@ async function dispatchToSubscription(
   let lastError: string | null = null
   let success = false
 
+  // DNS-rebinding guard: re-validate the target at DISPATCH time, not just at
+  // registration. A URL that resolved to a public IP when the subscription was
+  // created can later re-point at a private/internal IP. If it's now blocked we
+  // fail TERMINALLY (a blocked host won't un-block within this delivery) so the
+  // consecutive-failure counter still advances toward auto-deactivation.
+  const ssrf = await validateUrl(sub.url)
+  const blockedReason = ssrf.ok ? null : ssrf.error
+
   while (true) {
     const startedAt = Date.now()
-    try {
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
-      let response: Response
-      try {
-        response = await fetchImpl(sub.url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Webhook-Signature': signature,
-            'X-Webhook-Event': eventType,
-            'X-Webhook-Subscription-Id': sub.id,
-            'User-Agent': 'UnifiedCommsPortal-Webhook/1.0',
-          },
-          body,
-          signal: controller.signal,
-        })
-      } finally {
-        clearTimeout(timeoutId)
-      }
-
-      lastStatus = response.status
-      success = response.ok
-      lastError = success ? null : `HTTP ${response.status}`
-    } catch (err) {
+    if (blockedReason) {
       lastStatus = null
-      lastError = err instanceof Error ? err.message : 'unknown fetch error'
+      lastError = `blocked target: ${blockedReason}`
       success = false
+    } else {
+      try {
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+        let response: Response
+        try {
+          response = await fetchImpl(sub.url, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Webhook-Signature': signature,
+              'X-Webhook-Event': eventType,
+              'X-Webhook-Subscription-Id': sub.id,
+              'User-Agent': 'UnifiedCommsPortal-Webhook/1.0',
+            },
+            body,
+            signal: controller.signal,
+          })
+        } finally {
+          clearTimeout(timeoutId)
+        }
+
+        lastStatus = response.status
+        success = response.ok
+        lastError = success ? null : `HTTP ${response.status}`
+      } catch (err) {
+        lastStatus = null
+        lastError = err instanceof Error ? err.message : 'unknown fetch error'
+        success = false
+      }
     }
 
     const duration = Date.now() - startedAt
@@ -206,6 +228,7 @@ async function dispatchToSubscription(
     })
 
     if (success) break
+    if (blockedReason) break // terminal — a blocked target won't un-block here
     if (attemptIndex >= RETRY_DELAYS_MS.length) break // exhausted retries
 
     await sleepImpl(RETRY_DELAYS_MS[attemptIndex])

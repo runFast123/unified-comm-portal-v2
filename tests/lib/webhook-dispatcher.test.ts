@@ -112,6 +112,9 @@ beforeEach(() => {
 
 // Sleep stub: instant. Tests would otherwise wait 36s for full retries.
 const noSleep = () => Promise.resolve()
+// URL-validator stub: pass-through so unit tests stay offline + deterministic
+// (production uses the real DNS-resolving validatePublicHttpsUrl).
+const passUrl = async () => ({ ok: true as const })
 
 describe('signPayload', () => {
   it('returns sha256=<hex> matching createHmac', () => {
@@ -152,7 +155,7 @@ describe('dispatchToSubscription — success', () => {
       },
       'conversation.created',
       { conversation_id: 'c1' },
-      { fetchImpl, sleepImpl: noSleep },
+      { fetchImpl, sleepImpl: noSleep, validateUrlImpl: passUrl },
     )
 
     expect(fetchImpl).toHaveBeenCalledTimes(1)
@@ -193,7 +196,7 @@ describe('dispatchToSubscription — success', () => {
       },
       'message.received',
       { hello: 'world' },
-      { fetchImpl, sleepImpl: noSleep },
+      { fetchImpl, sleepImpl: noSleep, validateUrlImpl: passUrl },
     )
 
     expect(capturedHeaders['X-Webhook-Signature']).toBe(signPayload(capturedBody, 'shh'))
@@ -231,7 +234,7 @@ describe('dispatchToSubscription — failure + retry', () => {
       },
       'conversation.created',
       {},
-      { fetchImpl, sleepImpl: noSleep },
+      { fetchImpl, sleepImpl: noSleep, validateUrlImpl: passUrl },
     )
 
     // 1 initial + 2 retries before success (3 total attempts → indexes 0,1,2)
@@ -267,7 +270,7 @@ describe('dispatchToSubscription — failure + retry', () => {
       },
       'conversation.created',
       {},
-      { fetchImpl, sleepImpl: noSleep },
+      { fetchImpl, sleepImpl: noSleep, validateUrlImpl: passUrl },
     )
 
     // 1 initial + RETRY_DELAYS_MS.length retries
@@ -301,7 +304,7 @@ describe('dispatchToSubscription — failure + retry', () => {
       },
       'conversation.created',
       {},
-      { fetchImpl, sleepImpl: noSleep },
+      { fetchImpl, sleepImpl: noSleep, validateUrlImpl: passUrl },
     )
 
     const sub = fixture.subs.get('sub-5')!
@@ -333,7 +336,7 @@ describe('dispatchToSubscription — failure + retry', () => {
       },
       'conversation.created',
       {},
-      { fetchImpl, sleepImpl: noSleep },
+      { fetchImpl, sleepImpl: noSleep, validateUrlImpl: passUrl },
     )
 
     expect(fixture.deliveries.length).toBe(1 + RETRY_DELAYS_MS.length)
@@ -341,5 +344,46 @@ describe('dispatchToSubscription — failure + retry', () => {
       expect(d.http_status).toBeNull()
       expect(d.error).toContain('ECONNREFUSED')
     }
+  })
+})
+
+describe('dispatchToSubscription — DNS-rebinding guard', () => {
+  it('blocks delivery (no fetch), records a terminal failure, and counts it', async () => {
+    fixture.subs.set('sub-7', {
+      id: 'sub-7',
+      is_active: true,
+      consecutive_failures: 0,
+      last_delivery_at: null,
+    })
+
+    const fetchImpl = vi.fn(async () => new Response('ok', { status: 200 })) as unknown as typeof fetch
+    // Target re-resolves to a private IP at dispatch time (rebinding).
+    const blockUrl = async () => ({
+      ok: false as const,
+      error: 'hostname resolves to a private/loopback IP',
+    })
+
+    await dispatchToSubscription(
+      {
+        id: 'sub-7',
+        company_id: 'comp-a',
+        url: 'https://rebind.example/wh',
+        events: ['conversation.created'],
+        signing_secret: 'k',
+        is_active: true,
+        consecutive_failures: 0,
+      },
+      'conversation.created',
+      {},
+      { fetchImpl, sleepImpl: noSleep, validateUrlImpl: blockUrl },
+    )
+
+    expect(fetchImpl).not.toHaveBeenCalled() // never POSTed to the blocked host
+    expect(fixture.deliveries.length).toBe(1) // terminal — no retries
+    expect(fixture.deliveries[0].http_status).toBeNull()
+    expect(String(fixture.deliveries[0].error)).toMatch(/blocked target/)
+
+    const sub = fixture.subs.get('sub-7')!
+    expect(sub.consecutive_failures).toBe(1) // failure counter advanced
   })
 })
