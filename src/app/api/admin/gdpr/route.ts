@@ -14,15 +14,17 @@
 // and intentionally left untouched on erase to avoid cross-tenant impact.
 
 import { NextResponse } from 'next/server'
+import { z } from 'zod'
 import { createServiceRoleClient } from '@/lib/supabase-server'
 import { requireCompanyAdmin, tenantAccountIds } from '@/lib/tenant-guard'
+import { parseJsonBody } from '@/lib/validation'
 
-interface Body {
-  action?: 'export' | 'erase'
-  email?: string
-  phone?: string
-  confirm?: boolean
-}
+const GdprSchema = z.object({
+  action: z.enum(['export', 'erase']),
+  email: z.string().optional(),
+  phone: z.string().optional(),
+  confirm: z.boolean().optional(),
+})
 
 type Row = Record<string, unknown>
 
@@ -31,17 +33,11 @@ export async function POST(request: Request) {
   if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: gate.status })
   const { ctx } = gate
 
-  let body: Body
-  try {
-    body = (await request.json()) as Body
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
-  }
+  const parsed = await parseJsonBody(request, GdprSchema)
+  if (!parsed.ok) return parsed.response
+  const body = parsed.data
 
   const action = body.action
-  if (action !== 'export' && action !== 'erase') {
-    return NextResponse.json({ error: "action must be 'export' or 'erase'" }, { status: 400 })
-  }
   const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : ''
   const phone = typeof body.phone === 'string' ? body.phone.trim() : ''
   if (!email && !phone) {

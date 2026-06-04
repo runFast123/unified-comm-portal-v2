@@ -8,6 +8,20 @@ import {
   getAccountSettings,
 } from '@/lib/api-helpers'
 import { evaluateRouting, applyRoutingResult } from '@/lib/routing-engine'
+import { z } from 'zod'
+import { parseJsonBody } from '@/lib/validation'
+
+// Inbound relay payload (custom shape — NOT Meta's envelope; see POST below).
+// Every field is a string; we type-validate them here and keep the business
+// rules (account_id / sender_phone present, message non-empty) in the handler.
+const WhatsAppInboundSchema = z.object({
+  account_id: z.string().optional(),
+  sender_phone: z.string().optional(),
+  text: z.string().optional(),
+  media_url: z.string().optional(),
+  message_type: z.string().optional(),
+  timestamp: z.string().optional(),
+})
 
 /**
  * GET handler for Meta webhook verification.
@@ -54,7 +68,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const body = await request.json()
+    const parsed = await parseJsonBody(request, WhatsAppInboundSchema)
+    if (!parsed.ok) return parsed.response
     const {
       sender_phone,
       text,
@@ -62,7 +77,7 @@ export async function POST(request: Request) {
       message_type: msgType,
       timestamp,
       account_id,
-    } = body
+    } = parsed.data
 
     if (!account_id) {
       return NextResponse.json(
