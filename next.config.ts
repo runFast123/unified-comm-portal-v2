@@ -8,6 +8,8 @@ const nextConfig: NextConfig = {
     },
   },
   serverExternalPackages: ['jspdf', 'jspdf-autotable'],
+  // (Next 16 no longer runs ESLint during `next build`; lint is enforced as a
+  // dedicated CI step via `npm run lint`.)
   // Baseline HTTP security headers applied to every route. (CSP is intentionally
   // omitted here — it needs a report-only rollout first to avoid breaking inline
   // styles/scripts — and is tracked as a follow-up.)
