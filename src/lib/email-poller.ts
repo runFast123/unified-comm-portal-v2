@@ -25,6 +25,42 @@ export function simpleHash(id: string): number {
 // Open the breaker after 5 consecutive failures. Auto-resets on next success.
 export const CIRCUIT_BREAKER_THRESHOLD = 5
 
+/**
+ * Choose which INBOX UIDs to fetch this run from the merged candidate set
+ * (UID-incremental hits ∪ date-reconcile hits), given the persisted high-water
+ * cursor and the per-run cap.
+ *
+ * Invariant that makes this subtle: the cursor only ever advances to the MAX
+ * ingested UID, so under a cap we must never fetch a non-contiguous slice that
+ * leaves un-fetched NEW UIDs *below* the new cursor — they'd be orphaned (only
+ * the date reconcile could rescue them, and not if they predate RECONCILE_DAYS).
+ *
+ *   - Big NEW backlog (UIDs above the cursor) > cap → drain OLDEST-first so the
+ *     cursor advances contiguously; the remainder drains over later runs.
+ *   - Otherwise fetch new + reconcile, ordered for ingest UX (backfill
+ *     oldest-first, incremental newest-first), bounded to the cap. Every
+ *     fresh-new UID is higher than any already-ingested reconcile UID, so a
+ *     newest-first cap keeps ALL new mail and only drops old (deduped) rows —
+ *     the cursor still advances safely to the global max.
+ *
+ * Exported for unit testing.
+ */
+export function selectUidsToFetch(
+  uids: number[],
+  lastUid: number | null | undefined,
+  maxPerRun: number
+): number[] {
+  if (!uids || uids.length === 0) return []
+  const cursor = lastUid && lastUid > 0 ? lastUid : 0
+  const isBackfill = cursor === 0
+  const freshNew = uids.filter((u) => u > cursor)
+  if (freshNew.length > maxPerRun) {
+    return [...freshNew].sort((a, b) => a - b).slice(0, maxPerRun)
+  }
+  const ordered = [...uids].sort((a, b) => (isBackfill ? a - b : b - a))
+  return ordered.length > maxPerRun ? ordered.slice(0, maxPerRun) : ordered
+}
+
 export interface EmailPollResult {
   account_id: string
   fetched: number
@@ -264,17 +300,12 @@ export async function pollEmailAccount(
         const uids: number[] | false = merged.length > 0 ? merged : false
 
         if (uids && uids.length > 0) {
-          // Ordering depends on the mode:
-          //   - First-run BACKFILL (no cursor yet): OLDEST-first, so we advance
-          //     the cursor contiguously and never orphan older UIDs below a
-          //     capped batch (the backlog drains over successive runs).
-          //   - INCREMENTAL (cursor set): NEWEST-first, so today's mail ingests
-          //     first; the date reconcile re-surfaces any stragglers next run
-          //     and Message-ID dedup makes the overlap free.
-          const isBackfill = !(lastUid && lastUid > 0)
-          const sorted = [...uids].sort((a, b) => (isBackfill ? a - b : b - a))
-          const toFetch =
-            sorted.length > MAX_MESSAGES_PER_RUN ? sorted.slice(0, MAX_MESSAGES_PER_RUN) : sorted
+          // Cursor-safe UID selection (see selectUidsToFetch): a big NEW backlog
+          // drains oldest-first so the high-water-mark advances contiguously and
+          // never orphans mail below the new cursor; the common case keeps the
+          // prior incremental-newest-first / backfill-oldest-first ordering. The
+          // date reconcile still re-surfaces stragglers, deduped by Message-ID.
+          const toFetch = selectUidsToFetch(uids, lastUid, MAX_MESSAGES_PER_RUN)
 
           for await (const msg of client.fetch(
             toFetch,
