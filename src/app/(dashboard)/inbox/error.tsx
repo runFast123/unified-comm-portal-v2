@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import * as Sentry from '@sentry/nextjs'
 import { AlertTriangle, Inbox } from 'lucide-react'
 import Link from 'next/link'
 
@@ -13,6 +14,7 @@ export default function InboxError({
 }) {
   useEffect(() => {
     console.error('Inbox error:', error)
+    Sentry.captureException(error)
   }, [error])
 
   return (

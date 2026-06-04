@@ -4,7 +4,7 @@ const dsn = process.env.SENTRY_DSN
 if (dsn) {
   Sentry.init({
     dsn,
-    tracesSampleRate: Number(process.env.SENTRY_TRACES_SAMPLE_RATE ?? 0),
+    tracesSampleRate: Number(process.env.SENTRY_TRACES_SAMPLE_RATE ?? 0.1),
     enabled: process.env.NODE_ENV === 'production' || process.env.SENTRY_DEV === '1',
     environment: process.env.NODE_ENV,
     release: process.env.VERCEL_GIT_COMMIT_SHA,
