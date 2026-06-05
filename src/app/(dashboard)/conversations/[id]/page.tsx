@@ -24,6 +24,7 @@ import { CSATSendButton } from '@/components/dashboard/csat-send-button'
 import { TimeTrackingActive } from '@/components/dashboard/time-tracking-active'
 import { ConversationTimeDisplay } from '@/components/dashboard/conversation-time-display'
 import { ConversationSidePanel } from '@/components/dashboard/conversation-side-panel'
+import { ConversationSidebarShell } from '@/components/dashboard/conversation-sidebar-shell'
 import {
   cn,
   getChannelLabel,
@@ -631,7 +632,7 @@ export default async function ConversationPage({
             unsent notes / scroll positions / fetched data survive
             switching between tabs. Below thread on mobile, side panel
             on desktop. */}
-        <div className="w-full lg:w-96 shrink-0 overflow-hidden border-t lg:border-t-0 lg:border-l border-gray-200 bg-white">
+        <ConversationSidebarShell>
           <ConversationSidePanel
             tagsCount={((conversation.tags as string[] | null) ?? []).length}
             summary={
@@ -661,7 +662,7 @@ export default async function ConversationPage({
             notes={<InternalNotes conversationId={id} authorName={currentUserName || undefined} />}
             activity={<ActivityTimeline conversationId={id} />}
           />
-        </div>
+        </ConversationSidebarShell>
       </div>
     </div>
   )

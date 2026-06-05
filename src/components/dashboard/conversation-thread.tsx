@@ -324,8 +324,14 @@ function formatEmailBody(rawText: string | null): React.ReactNode {
     }
   }
 
-  // Clean up main body - remove excessive blank lines
+  // Clean up main body. Normalize whitespace-only lines to truly empty FIRST —
+  // HTML emails converted to text (Skool / newsletter "digest" mails, etc.)
+  // carry hundreds of tab/space-only lines from their table layout, and the
+  // blank-run collapse below only matches PURE newlines. Without this each
+  // tab-only line rendered as an 8px spacer → a wall of empty space that pushed
+  // the real content far down the message.
   const cleanBody = mainLines
+    .map((l) => (l.trim() === '' ? '' : l))
     .join('\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim()
