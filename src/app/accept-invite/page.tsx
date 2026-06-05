@@ -50,12 +50,30 @@ function AcceptInviteCard() {
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [error, setError] = useState<string | null>(null)
+  // Custom admin-issued setup token (from #setup=<token>). When present we use
+  // the prefetch-safe /api/auth/set-password flow instead of a GoTrue session.
+  const [setupToken, setSetupToken] = useState<string | null>(null)
 
   // On mount, wait for the browser client to consume the invite token in the
   // URL hash and establish a session. The token→session exchange is async, so
   // we poll getSession a few times with a short delay before giving up.
   useEffect(() => {
     let cancelled = false
+
+    // Custom admin-issued setup link: #setup=<token>. This path does NOT use a
+    // GoTrue session — the token is validated server-side on submit, so it's
+    // immune to the single-use / prefetch / expiry fragility of recovery links.
+    const rawHash = window.location.hash.startsWith('#')
+      ? window.location.hash.slice(1)
+      : window.location.hash
+    const setupTok = new URLSearchParams(rawHash).get('setup')
+    if (setupTok) {
+      setSetupToken(setupTok)
+      // Strip the token from the URL so it doesn't linger in the address bar.
+      window.history.replaceState(null, '', window.location.pathname)
+      setPhase('ready')
+      return
+    }
 
     // If the link itself carried an auth error, surface it immediately —
     // there will never be a session to wait for.
@@ -117,6 +135,38 @@ function AcceptInviteCard() {
 
       setPhase('saving')
 
+      // ── Custom setup-token flow (prefetch-safe; validated + set server-side) ──
+      if (setupToken) {
+        try {
+          const res = await fetch('/api/auth/set-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: setupToken, password }),
+          })
+          const j = (await res.json().catch(() => ({}))) as { error?: string }
+          if (!res.ok) {
+            setError(j?.error || 'Could not set your password.')
+            // 400 = invalid/expired/used token → terminal; else allow a retry.
+            setPhase(res.status === 400 ? 'invalid' : 'ready')
+            return
+          }
+          setPhase('success')
+          setTimeout(
+            () =>
+              router.push(
+                '/login?message=' +
+                  encodeURIComponent('Password set! Please sign in with your new password.')
+              ),
+            1200
+          )
+        } catch {
+          setError('Network error — please try again.')
+          setPhase('ready')
+        }
+        return
+      }
+
+      // ── GoTrue hash-session flow (real invite / recovery emails) ──
       // Make sure we still hold a live session before updating. A recovery /
       // invite session can lapse while the form sits open, and a no-session
       // updateUser would silently leave the OLD password in place — exactly the
@@ -159,7 +209,7 @@ function AcceptInviteCard() {
         1200
       )
     },
-    [password, confirm, supabase, router]
+    [password, confirm, supabase, router, setupToken]
   )
 
   return (
