@@ -183,7 +183,7 @@ export async function findOrCreateConversation(
   supabase: Awaited<ReturnType<typeof createServiceRoleClient>>,
   params: {
     account_id: string
-    channel: 'teams' | 'email' | 'whatsapp' | 'sms' | 'telegram'
+    channel: 'teams' | 'email' | 'whatsapp' | 'sms' | 'telegram' | 'messenger'
     teams_chat_id?: string | null
     email_thread_id?: string | null
     /** Email subject — used for the fallback subject+sender match. */
@@ -250,10 +250,12 @@ export async function findOrCreateConversation(
     // Non-email channels keep their original single-key lookup.
     let query = baseSelect()
     if (
-      (params.channel === 'teams' || params.channel === 'telegram') &&
+      (params.channel === 'teams' ||
+        params.channel === 'telegram' ||
+        params.channel === 'messenger') &&
       params.teams_chat_id
     ) {
-      // Teams and Telegram both group conversations by an opaque chat id.
+      // Teams, Telegram and Messenger all group by an opaque chat / PSID id.
       query = query.eq('teams_chat_id', params.teams_chat_id)
     } else if (
       (params.channel === 'whatsapp' || params.channel === 'sms') &&
@@ -330,6 +332,7 @@ export async function findOrCreateConversation(
         whatsapp: { col: 'participant_phone', value: params.participant_phone },
         sms: { col: 'participant_phone', value: params.participant_phone },
         telegram: { col: 'teams_chat_id', value: params.teams_chat_id },
+        messenger: { col: 'teams_chat_id', value: params.teams_chat_id },
       }
       const key = CHANNEL_UNIQUE_KEY[params.channel]
       if (key && key.value) {

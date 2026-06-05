@@ -6,6 +6,7 @@ import {
   type WhatsAppConfig,
   type SmsConfig,
   type TelegramConfig,
+  type MessengerConfig,
 } from '@/lib/channel-config'
 
 export type SendResult =
@@ -59,6 +60,14 @@ export interface SendTelegramInput {
   chatId: string
   body: string
   configOverride?: TelegramConfig
+}
+
+export interface SendMessengerInput {
+  accountId: string | null
+  /** The recipient's page-scoped id (PSID). */
+  recipientId: string
+  body: string
+  configOverride?: MessengerConfig
 }
 
 // ─── HTML escaping (anti-XSS for outbound email) ─────────────────────
@@ -460,5 +469,51 @@ export async function verifyTelegramConfig(cfg: TelegramConfig): Promise<SendRes
     return { ok: true }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : 'Telegram verify failed' }
+  }
+}
+
+// ─── Facebook Messenger (Meta Graph API) ──────────────────────────────
+
+export async function sendMessenger(input: SendMessengerInput): Promise<SendResult> {
+  try {
+    const cfg = input.configOverride ?? (await getChannelConfig(input.accountId, 'messenger'))
+    if (!cfg) return { ok: false, error: 'Messenger is not configured for this account' }
+
+    const version = cfg.graph_version || 'v21.0'
+    const res = await withRetry(
+      () =>
+        fetch(`https://graph.facebook.com/${version}/me/messages`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${cfg.page_access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            recipient: { id: input.recipientId },
+            messaging_type: 'RESPONSE',
+            message: { text: input.body },
+          }),
+        }),
+      (r) => r instanceof Response && isTransientStatus(r.status)
+    )
+    if (!res.ok) return { ok: false, error: `Meta ${res.status}: ${await res.text()}` }
+    const json = (await res.json()) as { message_id?: string }
+    return { ok: true, provider_message_id: json.message_id }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'Messenger send failed' }
+  }
+}
+
+export async function verifyMessengerConfig(cfg: MessengerConfig): Promise<SendResult> {
+  try {
+    const version = cfg.graph_version || 'v21.0'
+    const res = await fetch(
+      `https://graph.facebook.com/${version}/${encodeURIComponent(cfg.page_id)}?fields=id,name`,
+      { headers: { Authorization: `Bearer ${cfg.page_access_token}` } }
+    )
+    if (!res.ok) return { ok: false, error: `Meta ${res.status}: ${await res.text()}` }
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'Messenger verify failed' }
   }
 }

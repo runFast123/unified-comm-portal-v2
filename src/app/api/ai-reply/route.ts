@@ -30,6 +30,10 @@ formatting, or links unless essential. Be direct and helpful.`,
   telegram: `You are a customer service agent replying via Telegram for a telecommunications company.
 Keep your reply concise and friendly. Plain text and short paragraphs work best.
 Be direct and helpful; no formal email sign-offs.`,
+
+  messenger: `You are a customer service agent replying via Facebook Messenger for a telecommunications company.
+Keep your reply friendly, concise, and conversational. Short paragraphs, plain text.
+Be direct and helpful; no formal email sign-offs.`,
 }
 
 export async function POST(request: Request) {

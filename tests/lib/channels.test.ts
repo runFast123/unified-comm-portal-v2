@@ -4,7 +4,7 @@ import { getChannelLabel, getChannelColor, getChannelBgColor } from '@/lib/utils
 
 describe('channel registry', () => {
   it('registers the known channels with complete descriptors', () => {
-    expect([...CHANNEL_KEYS].sort()).toEqual(['email', 'sms', 'teams', 'telegram', 'whatsapp'])
+    expect([...CHANNEL_KEYS].sort()).toEqual(['email', 'messenger', 'sms', 'teams', 'telegram', 'whatsapp'])
     expect(CHANNEL_LIST.length).toBe(CHANNEL_KEYS.length)
     for (const c of CHANNEL_LIST) {
       expect(CHANNELS[c.key]).toBe(c) // key matches its map slot
@@ -27,6 +27,7 @@ describe('channel registry', () => {
     expect(getChannel('whatsapp')?.label).toBe('WhatsApp')
     expect(getChannel('sms')?.label).toBe('SMS')
     expect(getChannel('telegram')?.label).toBe('Telegram')
+    expect(getChannel('messenger')?.label).toBe('Messenger')
     expect(getChannel('discord')).toBeNull()
     expect(getChannel(null)).toBeNull()
     expect(getChannel(undefined)).toBeNull()
@@ -54,6 +55,10 @@ describe('channel registry', () => {
     expect(getChannelLabel('telegram')).toBe('Telegram')
     expect(getChannelColor('telegram')).toBe('text-[#0088cc]')
     expect(getChannelBgColor('telegram')).toBe('bg-[#0088cc]')
+
+    expect(getChannelLabel('messenger')).toBe('Messenger')
+    expect(getChannelColor('messenger')).toBe('text-[#0084ff]')
+    expect(getChannelBgColor('messenger')).toBe('bg-[#0084ff]')
   })
 
   it('resolveRecipient maps each channel to its recipient field', () => {
@@ -63,6 +68,7 @@ describe('channel registry', () => {
     expect(resolveRecipient('whatsapp', src)).toBe('+15551234567')
     expect(resolveRecipient('sms', src)).toBe('+15551234567') // SMS reuses participant_phone
     expect(resolveRecipient('telegram', src)).toBe('19:chat') // Telegram reuses teams_chat_id
+    expect(resolveRecipient('messenger', src)).toBe('19:chat') // Messenger reuses teams_chat_id (PSID)
     expect(resolveRecipient('unknown', src)).toBeNull()
     expect(resolveRecipient('email', {})).toBeNull() // missing field -> null
   })

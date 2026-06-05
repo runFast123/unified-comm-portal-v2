@@ -2,7 +2,7 @@ import { createServiceRoleClient } from '@/lib/supabase-server'
 import { encrypt, decrypt } from '@/lib/encryption'
 import { logError } from '@/lib/logger'
 
-export type Channel = 'email' | 'teams' | 'whatsapp' | 'sms' | 'telegram'
+export type Channel = 'email' | 'teams' | 'whatsapp' | 'sms' | 'telegram' | 'messenger'
 
 // ─── Config shapes per channel ────────────────────────────────────────
 
@@ -68,12 +68,21 @@ export interface TelegramConfig {
   bot_token: string
 }
 
+export interface MessengerConfig {
+  /** Facebook Page ID the bot replies as. */
+  page_id: string
+  /** Page Access Token from the Meta app (needs pages_messaging). */
+  page_access_token: string
+  graph_version?: string
+}
+
 export type ChannelConfigMap = {
   email: EmailConfig
   teams: TeamsConfig
   whatsapp: WhatsAppConfig
   sms: SmsConfig
   telegram: TelegramConfig
+  messenger: MessengerConfig
 }
 
 // Fields that should never be returned to the UI in clear text
@@ -83,6 +92,7 @@ const SECRET_FIELDS: Record<Channel, string[]> = {
   whatsapp: ['access_token', 'verify_token'],
   sms: ['auth_token'],
   telegram: ['bot_token'],
+  messenger: ['page_access_token'],
 }
 
 // Fields that MUST be present (non-empty) before a channel config can be saved.
@@ -94,6 +104,7 @@ export const REQUIRED_CONFIG_FIELDS: Record<Channel, string[]> = {
   whatsapp: ['phone_number_id', 'access_token'],
   sms: ['account_sid', 'auth_token', 'from_number'],
   telegram: ['bot_token'],
+  messenger: ['page_id', 'page_access_token'],
 }
 
 /**
@@ -171,12 +182,20 @@ function envTelegramConfig(): TelegramConfig | null {
   return { bot_token: token }
 }
 
+function envMessengerConfig(): MessengerConfig | null {
+  const pageId = process.env.MESSENGER_PAGE_ID
+  const token = process.env.MESSENGER_PAGE_ACCESS_TOKEN
+  if (!pageId || !token) return null
+  return { page_id: pageId, page_access_token: token, graph_version: process.env.MESSENGER_GRAPH_VERSION || 'v21.0' }
+}
+
 function envConfig<C extends Channel>(channel: C): ChannelConfigMap[C] | null {
   if (channel === 'email') return envEmailConfig() as ChannelConfigMap[C] | null
   if (channel === 'teams') return envTeamsConfig() as ChannelConfigMap[C] | null
   if (channel === 'whatsapp') return envWhatsAppConfig() as ChannelConfigMap[C] | null
   if (channel === 'sms') return envSmsConfig() as ChannelConfigMap[C] | null
-  return envTelegramConfig() as ChannelConfigMap[C] | null
+  if (channel === 'telegram') return envTelegramConfig() as ChannelConfigMap[C] | null
+  return envMessengerConfig() as ChannelConfigMap[C] | null
 }
 
 // ─── DB lookup (with env fallback) ────────────────────────────────────

@@ -18,6 +18,7 @@ import {
   Phone,
   MessageCircle,
   Send,
+  Facebook,
   Settings,
   Loader2,
   CheckCircle,
@@ -36,7 +37,7 @@ import {
 } from 'lucide-react'
 import { CopyField } from '@/components/ui/copy-field'
 
-type Channel = 'email' | 'teams' | 'whatsapp' | 'sms' | 'telegram'
+type Channel = 'email' | 'teams' | 'whatsapp' | 'sms' | 'telegram' | 'messenger'
 
 interface ConfigState {
   source: 'db' | 'env' | 'none'
@@ -49,6 +50,7 @@ const CHANNEL_META: Record<Channel, { label: string; Icon: typeof Mail; color: s
   whatsapp: { label: 'WhatsApp', Icon: Phone, color: 'text-green-600' },
   sms: { label: 'SMS (Twilio)', Icon: MessageCircle, color: 'text-pink-600' },
   telegram: { label: 'Telegram', Icon: Send, color: 'text-sky-600' },
+  messenger: { label: 'Messenger', Icon: Facebook, color: 'text-blue-500' },
 }
 
 // Channel-specific identifier (what uniquely locates this account on the provider side)
@@ -60,6 +62,8 @@ const IDENTIFIER_FIELD: Record<Channel, { key: string; label: string; placeholde
   sms: { key: 'whatsapp_phone', label: 'SMS number (E.164)', placeholder: '+14155552671' },
   // Telegram reuses teams_user_id for the bot handle (accounts are single-channel).
   telegram: { key: 'teams_user_id', label: 'Bot username (@yourbot)', placeholder: '@yourbot' },
+  // Messenger reuses teams_user_id for the Page handle.
+  messenger: { key: 'teams_user_id', label: 'Facebook Page name or ID', placeholder: 'My Business Page' },
 }
 
 // Credential fields per channel (what lives in channel_configs, encrypted)
@@ -99,6 +103,11 @@ const CRED_FIELDS: Record<
   telegram: [
     { key: 'bot_token', label: 'Bot Token (from @BotFather)', type: 'password', required: true },
   ],
+  messenger: [
+    { key: 'page_id', label: 'Facebook Page ID', required: true },
+    { key: 'page_access_token', label: 'Page Access Token (Meta app, pages_messaging)', type: 'password', required: true },
+    { key: 'graph_version', label: 'Graph API Version', placeholder: 'v21.0' },
+  ],
 }
 
 function defaultCreds(channel: Channel): Record<string, unknown> {
@@ -117,6 +126,9 @@ function defaultCreds(channel: Channel): Record<string, unknown> {
   }
   if (channel === 'telegram') {
     return { bot_token: '' }
+  }
+  if (channel === 'messenger') {
+    return { page_id: '', page_access_token: '', graph_version: 'v21.0' }
   }
   return { phone_number_id: '', access_token: '', verify_token: '', graph_version: 'v21.0' }
 }
@@ -317,6 +329,7 @@ export default function ChannelsPage() {
     whatsapp: ['access_token', 'verify_token'],
     sms: ['auth_token'],
     telegram: ['bot_token'],
+    messenger: ['page_access_token'],
   }
 
   const openCreate = (channel: Channel) => {
@@ -582,7 +595,7 @@ export default function ChannelsPage() {
     )
   }
 
-  const grouped: Record<Channel, Account[]> = { email: [], teams: [], whatsapp: [], sms: [], telegram: [] }
+  const grouped: Record<Channel, Account[]> = { email: [], teams: [], whatsapp: [], sms: [], telegram: [], messenger: [] }
   for (const a of accounts) {
     const ch = a.channel_type as Channel
     if (grouped[ch]) grouped[ch].push(a)

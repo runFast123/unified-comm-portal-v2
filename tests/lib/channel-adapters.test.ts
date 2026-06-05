@@ -13,6 +13,8 @@ vi.mock('@/lib/channel-sender', () => ({
   verifySmsConfig: vi.fn(async () => ({ ok: true })),
   sendTelegram: vi.fn(async () => ({ ok: true, provider_message_id: 'tg-1' })),
   verifyTelegramConfig: vi.fn(async () => ({ ok: true })),
+  sendMessenger: vi.fn(async () => ({ ok: true, provider_message_id: 'fb-1' })),
+  verifyMessengerConfig: vi.fn(async () => ({ ok: true })),
 }))
 
 import { sendViaChannel, getAdapter } from '@/lib/channels/adapters'
@@ -22,11 +24,13 @@ import {
   sendWhatsApp,
   sendSms,
   sendTelegram,
+  sendMessenger,
   verifyEmailConfig,
   verifyTeamsConfig,
   verifyWhatsAppConfig,
   verifySmsConfig,
   verifyTelegramConfig,
+  verifyMessengerConfig,
 } from '@/lib/channel-sender'
 
 beforeEach(() => {
@@ -158,5 +162,15 @@ describe('channel outbound adapters', () => {
     const tgCfg = { bot_token: '123:ABC' }
     await getAdapter('telegram')!.verifyConfig(tgCfg)
     expect(verifyTelegramConfig).toHaveBeenCalledWith(tgCfg)
+  })
+
+  it('routes messenger to sendMessenger (to -> recipientId) and verifyConfig to verifyMessengerConfig', async () => {
+    const res = await sendViaChannel('messenger', { accountId: 'acct-6', to: 'psid-123', body: 'fb message' })
+    expect(res).toEqual({ ok: true, provider_message_id: 'fb-1' })
+    expect(sendMessenger).toHaveBeenCalledWith({ accountId: 'acct-6', recipientId: 'psid-123', body: 'fb message' })
+
+    const fbCfg = { page_id: '111', page_access_token: 'tok' }
+    await getAdapter('messenger')!.verifyConfig(fbCfg)
+    expect(verifyMessengerConfig).toHaveBeenCalledWith(fbCfg)
   })
 })

@@ -222,3 +222,41 @@ export function parseTelegramInbound(raw: TelegramInboundRaw): InboundMessage {
     attachments: null,
   }
 }
+
+/** Raw inbound Messenger relay payload (a relay normalizes Meta's webhook). */
+export interface MessengerInboundRaw {
+  account_id?: string
+  /** The sender's page-scoped id (PSID). */
+  sender_id?: string
+  sender_name?: string
+  text?: string
+  message_id?: string
+  timestamp?: string
+}
+
+/**
+ * Normalize an inbound Facebook Messenger message. Grouped by the sender's
+ * page-scoped id (PSID), stored in teams_chat_id (the shared chat-id column).
+ * Always a customer message; plain text.
+ */
+export function parseMessengerInbound(raw: MessengerInboundRaw): InboundMessage {
+  const psid = raw.sender_id || null
+  return {
+    channel: 'messenger',
+    account_id: raw.account_id || null,
+    message_text: truncate(raw.text ?? ''),
+    message_type: 'text',
+    timestamp: raw.timestamp || null,
+    sender_name: raw.sender_name || psid,
+    sender_email: null,
+    sender_phone: null,
+    sender_type: 'customer',
+    direction: 'inbound',
+    replied: false,
+    reply_required: true,
+    teams_chat_id: psid,
+    teams_message_id: raw.message_id || null,
+    whatsapp_media_url: null,
+    attachments: null,
+  }
+}

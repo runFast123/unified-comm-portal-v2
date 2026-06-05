@@ -102,6 +102,17 @@ export const CHANNELS: Record<ChannelType, ChannelDescriptor> = {
     recipientField: 'teams_chat_id',
     capabilities: { inbound: true, outbound: true, attachments: false, threading: false },
   },
+  messenger: {
+    key: 'messenger',
+    label: 'Messenger',
+    filterLabel: 'Messenger Only',
+    hex: '#0084ff',
+    textClass: 'text-[#0084ff]',
+    bgClass: 'bg-[#0084ff]',
+    // Messenger groups by the page-scoped user id (PSID), reusing teams_chat_id.
+    recipientField: 'teams_chat_id',
+    capabilities: { inbound: true, outbound: true, attachments: false, threading: false },
+  },
 }
 
 /** All channel keys, in registry (display) order. */
