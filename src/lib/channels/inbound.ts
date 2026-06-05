@@ -100,3 +100,51 @@ export function parseWhatsAppInbound(raw: WhatsAppInboundRaw): InboundMessage {
     attachments: null,
   }
 }
+
+/** Raw Teams relay payload (fields arrive untyped from the JSON body). */
+export interface TeamsInboundRaw {
+  account_id?: string | null
+  sender_name?: string | null
+  sender_email?: string | null
+  message_text?: string | null
+  teams_message_id?: string | null
+  teams_chat_id?: string | null
+  message_type?: string | null
+  timestamp?: string | null
+  attachments?: unknown
+  is_agent_message?: boolean | string | null
+}
+
+/**
+ * Normalize a Teams relay payload. Teams (unlike WhatsApp) can carry an AGENT
+ * message — a company user replying from inside Teams, flagged by
+ * is_agent_message — which flips sender_type/direction/replied so the reply is
+ * stored as an outbound, already-replied message. Only real file attachments
+ * are kept; team_name / channel_name metadata is dropped. The `'message'`
+ * provider type collapses to `'text'`.
+ */
+export function parseTeamsInbound(raw: TeamsInboundRaw): InboundMessage {
+  const isAgent = raw.is_agent_message === true || raw.is_agent_message === 'true'
+  const attachments =
+    raw.attachments && Array.isArray(raw.attachments) && raw.attachments.length > 0
+      ? raw.attachments
+      : null
+  return {
+    channel: 'teams',
+    account_id: raw.account_id || null,
+    message_text: truncate(raw.message_text ?? ''),
+    message_type: (raw.message_type === 'message' ? 'text' : raw.message_type) || 'text',
+    timestamp: raw.timestamp || null,
+    sender_name: raw.sender_name || null,
+    sender_email: raw.sender_email || null,
+    sender_phone: null,
+    sender_type: isAgent ? 'agent' : 'customer',
+    direction: isAgent ? 'outbound' : 'inbound',
+    replied: isAgent,
+    reply_required: !isAgent,
+    teams_chat_id: raw.teams_chat_id || null,
+    teams_message_id: raw.teams_message_id || null,
+    whatsapp_media_url: null,
+    attachments,
+  }
+}

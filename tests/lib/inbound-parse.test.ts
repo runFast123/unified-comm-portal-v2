@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseWhatsAppInbound, MAX_MESSAGE_LENGTH } from '@/lib/channels/inbound'
+import { parseWhatsAppInbound, parseTeamsInbound, MAX_MESSAGE_LENGTH } from '@/lib/channels/inbound'
 
 describe('parseWhatsAppInbound', () => {
   it('normalizes a plain text message', () => {
@@ -64,5 +64,70 @@ describe('parseWhatsAppInbound', () => {
     expect(m.timestamp).toBeNull()
     expect(m.sender_type).toBe('customer')
     expect(m.direction).toBe('inbound')
+  })
+})
+
+describe('parseTeamsInbound', () => {
+  it('normalizes a customer message (message -> text, file attachments kept)', () => {
+    const m = parseTeamsInbound({
+      account_id: 'acct-1',
+      sender_name: 'Jane Doe',
+      sender_email: 'jane@example.com',
+      message_text: 'hello team',
+      teams_message_id: 'tm-1',
+      teams_chat_id: '19:chat-abc@thread.v2',
+      message_type: 'message',
+      timestamp: '2026-01-01T00:00:00.000Z',
+      attachments: [{ name: 'f.pdf' }],
+    })
+    expect(m).toEqual({
+      channel: 'teams',
+      account_id: 'acct-1',
+      message_text: 'hello team',
+      message_type: 'text',
+      timestamp: '2026-01-01T00:00:00.000Z',
+      sender_name: 'Jane Doe',
+      sender_email: 'jane@example.com',
+      sender_phone: null,
+      sender_type: 'customer',
+      direction: 'inbound',
+      replied: false,
+      reply_required: true,
+      teams_chat_id: '19:chat-abc@thread.v2',
+      teams_message_id: 'tm-1',
+      whatsapp_media_url: null,
+      attachments: [{ name: 'f.pdf' }],
+    })
+  })
+
+  it('flips role fields for an agent message (boolean true)', () => {
+    const m = parseTeamsInbound({ message_text: 'agent reply', is_agent_message: true })
+    expect(m.sender_type).toBe('agent')
+    expect(m.direction).toBe('outbound')
+    expect(m.replied).toBe(true)
+    expect(m.reply_required).toBe(false)
+  })
+
+  it('treats the string "true" as an agent message too', () => {
+    const m = parseTeamsInbound({ message_text: 'x', is_agent_message: 'true' })
+    expect(m.sender_type).toBe('agent')
+    expect(m.direction).toBe('outbound')
+  })
+
+  it('maps message_type: undefined -> text, image stays image', () => {
+    expect(parseTeamsInbound({ message_text: 'a' }).message_type).toBe('text')
+    expect(parseTeamsInbound({ message_text: 'a', message_type: 'image' }).message_type).toBe('image')
+  })
+
+  it('drops empty / non-array attachments to null', () => {
+    expect(parseTeamsInbound({ message_text: 'a', attachments: [] }).attachments).toBeNull()
+    expect(parseTeamsInbound({ message_text: 'a', attachments: 'nope' }).attachments).toBeNull()
+    expect(parseTeamsInbound({ message_text: 'a' }).attachments).toBeNull()
+  })
+
+  it('truncates an over-length body to 50KB + marker', () => {
+    const m = parseTeamsInbound({ message_text: 'b'.repeat(MAX_MESSAGE_LENGTH + 100) })
+    expect(m.message_text.length).toBe(MAX_MESSAGE_LENGTH + '... [truncated]'.length)
+    expect(m.message_text.endsWith('... [truncated]')).toBe(true)
   })
 })

@@ -11,6 +11,7 @@ import { evaluateRouting, applyRoutingResult } from '@/lib/routing-engine'
 import { getRequestId, REQUEST_ID_HEADER } from '@/lib/request-id'
 import { isAccountOOO, shouldSendOOOReply, recordOOOReply, substituteOOOVariables } from '@/lib/ooo'
 import { sendTeams } from '@/lib/channel-sender'
+import { parseTeamsInbound } from '@/lib/channels/inbound'
 
 export async function POST(request: Request) {
   const requestId = await getRequestId()
@@ -69,11 +70,23 @@ export async function POST(request: Request) {
       )
     }
 
-    // Truncate message text if too large
-    const MAX_MESSAGE_LENGTH = 50000 // 50KB max
-    const messageText = message_text.length > MAX_MESSAGE_LENGTH
-      ? message_text.substring(0, MAX_MESSAGE_LENGTH) + '... [truncated]'
-      : message_text
+    // Normalize into the canonical InboundMessage (truncation, message_type,
+    // agent/customer role -> sender_type/direction/replied). The per-channel
+    // parse lives in src/lib/channels/inbound.ts; messageText is aliased so the
+    // dedup / dispatch below read the same value as before.
+    const inbound = parseTeamsInbound({
+      account_id,
+      sender_name,
+      sender_email,
+      message_text,
+      teams_message_id,
+      teams_chat_id,
+      message_type,
+      timestamp,
+      attachments,
+      is_agent_message,
+    })
+    const messageText = inbound.message_text
 
     const supabase = await createServiceRoleClient()
 
@@ -147,15 +160,9 @@ export async function POST(request: Request) {
       participant_email: sender_email || null,
     })
 
-    // Only store actual file attachments — NOT metadata like team_name, channel_name
-    const fileAttachments = (attachments && Array.isArray(attachments) && attachments.length > 0)
-      ? attachments
-      : null
-
-    // Determine if this is an agent message (company user replying in Teams)
-    const isAgent = is_agent_message === true || is_agent_message === 'true'
-    const senderType = isAgent ? 'agent' : 'customer'
-    const direction = isAgent ? 'outbound' : 'inbound'
+    // Agent (company user replying in Teams) vs customer — already derived in
+    // the parser; the agent short-circuit below still needs the boolean.
+    const isAgent = inbound.sender_type === 'agent'
 
     // Store message in messages table
     const { data: message, error: msgError } = await supabase
@@ -163,17 +170,17 @@ export async function POST(request: Request) {
       .insert({
         conversation_id: conversationId,
         account_id,
-        channel: 'teams',
-        teams_message_id: teams_message_id || null,
-        sender_name: sender_name || null,
-        sender_type: senderType,
-        message_text: messageText,
-        message_type: (message_type === 'message' ? 'text' : message_type) || 'text',
-        direction,
-        attachments: fileAttachments,
-        replied: isAgent ? true : false,
-        reply_required: isAgent ? false : true,
-        timestamp: timestamp || new Date().toISOString(),
+        channel: inbound.channel,
+        teams_message_id: inbound.teams_message_id,
+        sender_name: inbound.sender_name,
+        sender_type: inbound.sender_type,
+        message_text: inbound.message_text,
+        message_type: inbound.message_type,
+        direction: inbound.direction,
+        attachments: inbound.attachments,
+        replied: inbound.replied,
+        reply_required: inbound.reply_required,
+        timestamp: inbound.timestamp || new Date().toISOString(),
         received_at: new Date().toISOString(),
       })
       .select('id')
