@@ -4,7 +4,9 @@ import {
   getMaskedChannelConfig,
   saveChannelConfig,
   deleteChannelConfig,
+  firstMissingConfigField,
   type Channel,
+  type ChannelConfigMap,
 } from '@/lib/channel-config'
 import { verifyAccountAccess } from '@/lib/api-helpers'
 
@@ -89,21 +91,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Forbidden: account scope mismatch' }, { status: 403 })
     }
 
-    // Minimal shape validation per channel
+    // Minimal shape validation per channel — required fields are declared in the
+    // channel-config registry (REQUIRED_CONFIG_FIELDS) so a new channel needs no
+    // edit here.
     const c = config as Record<string, unknown>
-    if (channel === 'email') {
-      const required = ['smtp_host', 'smtp_user', 'smtp_password']
-      for (const f of required) if (!c[f]) return NextResponse.json({ error: `Missing ${f}` }, { status: 400 })
-      await saveChannelConfig(account_id, 'email', c as unknown as import('@/lib/channel-config').EmailConfig)
-    } else if (channel === 'teams') {
-      const required = ['azure_tenant_id', 'azure_client_id', 'azure_client_secret']
-      for (const f of required) if (!c[f]) return NextResponse.json({ error: `Missing ${f}` }, { status: 400 })
-      await saveChannelConfig(account_id, 'teams', c as unknown as import('@/lib/channel-config').TeamsConfig)
-    } else {
-      const required = ['phone_number_id', 'access_token']
-      for (const f of required) if (!c[f]) return NextResponse.json({ error: `Missing ${f}` }, { status: 400 })
-      await saveChannelConfig(account_id, 'whatsapp', c as unknown as import('@/lib/channel-config').WhatsAppConfig)
-    }
+    const missing = firstMissingConfigField(channel, c)
+    if (missing) return NextResponse.json({ error: `Missing ${missing}` }, { status: 400 })
+    await saveChannelConfig(account_id, channel, c as unknown as ChannelConfigMap[typeof channel])
 
     await writeAudit(gate.ctx.userId, 'channel_config.save', account_id, channel)
     return NextResponse.json({ success: true })

@@ -256,6 +256,9 @@ vi.mock('@/lib/channel-config', () => ({
   saveChannelConfig: vi.fn(async () => {}),
   deleteChannelConfig: vi.fn(async () => {}),
   getChannelConfig: vi.fn(async () => null),
+  // Field-presence validation is exercised in channel-config-validation.test.ts;
+  // here every posted config is complete, so treat all as valid.
+  firstMissingConfigField: vi.fn(() => null),
 }))
 vi.mock('@/lib/integration-settings', () => ({
   getAzureOAuth: vi.fn(async () => null),

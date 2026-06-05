@@ -1,0 +1,35 @@
+import { describe, it, expect } from 'vitest'
+import { firstMissingConfigField, REQUIRED_CONFIG_FIELDS } from '@/lib/channel-config'
+
+describe('channel config required-field validation', () => {
+  // Regression guard: these are the exact required fields the POST route used to
+  // check inline per channel.
+  it('declares the required fields per channel', () => {
+    expect(REQUIRED_CONFIG_FIELDS.email).toEqual(['smtp_host', 'smtp_user', 'smtp_password'])
+    expect(REQUIRED_CONFIG_FIELDS.teams).toEqual(['azure_tenant_id', 'azure_client_id', 'azure_client_secret'])
+    expect(REQUIRED_CONFIG_FIELDS.whatsapp).toEqual(['phone_number_id', 'access_token'])
+  })
+
+  it('returns the first missing field, or null when all present', () => {
+    expect(firstMissingConfigField('email', {})).toBe('smtp_host')
+    expect(firstMissingConfigField('email', { smtp_host: 'h' })).toBe('smtp_user')
+    expect(
+      firstMissingConfigField('email', { smtp_host: 'h', smtp_user: 'u', smtp_password: 'p' })
+    ).toBeNull()
+    expect(firstMissingConfigField('teams', { azure_tenant_id: 't', azure_client_id: 'c' })).toBe(
+      'azure_client_secret'
+    )
+    expect(
+      firstMissingConfigField('whatsapp', { phone_number_id: 'p', access_token: 't' })
+    ).toBeNull()
+  })
+
+  it('treats empty string / falsy values as missing (matches the prior inline check)', () => {
+    expect(firstMissingConfigField('whatsapp', { phone_number_id: '', access_token: 't' })).toBe(
+      'phone_number_id'
+    )
+    expect(firstMissingConfigField('email', { smtp_host: 'h', smtp_user: 'u', smtp_password: '' })).toBe(
+      'smtp_password'
+    )
+  })
+})

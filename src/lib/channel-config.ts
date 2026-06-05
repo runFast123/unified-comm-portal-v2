@@ -69,6 +69,31 @@ const SECRET_FIELDS: Record<Channel, string[]> = {
   whatsapp: ['access_token', 'verify_token'],
 }
 
+// Fields that MUST be present (non-empty) before a channel config can be saved.
+// Drives POST /api/channels/config so a new channel declares its required
+// credentials here in ONE place instead of a per-channel branch in the route.
+export const REQUIRED_CONFIG_FIELDS: Record<Channel, string[]> = {
+  email: ['smtp_host', 'smtp_user', 'smtp_password'],
+  teams: ['azure_tenant_id', 'azure_client_id', 'azure_client_secret'],
+  whatsapp: ['phone_number_id', 'access_token'],
+}
+
+/**
+ * Return the first required field that is missing/empty from a candidate
+ * config, or null when all are present. Mirrors the prior per-channel
+ * `if (!c[f]) ...` loop exactly — same falsiness check (empty string / 0 /
+ * false all count as missing).
+ */
+export function firstMissingConfigField(
+  channel: Channel,
+  config: Record<string, unknown>
+): string | null {
+  for (const f of REQUIRED_CONFIG_FIELDS[channel]) {
+    if (!config[f]) return f
+  }
+  return null
+}
+
 // ─── Env fallback ─────────────────────────────────────────────────────
 
 function envEmailConfig(): EmailConfig | null {

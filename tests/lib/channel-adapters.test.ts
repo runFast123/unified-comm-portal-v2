@@ -6,10 +6,20 @@ vi.mock('@/lib/channel-sender', () => ({
   sendEmail: vi.fn(async () => ({ ok: true, provider_message_id: 'email-1' })),
   sendTeams: vi.fn(async () => ({ ok: true, provider_message_id: 'teams-1' })),
   sendWhatsApp: vi.fn(async () => ({ ok: true, provider_message_id: 'wa-1' })),
+  verifyEmailConfig: vi.fn(async () => ({ ok: true })),
+  verifyTeamsConfig: vi.fn(async () => ({ ok: true })),
+  verifyWhatsAppConfig: vi.fn(async () => ({ ok: true })),
 }))
 
 import { sendViaChannel, getAdapter } from '@/lib/channels/adapters'
-import { sendEmail, sendTeams, sendWhatsApp } from '@/lib/channel-sender'
+import {
+  sendEmail,
+  sendTeams,
+  sendWhatsApp,
+  verifyEmailConfig,
+  verifyTeamsConfig,
+  verifyWhatsAppConfig,
+} from '@/lib/channel-sender'
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -100,5 +110,24 @@ describe('channel outbound adapters', () => {
     expect(getAdapter('telegram')).toBeNull()
     expect(getAdapter(null)).toBeNull()
     expect(getAdapter(undefined)).toBeNull()
+  })
+
+  it('routes verifyConfig to the matching provider verify fn', async () => {
+    const emailCfg = { smtp_host: 'h', smtp_user: 'u', smtp_password: 'p' }
+    expect(await getAdapter('email')!.verifyConfig(emailCfg)).toEqual({ ok: true })
+    expect(verifyEmailConfig).toHaveBeenCalledWith(emailCfg)
+
+    const teamsCfg = { azure_tenant_id: 't' }
+    await getAdapter('teams')!.verifyConfig(teamsCfg)
+    expect(verifyTeamsConfig).toHaveBeenCalledWith(teamsCfg)
+
+    const waCfg = { phone_number_id: 'p', access_token: 't' }
+    await getAdapter('whatsapp')!.verifyConfig(waCfg)
+    expect(verifyWhatsAppConfig).toHaveBeenCalledWith(waCfg)
+
+    // each verify fn used exactly once, no cross-routing
+    expect(verifyEmailConfig).toHaveBeenCalledTimes(1)
+    expect(verifyTeamsConfig).toHaveBeenCalledTimes(1)
+    expect(verifyWhatsAppConfig).toHaveBeenCalledTimes(1)
   })
 })

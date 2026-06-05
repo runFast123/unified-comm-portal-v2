@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase-server'
-import { verifyEmailConfig, verifyTeamsConfig, verifyWhatsAppConfig } from '@/lib/channel-sender'
+import { getAdapter } from '@/lib/channels/adapters'
 import { checkRateLimit, verifyAccountAccess } from '@/lib/api-helpers'
 import {
   getChannelConfig,
@@ -45,23 +45,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Forbidden: account scope mismatch' }, { status: 403 })
     }
 
-    switch (channel) {
-      case 'email': {
-        const cfg = body.config ?? (await getChannelConfig(account_id ?? null, 'email'))
-        if (!cfg) return NextResponse.json({ ok: false, error: 'No credentials configured' })
-        return NextResponse.json(await verifyEmailConfig(cfg as EmailConfig))
-      }
-      case 'teams': {
-        const cfg = body.config ?? (await getChannelConfig(account_id ?? null, 'teams'))
-        if (!cfg) return NextResponse.json({ ok: false, error: 'No credentials configured' })
-        return NextResponse.json(await verifyTeamsConfig(cfg as TeamsConfig))
-      }
-      case 'whatsapp': {
-        const cfg = body.config ?? (await getChannelConfig(account_id ?? null, 'whatsapp'))
-        if (!cfg) return NextResponse.json({ ok: false, error: 'No credentials configured' })
-        return NextResponse.json(await verifyWhatsAppConfig(cfg as WhatsAppConfig))
-      }
-    }
+    // Resolve credentials (caller-provided config, else the account's saved/env
+    // creds) and verify them via the channel adapter — one dispatch for all
+    // channels instead of a per-channel case.
+    const adapter = getAdapter(channel)
+    if (!adapter) return NextResponse.json({ error: 'channel must be email|teams|whatsapp' }, { status: 400 })
+    const cfg = body.config ?? (await getChannelConfig(account_id ?? null, channel))
+    if (!cfg) return NextResponse.json({ ok: false, error: 'No credentials configured' })
+    return NextResponse.json(await adapter.verifyConfig(cfg))
   } catch (err) {
     return NextResponse.json(
       { ok: false, error: err instanceof Error ? err.message : 'Test failed' },
