@@ -183,7 +183,7 @@ export async function findOrCreateConversation(
   supabase: Awaited<ReturnType<typeof createServiceRoleClient>>,
   params: {
     account_id: string
-    channel: 'teams' | 'email' | 'whatsapp'
+    channel: 'teams' | 'email' | 'whatsapp' | 'sms'
     teams_chat_id?: string | null
     email_thread_id?: string | null
     /** Email subject — used for the fallback subject+sender match. */
@@ -251,7 +251,11 @@ export async function findOrCreateConversation(
     let query = baseSelect()
     if (params.channel === 'teams' && params.teams_chat_id) {
       query = query.eq('teams_chat_id', params.teams_chat_id)
-    } else if (params.channel === 'whatsapp' && params.participant_phone) {
+    } else if (
+      (params.channel === 'whatsapp' || params.channel === 'sms') &&
+      params.participant_phone
+    ) {
+      // SMS and WhatsApp both group conversations by the customer's phone number.
       query = query.eq('participant_phone', params.participant_phone)
     }
     const { data, error: lookupError } = await query.limit(1).maybeSingle()
@@ -320,6 +324,7 @@ export async function findOrCreateConversation(
         // Email is keyed off the stable thread root now (NOT the sender).
         email: { col: 'email_thread_id', value: params.email_thread_id },
         whatsapp: { col: 'participant_phone', value: params.participant_phone },
+        sms: { col: 'participant_phone', value: params.participant_phone },
       }
       const key = CHANNEL_UNIQUE_KEY[params.channel]
       if (key && key.value) {

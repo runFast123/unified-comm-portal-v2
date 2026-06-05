@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseWhatsAppInbound, parseTeamsInbound, MAX_MESSAGE_LENGTH } from '@/lib/channels/inbound'
+import { parseWhatsAppInbound, parseTeamsInbound, parseSmsInbound, MAX_MESSAGE_LENGTH } from '@/lib/channels/inbound'
 
 describe('parseWhatsAppInbound', () => {
   it('normalizes a plain text message', () => {
@@ -129,5 +129,49 @@ describe('parseTeamsInbound', () => {
     const m = parseTeamsInbound({ message_text: 'b'.repeat(MAX_MESSAGE_LENGTH + 100) })
     expect(m.message_text.length).toBe(MAX_MESSAGE_LENGTH + '... [truncated]'.length)
     expect(m.message_text.endsWith('... [truncated]')).toBe(true)
+  })
+})
+
+describe('parseSmsInbound', () => {
+  it('normalizes an inbound SMS (always customer/inbound, text type)', () => {
+    const m = parseSmsInbound({
+      account_id: 'acct-1',
+      sender_phone: '+15557654321',
+      text: 'hi there',
+      timestamp: '2026-01-01T00:00:00.000Z',
+    })
+    expect(m).toEqual({
+      channel: 'sms',
+      account_id: 'acct-1',
+      message_text: 'hi there',
+      message_type: 'text',
+      timestamp: '2026-01-01T00:00:00.000Z',
+      sender_name: '+15557654321',
+      sender_email: null,
+      sender_phone: '+15557654321',
+      sender_type: 'customer',
+      direction: 'inbound',
+      replied: false,
+      reply_required: true,
+      teams_chat_id: null,
+      teams_message_id: null,
+      whatsapp_media_url: null,
+      attachments: null,
+    })
+  })
+
+  it('truncates an over-length body to 50KB + marker', () => {
+    const m = parseSmsInbound({ text: 'z'.repeat(MAX_MESSAGE_LENGTH + 50) })
+    expect(m.message_text.length).toBe(MAX_MESSAGE_LENGTH + '... [truncated]'.length)
+    expect(m.message_text.endsWith('... [truncated]')).toBe(true)
+  })
+
+  it('tolerates an empty payload (webhook handles the 400s)', () => {
+    const m = parseSmsInbound({})
+    expect(m.account_id).toBeNull()
+    expect(m.sender_phone).toBeNull()
+    expect(m.message_text).toBe('')
+    expect(m.sender_type).toBe('customer')
+    expect(m.direction).toBe('inbound')
   })
 })

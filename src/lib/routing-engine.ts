@@ -23,12 +23,12 @@
 
 import { createServiceRoleClient } from '@/lib/supabase-server'
 import { pickNextAgent } from '@/lib/agent-assignment'
-import type { RoutingRule, RoutingCondition } from '@/types/database'
+import type { RoutingRule, RoutingCondition, ChannelType } from '@/types/database'
 
 export type { RoutingRule } from '@/types/database'
 
 export interface RoutingContext {
-  channel: 'email' | 'teams' | 'whatsapp'
+  channel: ChannelType
   account_id: string
   sender_email: string | null
   sender_phone: string | null

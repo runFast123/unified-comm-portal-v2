@@ -148,3 +148,39 @@ export function parseTeamsInbound(raw: TeamsInboundRaw): InboundMessage {
     attachments,
   }
 }
+
+/** Raw inbound SMS relay payload (a relay in front of Twilio posts this). */
+export interface SmsInboundRaw {
+  account_id?: string
+  sender_phone?: string
+  text?: string
+  message_sid?: string
+  timestamp?: string
+}
+
+/**
+ * Normalize an inbound SMS. Like WhatsApp, SMS inbound is always a customer
+ * message (no agent path); plain text only (MMS not handled yet), grouped by
+ * the sender's phone number.
+ */
+export function parseSmsInbound(raw: SmsInboundRaw): InboundMessage {
+  const senderPhone = raw.sender_phone || null
+  return {
+    channel: 'sms',
+    account_id: raw.account_id || null,
+    message_text: truncate(raw.text ?? ''),
+    message_type: 'text',
+    timestamp: raw.timestamp || null,
+    sender_name: senderPhone,
+    sender_email: null,
+    sender_phone: senderPhone,
+    sender_type: 'customer',
+    direction: 'inbound',
+    replied: false,
+    reply_required: true,
+    teams_chat_id: null,
+    teams_message_id: null,
+    whatsapp_media_url: null,
+    attachments: null,
+  }
+}

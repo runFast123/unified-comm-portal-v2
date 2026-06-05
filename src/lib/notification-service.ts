@@ -12,13 +12,14 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import nodemailer from 'nodemailer'
 import { logInfo, logError } from '@/lib/logger'
+import type { ChannelType } from '@/types/database'
 
 export interface NotificationMessageData {
   id: string
   conversation_id: string
   account_id: string
   account_name: string
-  channel: 'email' | 'teams' | 'whatsapp'
+  channel: ChannelType
   sender_name: string | null
   sender_email?: string | null
   email_subject: string | null
