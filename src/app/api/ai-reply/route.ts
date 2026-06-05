@@ -3,7 +3,7 @@ import { createServiceRoleClient, createServerSupabaseClient } from '@/lib/supab
 import { callAI, getAccountSettings, checkRateLimit } from '@/lib/api-helpers'
 import { AIBudgetExceededError } from '@/lib/ai-usage'
 import { CircuitBreakerOpenError } from '@/lib/ai-circuit-breaker'
-import { sendEmail, sendTeams, sendWhatsApp } from '@/lib/channel-sender'
+import { sendViaChannel } from '@/lib/channels/adapters'
 import { logInfo, logError } from '@/lib/logger'
 import { getRequestId } from '@/lib/request-id'
 import type { ChannelType, AIReplyStatus } from '@/types/database'
@@ -542,11 +542,11 @@ export async function POST(request: Request) {
           // in the same thread in the recipient's mail client and our
           // Sent-folder reconcile re-attaches it by thread root.
           const replyToMessageId = (origMsg as { email_message_id?: string | null } | null)?.email_message_id ?? null
-          sendResult = await sendEmail({ accountId: account_id, to: convForReply.participant_email, subject, body: replyText, replyToMessageId })
+          sendResult = await sendViaChannel(channelKey, { accountId: account_id, to: convForReply.participant_email, subject, body: replyText, replyToMessageId })
         } else if (channelKey === 'teams' && convForReply?.teams_chat_id) {
-          sendResult = await sendTeams({ accountId: account_id, chatId: convForReply.teams_chat_id, body: replyText })
+          sendResult = await sendViaChannel(channelKey, { accountId: account_id, to: convForReply.teams_chat_id, body: replyText })
         } else if (channelKey === 'whatsapp' && convForReply?.participant_phone) {
-          sendResult = await sendWhatsApp({ accountId: account_id, toPhone: convForReply.participant_phone, body: replyText })
+          sendResult = await sendViaChannel(channelKey, { accountId: account_id, to: convForReply.participant_phone, body: replyText })
         }
 
         if (sendResult?.ok) {

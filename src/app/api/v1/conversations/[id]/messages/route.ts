@@ -2,7 +2,7 @@
  * POST /api/v1/conversations/[id]/messages
  *
  * Token-authed reply endpoint. Sends an outbound message on the conversation's
- * channel via the same `sendEmail` / `sendTeams` / `sendWhatsApp` pipeline
+ * channel via the shared `sendViaChannel` adapter pipeline
  * the dashboard uses — same provider configs, same audit, same realtime
  * notifications.
  *
@@ -24,7 +24,7 @@ import { NextResponse } from 'next/server'
 
 import { createServiceRoleClient } from '@/lib/supabase-server'
 import { requireToken } from '@/app/api/v1/_helpers'
-import { sendEmail, sendTeams, sendWhatsApp } from '@/lib/channel-sender'
+import { sendViaChannel } from '@/lib/channels/adapters'
 import { getReplyToMessageId } from '@/lib/api-helpers'
 import { logError, logInfo } from '@/lib/logger'
 
@@ -114,10 +114,10 @@ export async function POST(
     // Thread the API reply against the conversation's latest inbound email
     // (In-Reply-To / References) so it stays in the same thread.
     const replyToMessageId = await getReplyToMessageId(admin, id)
-    result = await sendEmail({
+    result = await sendViaChannel(conv.channel, {
       accountId: conv.account_id,
       to: conv.participant_email,
-      subject: subject || 'Re: Your inquiry',
+      subject,
       body: messageBody,
       replyToMessageId,
     })
@@ -125,18 +125,18 @@ export async function POST(
     if (!conv.teams_chat_id) {
       return NextResponse.json({ error: 'Conversation has no teams_chat_id' }, { status: 400 })
     }
-    result = await sendTeams({
+    result = await sendViaChannel(conv.channel, {
       accountId: conv.account_id,
-      chatId: conv.teams_chat_id,
+      to: conv.teams_chat_id,
       body: messageBody,
     })
   } else if (conv.channel === 'whatsapp') {
     if (!conv.participant_phone) {
       return NextResponse.json({ error: 'Conversation has no participant phone' }, { status: 400 })
     }
-    result = await sendWhatsApp({
+    result = await sendViaChannel(conv.channel, {
       accountId: conv.account_id,
-      toPhone: conv.participant_phone,
+      to: conv.participant_phone,
       body: messageBody,
     })
   } else {

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase-server'
-import { sendEmail, sendTeams, sendWhatsApp } from '@/lib/channel-sender'
+import { sendViaChannel } from '@/lib/channels/adapters'
 import { checkRateLimit, verifyAccountAccess, getReplyToMessageId } from '@/lib/api-helpers'
 import { getRequestId } from '@/lib/request-id'
 import { logError, logInfo } from '@/lib/logger'
@@ -236,10 +236,10 @@ export async function POST(request: Request) {
       // (In-Reply-To / References) so it stays in the same thread for the
       // recipient and the Sent-folder reconcile re-attaches it by thread root.
       const replyToMessageId = await getReplyToMessageId(admin, conversation_id)
-      result = await sendEmail({
+      result = await sendViaChannel(channel, {
         accountId: account_id,
         to: body.to,
-        subject: body.subject || 'Re: Your inquiry',
+        subject: body.subject,
         // Signature-augmented body for email; no-op when append_signature
         // is false or no signature is configured.
         body: resolvedReplyText,
@@ -251,10 +251,10 @@ export async function POST(request: Request) {
     } else if (channel === 'teams') {
       const chatId = body.teams_chat_id
       if (!chatId) return NextResponse.json({ error: 'Missing teams_chat_id', request_id: requestId }, { status: 400 })
-      result = await sendTeams({ accountId: account_id, chatId, body: reply_text })
+      result = await sendViaChannel(channel, { accountId: account_id, to: chatId, body: reply_text })
     } else {
       if (!body.to) return NextResponse.json({ error: 'Missing recipient phone', request_id: requestId }, { status: 400 })
-      result = await sendWhatsApp({ accountId: account_id, toPhone: body.to, body: reply_text })
+      result = await sendViaChannel(channel, { accountId: account_id, to: body.to, body: reply_text })
     }
 
     if (!result.ok) {

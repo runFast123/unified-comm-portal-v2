@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase-server'
-import { sendEmail, sendTeams, sendWhatsApp } from '@/lib/channel-sender'
+import { sendViaChannel } from '@/lib/channels/adapters'
 import { validateWebhookSecret, getReplyToMessageId } from '@/lib/api-helpers'
 import { logError, logInfo } from '@/lib/logger'
 import { getRequestId } from '@/lib/request-id'
@@ -122,10 +122,10 @@ export async function GET(request: Request) {
         // Thread against the conversation's latest inbound email so the
         // dispatched reply stays in the same thread (In-Reply-To / References).
         const replyToMessageId = await getReplyToMessageId(admin, row.conversation_id)
-        result = await sendEmail({
+        result = await sendViaChannel(row.channel, {
           accountId: row.account_id,
           to: row.to_address,
-          subject: row.subject || 'Re: Your inquiry',
+          subject: row.subject,
           body: row.reply_text,
           replyToMessageId,
         })
@@ -133,18 +133,18 @@ export async function GET(request: Request) {
         if (!row.teams_chat_id) {
           throw new Error('Missing teams_chat_id on scheduled row')
         }
-        result = await sendTeams({
+        result = await sendViaChannel(row.channel, {
           accountId: row.account_id,
-          chatId: row.teams_chat_id,
+          to: row.teams_chat_id,
           body: row.reply_text,
         })
       } else {
         if (!row.to_address) {
           throw new Error('Missing recipient phone on scheduled row')
         }
-        result = await sendWhatsApp({
+        result = await sendViaChannel(row.channel, {
           accountId: row.account_id,
-          toPhone: row.to_address,
+          to: row.to_address,
           body: row.reply_text,
         })
       }
@@ -326,10 +326,10 @@ export async function GET(request: Request) {
           // Thread the undo-window reply against the conversation's latest
           // inbound email (In-Reply-To / References) at dispatch time.
           const replyToMessageId = await getReplyToMessageId(admin, row.conversation_id)
-          result = await sendEmail({
+          result = await sendViaChannel(row.channel, {
             accountId: row.account_id,
             to: row.to_address,
-            subject: row.subject || 'Re: Your inquiry',
+            subject: row.subject,
             body: row.reply_text,
             replyToMessageId,
             attachments: atts.length > 0
@@ -338,16 +338,16 @@ export async function GET(request: Request) {
           })
         } else if (row.channel === 'teams') {
           if (!row.teams_chat_id) throw new Error('Missing teams_chat_id on pending row')
-          result = await sendTeams({
+          result = await sendViaChannel(row.channel, {
             accountId: row.account_id,
-            chatId: row.teams_chat_id,
+            to: row.teams_chat_id,
             body: row.reply_text,
           })
         } else {
           if (!row.to_address) throw new Error('Missing recipient phone on pending row')
-          result = await sendWhatsApp({
+          result = await sendViaChannel(row.channel, {
             accountId: row.account_id,
-            toPhone: row.to_address,
+            to: row.to_address,
             body: row.reply_text,
           })
         }
