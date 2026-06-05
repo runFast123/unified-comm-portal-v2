@@ -9,8 +9,9 @@ import {
   type ChannelConfigMap,
 } from '@/lib/channel-config'
 import { verifyAccountAccess } from '@/lib/api-helpers'
+import { CHANNEL_KEYS } from '@/lib/channels/registry'
 
-const CHANNELS: Channel[] = ['email', 'teams', 'whatsapp']
+const CHANNELS = CHANNEL_KEYS as Channel[]
 
 type AdminCtx = { userId: string }
 

@@ -7,6 +7,7 @@ import { ReportCard } from '@/components/reports/report-card'
 import { Badge } from '@/components/ui/badge'
 import { createClient } from '@/lib/supabase-client'
 import { cn, timeAgo } from '@/lib/utils'
+import { CHANNEL_KEYS } from '@/lib/channels/registry'
 import {
   TrendingUp,
   TrendingDown,
@@ -335,7 +336,7 @@ export function SentimentAnalyticsTab({ dateStart, activeCompanyId, companyAccou
           channel: ch,
         })
       })
-      setChannelSentiments(['email', 'teams', 'whatsapp'].map(ch => {
+      setChannelSentiments(CHANNEL_KEYS.map(ch => {
         const d = chMap[ch] || { pos: 0, neu: 0, neg: 0, total: 0, messages: [] }
         return {
           channel: ch,

@@ -7,6 +7,7 @@ import { logInfo, logError } from '@/lib/logger'
 import { getRequestId } from '@/lib/request-id'
 import { ASSIGNABLE_AGENT_ROLE_NAMES } from '@/lib/roles'
 import type { Category, Sentiment, Urgency } from '@/types/database'
+import { isChannel, CHANNEL_KEYS } from '@/lib/channels/registry'
 
 const DEFAULT_CLASSIFICATION_PROMPT = `You are a customer message classifier for a telecommunications company. Analyze the customer message and return a JSON object with the following fields:
 
@@ -114,10 +115,9 @@ export async function POST(request: Request) {
     }
 
     // Validate channel — reject invalid values
-    const VALID_CHANNELS = ['email', 'teams', 'whatsapp'] as const
-    if (!channel || !VALID_CHANNELS.includes(channel)) {
+    if (!isChannel(channel)) {
       return NextResponse.json(
-        { error: `Invalid or missing channel "${channel}". Valid channels: ${VALID_CHANNELS.join(', ')}` },
+        { error: `Invalid or missing channel "${channel}". Valid channels: ${CHANNEL_KEYS.join(', ')}` },
         { status: 400 }
       )
     }

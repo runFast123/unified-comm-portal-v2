@@ -21,10 +21,11 @@ import {
   createServerSupabaseClient,
   createServiceRoleClient,
 } from '@/lib/supabase-server'
+import { CHANNEL_KEYS } from '@/lib/channels/registry'
 
 // Channels we surface in the sidebar. Anything outside this list still gets
 // counted in `total` but doesn't appear as a chip.
-const CHANNELS = ['email', 'teams', 'whatsapp'] as const
+const CHANNELS = CHANNEL_KEYS
 const SENTIMENTS = ['positive', 'neutral', 'negative'] as const
 const URGENCIES = ['low', 'medium', 'high', 'urgent'] as const
 const STATUSES = [

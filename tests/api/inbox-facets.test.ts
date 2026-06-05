@@ -218,8 +218,11 @@ describe('GET /api/inbox/facets', () => {
     const body = (await res.json()) as Awaited<ReturnType<typeof GET>> extends Response ? Record<string, unknown> : never
     // 4 inbound non-spam messages in comp-a (m1-m4); m5/m6 are comp-b
     expect(body.total).toBe(4)
-    // Channels — email=2 (m1,m2), teams=1 (m3), whatsapp=1 (m4)
-    expect(body.channels).toEqual({ email: 2, teams: 1, whatsapp: 1 })
+    // Channels — email=2 (m1,m2), teams=1 (m3), whatsapp=1 (m4); the remaining
+    // registered channels have no messages here (facets surface ALL channels).
+    expect(body.channels).toEqual({
+      email: 2, teams: 1, whatsapp: 1, sms: 0, telegram: 0, messenger: 0, instagram: 0,
+    })
     // Sentiments
     expect(body.sentiments).toEqual({ positive: 1, neutral: 2, negative: 1 })
     // Urgencies

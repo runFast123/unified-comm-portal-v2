@@ -3,6 +3,7 @@ import { cookies } from 'next/headers'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase-server'
 import { getChannelConfig, saveChannelConfig } from '@/lib/channel-config'
 import { verifyAccountAccess } from '@/lib/api-helpers'
+import { isChannel } from '@/lib/channels/registry'
 import { getAzureOAuth } from '@/lib/integration-settings'
 import { getRequestId } from '@/lib/request-id'
 import { logError } from '@/lib/logger'
@@ -38,7 +39,7 @@ export async function POST(request: Request) {
     }
     const { name, channel_type, reuse_tenant_from_account_id, setup_mode } = body
     if (!name?.trim()) return NextResponse.json({ error: 'name required', request_id: requestId }, { status: 400 })
-    if (!channel_type || !['email', 'teams', 'whatsapp'].includes(channel_type)) {
+    if (!isChannel(channel_type)) {
       return NextResponse.json({ error: 'channel_type must be email|teams|whatsapp', request_id: requestId }, { status: 400 })
     }
     if (setup_mode && !['oauth', 'manual'].includes(setup_mode)) {

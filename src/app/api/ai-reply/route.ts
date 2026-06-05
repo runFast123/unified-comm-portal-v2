@@ -4,7 +4,7 @@ import { callAI, getAccountSettings, checkRateLimit } from '@/lib/api-helpers'
 import { AIBudgetExceededError } from '@/lib/ai-usage'
 import { CircuitBreakerOpenError } from '@/lib/ai-circuit-breaker'
 import { sendViaChannel } from '@/lib/channels/adapters'
-import { resolveRecipient } from '@/lib/channels/registry'
+import { resolveRecipient, isChannel, CHANNEL_KEYS } from '@/lib/channels/registry'
 import { logInfo, logError } from '@/lib/logger'
 import { getRequestId } from '@/lib/request-id'
 import type { ChannelType, AIReplyStatus } from '@/types/database'
@@ -216,10 +216,9 @@ export async function POST(request: Request) {
     }
 
     // Validate channel against allowed values — reject invalid channels
-    const validChannels: ChannelType[] = ['email', 'teams', 'whatsapp']
-    if (!channel || !validChannels.includes(channel as ChannelType)) {
+    if (!isChannel(channel)) {
       return NextResponse.json(
-        { error: `Invalid or missing channel "${channel}". Valid channels: ${validChannels.join(', ')}` },
+        { error: `Invalid or missing channel "${channel}". Valid channels: ${CHANNEL_KEYS.join(', ')}` },
         { status: 400 }
       )
     }

@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-client'
 import type { Account } from '@/types/database'
+import { CHANNEL_KEYS } from '@/lib/channels/registry'
 import { useUser } from '@/context/user-context'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -647,7 +648,7 @@ export default function ChannelsPage() {
         </Button>
       </div>
 
-      {(['email', 'teams', 'whatsapp'] as Channel[]).map((channel) => {
+      {(CHANNEL_KEYS as Channel[]).map((channel) => {
         const meta = CHANNEL_META[channel]
         const list = grouped[channel]
         return (
@@ -1049,7 +1050,7 @@ export default function ChannelsPage() {
               </button>
             </div>
             <div className="grid gap-3 p-5 sm:grid-cols-3">
-              {(['email', 'teams', 'whatsapp'] as Channel[]).map((ch) => {
+              {(CHANNEL_KEYS as Channel[]).map((ch) => {
                 const m = CHANNEL_META[ch]
                 const n = grouped[ch].length
                 // Match the palette tone to each channel's icon color.

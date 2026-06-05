@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { getChannel } from '@/lib/channels/registry'
+import { getChannel, CHANNEL_KEYS } from '@/lib/channels/registry'
 import {
   BarChart3,
   Layers,
@@ -312,7 +312,7 @@ export default function ReportsPage() {
 
       // 6. Build channel stats
       // Channel colour + label come from the registry (single source of truth).
-      const channels = ['email', 'teams', 'whatsapp'] as const
+      const channels = CHANNEL_KEYS
       const cStats = channels.map((ch) => {
         const chMsgs = (messages || []).filter((m) => m.channel === ch)
         const totalMessages = chMsgs.length

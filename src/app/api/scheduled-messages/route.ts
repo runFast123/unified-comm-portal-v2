@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase-server'
 import { checkRateLimit, verifyAccountAccess } from '@/lib/api-helpers'
 import { getAllowedAccountIds, isSuperAdmin } from '@/lib/auth'
+import { isChannel } from '@/lib/channels/registry'
 
 // Reject anything scheduled more than a year out. Keeps runaway/malicious
 // payloads from squatting on the scheduled-messages table forever.
@@ -46,7 +47,7 @@ export async function POST(request: Request) {
     if (!conversation_id || !channel || !reply_text || !scheduled_for) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
-    if (!(['email', 'teams', 'whatsapp'] as const).includes(channel)) {
+    if (!isChannel(channel)) {
       return NextResponse.json({ error: `Unsupported channel: ${channel}` }, { status: 400 })
     }
 

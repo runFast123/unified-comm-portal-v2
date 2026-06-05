@@ -160,3 +160,8 @@ export function resolveRecipient(
   if (!field) return null
   return src[field] ?? null
 }
+
+/** Type guard: is this a known / registered channel key? */
+export function isChannel(value: string | null | undefined): value is ChannelType {
+  return getChannel(value) !== null
+}

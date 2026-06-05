@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase-server'
 import { getAdapter } from '@/lib/channels/adapters'
+import { isChannel } from '@/lib/channels/registry'
 import { checkRateLimit, verifyAccountAccess } from '@/lib/api-helpers'
 import {
   getChannelConfig,
@@ -34,7 +35,7 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json()) as Partial<TestBody> & { channel?: Channel }
     const { channel, account_id } = body
-    if (!channel || !['email', 'teams', 'whatsapp'].includes(channel)) {
+    if (!isChannel(channel)) {
       return NextResponse.json({ error: 'channel must be email|teams|whatsapp' }, { status: 400 })
     }
 

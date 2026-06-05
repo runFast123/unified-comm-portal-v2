@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase-server'
 import { sendViaChannel } from '@/lib/channels/adapters'
-import { resolveRecipient } from '@/lib/channels/registry'
+import { resolveRecipient, isChannel } from '@/lib/channels/registry'
 import { checkRateLimit, verifyAccountAccess, getReplyToMessageId } from '@/lib/api-helpers'
 import { getRequestId } from '@/lib/request-id'
 import { logError, logInfo } from '@/lib/logger'
@@ -64,7 +64,7 @@ export async function POST(request: Request) {
     if (!channel || !account_id || !conversation_id || !reply_text) {
       return NextResponse.json({ error: 'Missing required fields', request_id: requestId }, { status: 400 })
     }
-    if (!(['email', 'teams', 'whatsapp'] as const).includes(channel)) {
+    if (!isChannel(channel)) {
       return NextResponse.json({ error: `Unsupported channel: ${channel}`, request_id: requestId }, { status: 400 })
     }
 
