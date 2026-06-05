@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase-server'
 import { sendViaChannel } from '@/lib/channels/adapters'
+import { resolveRecipient } from '@/lib/channels/registry'
 import { checkRateLimit, verifyAccountAccess, getReplyToMessageId } from '@/lib/api-helpers'
 import { getRequestId } from '@/lib/request-id'
 import { logError, logInfo } from '@/lib/logger'
@@ -248,13 +249,18 @@ export async function POST(request: Request) {
           ? attachments.map((a) => ({ path: a.path, filename: a.filename, contentType: a.contentType }))
           : undefined,
       })
-    } else if (channel === 'teams') {
-      const chatId = body.teams_chat_id
-      if (!chatId) return NextResponse.json({ error: 'Missing teams_chat_id', request_id: requestId }, { status: 400 })
-      result = await sendViaChannel(channel, { accountId: account_id, to: chatId, body: reply_text })
     } else {
-      if (!body.to) return NextResponse.json({ error: 'Missing recipient phone', request_id: requestId }, { status: 400 })
-      result = await sendViaChannel(channel, { accountId: account_id, to: body.to, body: reply_text })
+      // Non-email channels: resolve the recipient generically from the registry
+      // (teams -> chat id, whatsapp/sms -> phone, future channels by their
+      // recipientField) so a new channel needs no edit here. The request body
+      // carries the recipient in `to` (phone/email-shaped) or `teams_chat_id`.
+      const to = resolveRecipient(channel, {
+        teams_chat_id: body.teams_chat_id,
+        participant_phone: body.to,
+        participant_email: body.to,
+      })
+      if (!to) return NextResponse.json({ error: `Missing recipient for ${channel}`, request_id: requestId }, { status: 400 })
+      result = await sendViaChannel(channel, { accountId: account_id, to, body: reply_text })
     }
 
     if (!result.ok) {

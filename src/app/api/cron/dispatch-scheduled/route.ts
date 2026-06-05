@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase-server'
 import { sendViaChannel } from '@/lib/channels/adapters'
+import { resolveRecipient } from '@/lib/channels/registry'
 import { validateWebhookSecret, getReplyToMessageId } from '@/lib/api-helpers'
 import { logError, logInfo } from '@/lib/logger'
 import { getRequestId } from '@/lib/request-id'
@@ -129,22 +130,21 @@ export async function GET(request: Request) {
           body: row.reply_text,
           replyToMessageId,
         })
-      } else if (row.channel === 'teams') {
-        if (!row.teams_chat_id) {
-          throw new Error('Missing teams_chat_id on scheduled row')
-        }
-        result = await sendViaChannel(row.channel, {
-          accountId: row.account_id,
-          to: row.teams_chat_id,
-          body: row.reply_text,
-        })
       } else {
-        if (!row.to_address) {
-          throw new Error('Missing recipient phone on scheduled row')
+        // Non-email channels: registry-driven recipient (teams -> chat id,
+        // whatsapp/sms -> phone). The scheduled row carries to_address +
+        // teams_chat_id.
+        const to = resolveRecipient(row.channel, {
+          teams_chat_id: row.teams_chat_id,
+          participant_phone: row.to_address,
+          participant_email: row.to_address,
+        })
+        if (!to) {
+          throw new Error(`Missing recipient for ${row.channel} on scheduled row`)
         }
         result = await sendViaChannel(row.channel, {
           accountId: row.account_id,
-          to: row.to_address,
+          to,
           body: row.reply_text,
         })
       }
@@ -336,18 +336,19 @@ export async function GET(request: Request) {
               ? atts.map((a) => ({ path: a.path, filename: a.filename, contentType: a.contentType }))
               : undefined,
           })
-        } else if (row.channel === 'teams') {
-          if (!row.teams_chat_id) throw new Error('Missing teams_chat_id on pending row')
-          result = await sendViaChannel(row.channel, {
-            accountId: row.account_id,
-            to: row.teams_chat_id,
-            body: row.reply_text,
-          })
         } else {
-          if (!row.to_address) throw new Error('Missing recipient phone on pending row')
+          // Non-email channels: registry-driven recipient (teams -> chat id,
+          // whatsapp/sms -> phone). The pending row carries to_address +
+          // teams_chat_id.
+          const to = resolveRecipient(row.channel, {
+            teams_chat_id: row.teams_chat_id,
+            participant_phone: row.to_address,
+            participant_email: row.to_address,
+          })
+          if (!to) throw new Error(`Missing recipient for ${row.channel} on pending row`)
           result = await sendViaChannel(row.channel, {
             accountId: row.account_id,
-            to: row.to_address,
+            to,
             body: row.reply_text,
           })
         }

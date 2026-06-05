@@ -25,6 +25,7 @@ import { NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase-server'
 import { requireToken } from '@/app/api/v1/_helpers'
 import { sendViaChannel } from '@/lib/channels/adapters'
+import { resolveRecipient } from '@/lib/channels/registry'
 import { getReplyToMessageId } from '@/lib/api-helpers'
 import { logError, logInfo } from '@/lib/logger'
 
@@ -121,26 +122,19 @@ export async function POST(
       body: messageBody,
       replyToMessageId,
     })
-  } else if (conv.channel === 'teams') {
-    if (!conv.teams_chat_id) {
-      return NextResponse.json({ error: 'Conversation has no teams_chat_id' }, { status: 400 })
-    }
-    result = await sendViaChannel(conv.channel, {
-      accountId: conv.account_id,
-      to: conv.teams_chat_id,
-      body: messageBody,
-    })
-  } else if (conv.channel === 'whatsapp') {
-    if (!conv.participant_phone) {
-      return NextResponse.json({ error: 'Conversation has no participant phone' }, { status: 400 })
-    }
-    result = await sendViaChannel(conv.channel, {
-      accountId: conv.account_id,
-      to: conv.participant_phone,
-      body: messageBody,
-    })
   } else {
-    return NextResponse.json({ error: `Unsupported channel: ${conv.channel}` }, { status: 400 })
+    // Non-email channels: resolve the recipient generically from the registry
+    // (teams -> chat id, whatsapp/sms -> phone, future channels by their
+    // recipientField). Unknown channel / missing recipient -> null -> 400.
+    const to = resolveRecipient(conv.channel, conv)
+    if (!to) {
+      return NextResponse.json({ error: `Conversation has no recipient for channel ${conv.channel}` }, { status: 400 })
+    }
+    result = await sendViaChannel(conv.channel, {
+      accountId: conv.account_id,
+      to,
+      body: messageBody,
+    })
   }
 
   if (!result.ok) {

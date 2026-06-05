@@ -30,6 +30,13 @@ export interface ChannelDescriptor {
   textClass: string
   /** Tailwind bg-colour class for the brand hex. */
   bgClass: string
+  /**
+   * Which conversation column holds this channel's OUTBOUND recipient. Lets the
+   * send sites resolve the recipient generically (see resolveRecipient) instead
+   * of branching per channel. Channels that share an address kind reuse a field
+   * (SMS reuses participant_phone; a chat-style channel reuses teams_chat_id).
+   */
+  recipientField: 'participant_email' | 'teams_chat_id' | 'participant_phone'
   /** Forward-looking adapter capabilities (not yet wired to behaviour). */
   capabilities: {
     inbound: boolean
@@ -50,6 +57,7 @@ export const CHANNELS: Record<ChannelType, ChannelDescriptor> = {
     hex: '#6264a7',
     textClass: 'text-[#6264a7]',
     bgClass: 'bg-[#6264a7]',
+    recipientField: 'teams_chat_id',
     capabilities: { inbound: true, outbound: true, attachments: true, threading: true },
   },
   email: {
@@ -59,6 +67,7 @@ export const CHANNELS: Record<ChannelType, ChannelDescriptor> = {
     hex: '#ea4335',
     textClass: 'text-[#ea4335]',
     bgClass: 'bg-[#ea4335]',
+    recipientField: 'participant_email',
     capabilities: { inbound: true, outbound: true, attachments: true, threading: true },
   },
   whatsapp: {
@@ -68,6 +77,7 @@ export const CHANNELS: Record<ChannelType, ChannelDescriptor> = {
     hex: '#25d366',
     textClass: 'text-[#25d366]',
     bgClass: 'bg-[#25d366]',
+    recipientField: 'participant_phone',
     capabilities: { inbound: true, outbound: true, attachments: true, threading: true },
   },
   sms: {
@@ -77,6 +87,7 @@ export const CHANNELS: Record<ChannelType, ChannelDescriptor> = {
     hex: '#f22f46',
     textClass: 'text-[#f22f46]',
     bgClass: 'bg-[#f22f46]',
+    recipientField: 'participant_phone',
     // Plain text SMS via Twilio: no native threading; MMS/attachments not handled yet.
     capabilities: { inbound: true, outbound: true, attachments: false, threading: false },
   },
@@ -92,4 +103,27 @@ export const CHANNEL_LIST: ChannelDescriptor[] = Object.values(CHANNELS)
 export function getChannel(key: string | null | undefined): ChannelDescriptor | null {
   if (!key) return null
   return (CHANNELS as Record<string, ChannelDescriptor>)[key] ?? null
+}
+
+/** The conversation fields a send site can resolve a recipient from. */
+export interface RecipientSource {
+  participant_email?: string | null
+  teams_chat_id?: string | null
+  participant_phone?: string | null
+}
+
+/**
+ * Resolve a channel's outbound recipient from a source object (a conversation
+ * row, or a per-site shim built from a request body / scheduled row). Returns
+ * null for an unknown channel or a missing recipient — callers turn that into
+ * the appropriate "no recipient" error. The single place that knows which field
+ * each channel sends to, so a new channel needs no send-site edit.
+ */
+export function resolveRecipient(
+  channel: string | null | undefined,
+  src: RecipientSource
+): string | null {
+  const field = getChannel(channel)?.recipientField
+  if (!field) return null
+  return src[field] ?? null
 }

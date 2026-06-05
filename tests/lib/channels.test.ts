@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { CHANNELS, CHANNEL_KEYS, CHANNEL_LIST, getChannel } from '@/lib/channels/registry'
+import { CHANNELS, CHANNEL_KEYS, CHANNEL_LIST, getChannel, resolveRecipient } from '@/lib/channels/registry'
 import { getChannelLabel, getChannelColor, getChannelBgColor } from '@/lib/utils'
 
 describe('channel registry', () => {
@@ -49,5 +49,15 @@ describe('channel registry', () => {
     expect(getChannelLabel('sms')).toBe('SMS')
     expect(getChannelColor('sms')).toBe('text-[#f22f46]')
     expect(getChannelBgColor('sms')).toBe('bg-[#f22f46]')
+  })
+
+  it('resolveRecipient maps each channel to its recipient field', () => {
+    const src = { participant_email: 'a@b.com', teams_chat_id: '19:chat', participant_phone: '+15551234567' }
+    expect(resolveRecipient('email', src)).toBe('a@b.com')
+    expect(resolveRecipient('teams', src)).toBe('19:chat')
+    expect(resolveRecipient('whatsapp', src)).toBe('+15551234567')
+    expect(resolveRecipient('sms', src)).toBe('+15551234567') // SMS reuses participant_phone
+    expect(resolveRecipient('unknown', src)).toBeNull()
+    expect(resolveRecipient('email', {})).toBeNull() // missing field -> null
   })
 })

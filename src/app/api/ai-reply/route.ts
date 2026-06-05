@@ -4,6 +4,7 @@ import { callAI, getAccountSettings, checkRateLimit } from '@/lib/api-helpers'
 import { AIBudgetExceededError } from '@/lib/ai-usage'
 import { CircuitBreakerOpenError } from '@/lib/ai-circuit-breaker'
 import { sendViaChannel } from '@/lib/channels/adapters'
+import { resolveRecipient } from '@/lib/channels/registry'
 import { logInfo, logError } from '@/lib/logger'
 import { getRequestId } from '@/lib/request-id'
 import type { ChannelType, AIReplyStatus } from '@/types/database'
@@ -547,10 +548,14 @@ export async function POST(request: Request) {
           // Sent-folder reconcile re-attaches it by thread root.
           const replyToMessageId = (origMsg as { email_message_id?: string | null } | null)?.email_message_id ?? null
           sendResult = await sendViaChannel(channelKey, { accountId: account_id, to: convForReply.participant_email, subject, body: replyText, replyToMessageId })
-        } else if (channelKey === 'teams' && convForReply?.teams_chat_id) {
-          sendResult = await sendViaChannel(channelKey, { accountId: account_id, to: convForReply.teams_chat_id, body: replyText })
-        } else if (channelKey === 'whatsapp' && convForReply?.participant_phone) {
-          sendResult = await sendViaChannel(channelKey, { accountId: account_id, to: convForReply.participant_phone, body: replyText })
+        } else {
+          // Non-email channels: resolve the recipient from the registry; skip
+          // (leave sendResult undefined) when there's no recipient, exactly as
+          // the prior per-channel guards did.
+          const to = resolveRecipient(channelKey, convForReply ?? {})
+          if (to) {
+            sendResult = await sendViaChannel(channelKey, { accountId: account_id, to, body: replyText })
+          }
         }
 
         if (sendResult?.ok) {
