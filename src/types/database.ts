@@ -1,4 +1,4 @@
-export type ChannelType = 'teams' | 'email' | 'whatsapp' | 'sms' | 'telegram' | 'messenger'
+export type ChannelType = 'teams' | 'email' | 'whatsapp' | 'sms' | 'telegram' | 'messenger' | 'instagram'
 export type SenderType = 'customer' | 'agent' | 'ai'
 export type MessageType = 'text' | 'attachment' | 'card' | 'system'
 export type Direction = 'inbound' | 'outbound'

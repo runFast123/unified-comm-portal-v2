@@ -7,6 +7,7 @@ import {
   type SmsConfig,
   type TelegramConfig,
   type MessengerConfig,
+  type InstagramConfig,
 } from '@/lib/channel-config'
 
 export type SendResult =
@@ -68,6 +69,14 @@ export interface SendMessengerInput {
   recipientId: string
   body: string
   configOverride?: MessengerConfig
+}
+
+export interface SendInstagramInput {
+  accountId: string | null
+  /** The recipient's Instagram-scoped id (IGSID). */
+  recipientId: string
+  body: string
+  configOverride?: InstagramConfig
 }
 
 // ─── HTML escaping (anti-XSS for outbound email) ─────────────────────
@@ -515,5 +524,53 @@ export async function verifyMessengerConfig(cfg: MessengerConfig): Promise<SendR
     return { ok: true }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : 'Messenger verify failed' }
+  }
+}
+
+// ─── Instagram DM (Meta Graph API) ────────────────────────────────────
+// Uses the same /me/messages endpoint as Messenger via the linked Page token;
+// the recipient is an Instagram-scoped id (IGSID).
+
+export async function sendInstagram(input: SendInstagramInput): Promise<SendResult> {
+  try {
+    const cfg = input.configOverride ?? (await getChannelConfig(input.accountId, 'instagram'))
+    if (!cfg) return { ok: false, error: 'Instagram is not configured for this account' }
+
+    const version = cfg.graph_version || 'v21.0'
+    const res = await withRetry(
+      () =>
+        fetch(`https://graph.facebook.com/${version}/me/messages`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${cfg.page_access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            recipient: { id: input.recipientId },
+            messaging_type: 'RESPONSE',
+            message: { text: input.body },
+          }),
+        }),
+      (r) => r instanceof Response && isTransientStatus(r.status)
+    )
+    if (!res.ok) return { ok: false, error: `Meta ${res.status}: ${await res.text()}` }
+    const json = (await res.json()) as { message_id?: string }
+    return { ok: true, provider_message_id: json.message_id }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'Instagram send failed' }
+  }
+}
+
+export async function verifyInstagramConfig(cfg: InstagramConfig): Promise<SendResult> {
+  try {
+    const version = cfg.graph_version || 'v21.0'
+    const res = await fetch(
+      `https://graph.facebook.com/${version}/${encodeURIComponent(cfg.page_id)}?fields=id,name`,
+      { headers: { Authorization: `Bearer ${cfg.page_access_token}` } }
+    )
+    if (!res.ok) return { ok: false, error: `Meta ${res.status}: ${await res.text()}` }
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'Instagram verify failed' }
   }
 }

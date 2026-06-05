@@ -15,6 +15,8 @@ vi.mock('@/lib/channel-sender', () => ({
   verifyTelegramConfig: vi.fn(async () => ({ ok: true })),
   sendMessenger: vi.fn(async () => ({ ok: true, provider_message_id: 'fb-1' })),
   verifyMessengerConfig: vi.fn(async () => ({ ok: true })),
+  sendInstagram: vi.fn(async () => ({ ok: true, provider_message_id: 'ig-1' })),
+  verifyInstagramConfig: vi.fn(async () => ({ ok: true })),
 }))
 
 import { sendViaChannel, getAdapter } from '@/lib/channels/adapters'
@@ -25,12 +27,14 @@ import {
   sendSms,
   sendTelegram,
   sendMessenger,
+  sendInstagram,
   verifyEmailConfig,
   verifyTeamsConfig,
   verifyWhatsAppConfig,
   verifySmsConfig,
   verifyTelegramConfig,
   verifyMessengerConfig,
+  verifyInstagramConfig,
 } from '@/lib/channel-sender'
 
 beforeEach(() => {
@@ -172,5 +176,15 @@ describe('channel outbound adapters', () => {
     const fbCfg = { page_id: '111', page_access_token: 'tok' }
     await getAdapter('messenger')!.verifyConfig(fbCfg)
     expect(verifyMessengerConfig).toHaveBeenCalledWith(fbCfg)
+  })
+
+  it('routes instagram to sendInstagram (to -> recipientId) and verifyConfig to verifyInstagramConfig', async () => {
+    const res = await sendViaChannel('instagram', { accountId: 'acct-7', to: 'igsid-456', body: 'ig message' })
+    expect(res).toEqual({ ok: true, provider_message_id: 'ig-1' })
+    expect(sendInstagram).toHaveBeenCalledWith({ accountId: 'acct-7', recipientId: 'igsid-456', body: 'ig message' })
+
+    const igCfg = { page_id: '222', page_access_token: 'tok2' }
+    await getAdapter('instagram')!.verifyConfig(igCfg)
+    expect(verifyInstagramConfig).toHaveBeenCalledWith(igCfg)
   })
 })

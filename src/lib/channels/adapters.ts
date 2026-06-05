@@ -6,16 +6,18 @@ import {
   sendSms,
   sendTelegram,
   sendMessenger,
+  sendInstagram,
   verifyEmailConfig,
   verifyTeamsConfig,
   verifyWhatsAppConfig,
   verifySmsConfig,
   verifyTelegramConfig,
   verifyMessengerConfig,
+  verifyInstagramConfig,
   type SendResult,
   type SendEmailAttachment,
 } from '@/lib/channel-sender'
-import type { EmailConfig, TeamsConfig, WhatsAppConfig, SmsConfig, TelegramConfig, MessengerConfig } from '@/lib/channel-config'
+import type { EmailConfig, TeamsConfig, WhatsAppConfig, SmsConfig, TelegramConfig, MessengerConfig, InstagramConfig } from '@/lib/channel-config'
 
 /**
  * Normalized outbound message — the channel-agnostic shape every send site
@@ -95,6 +97,10 @@ const ADAPTERS: Record<ChannelType, ChannelAdapter> = {
   messenger: {
     send: (m) => sendMessenger({ accountId: m.accountId, recipientId: m.to, body: m.body }),
     verifyConfig: (cfg) => verifyMessengerConfig(cfg as MessengerConfig),
+  },
+  instagram: {
+    send: (m) => sendInstagram({ accountId: m.accountId, recipientId: m.to, body: m.body }),
+    verifyConfig: (cfg) => verifyInstagramConfig(cfg as InstagramConfig),
   },
 }
 

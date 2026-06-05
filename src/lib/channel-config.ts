@@ -2,7 +2,7 @@ import { createServiceRoleClient } from '@/lib/supabase-server'
 import { encrypt, decrypt } from '@/lib/encryption'
 import { logError } from '@/lib/logger'
 
-export type Channel = 'email' | 'teams' | 'whatsapp' | 'sms' | 'telegram' | 'messenger'
+export type Channel = 'email' | 'teams' | 'whatsapp' | 'sms' | 'telegram' | 'messenger' | 'instagram'
 
 // ─── Config shapes per channel ────────────────────────────────────────
 
@@ -76,6 +76,14 @@ export interface MessengerConfig {
   graph_version?: string
 }
 
+export interface InstagramConfig {
+  /** Facebook Page ID linked to the Instagram professional account. */
+  page_id: string
+  /** Page Access Token (needs instagram_manage_messages). */
+  page_access_token: string
+  graph_version?: string
+}
+
 export type ChannelConfigMap = {
   email: EmailConfig
   teams: TeamsConfig
@@ -83,6 +91,7 @@ export type ChannelConfigMap = {
   sms: SmsConfig
   telegram: TelegramConfig
   messenger: MessengerConfig
+  instagram: InstagramConfig
 }
 
 // Fields that should never be returned to the UI in clear text
@@ -93,6 +102,7 @@ const SECRET_FIELDS: Record<Channel, string[]> = {
   sms: ['auth_token'],
   telegram: ['bot_token'],
   messenger: ['page_access_token'],
+  instagram: ['page_access_token'],
 }
 
 // Fields that MUST be present (non-empty) before a channel config can be saved.
@@ -105,6 +115,7 @@ export const REQUIRED_CONFIG_FIELDS: Record<Channel, string[]> = {
   sms: ['account_sid', 'auth_token', 'from_number'],
   telegram: ['bot_token'],
   messenger: ['page_id', 'page_access_token'],
+  instagram: ['page_id', 'page_access_token'],
 }
 
 /**
@@ -189,13 +200,21 @@ function envMessengerConfig(): MessengerConfig | null {
   return { page_id: pageId, page_access_token: token, graph_version: process.env.MESSENGER_GRAPH_VERSION || 'v21.0' }
 }
 
+function envInstagramConfig(): InstagramConfig | null {
+  const pageId = process.env.INSTAGRAM_PAGE_ID
+  const token = process.env.INSTAGRAM_PAGE_ACCESS_TOKEN
+  if (!pageId || !token) return null
+  return { page_id: pageId, page_access_token: token, graph_version: process.env.INSTAGRAM_GRAPH_VERSION || 'v21.0' }
+}
+
 function envConfig<C extends Channel>(channel: C): ChannelConfigMap[C] | null {
   if (channel === 'email') return envEmailConfig() as ChannelConfigMap[C] | null
   if (channel === 'teams') return envTeamsConfig() as ChannelConfigMap[C] | null
   if (channel === 'whatsapp') return envWhatsAppConfig() as ChannelConfigMap[C] | null
   if (channel === 'sms') return envSmsConfig() as ChannelConfigMap[C] | null
   if (channel === 'telegram') return envTelegramConfig() as ChannelConfigMap[C] | null
-  return envMessengerConfig() as ChannelConfigMap[C] | null
+  if (channel === 'messenger') return envMessengerConfig() as ChannelConfigMap[C] | null
+  return envInstagramConfig() as ChannelConfigMap[C] | null
 }
 
 // ─── DB lookup (with env fallback) ────────────────────────────────────

@@ -260,3 +260,41 @@ export function parseMessengerInbound(raw: MessengerInboundRaw): InboundMessage 
     attachments: null,
   }
 }
+
+/** Raw inbound Instagram DM relay payload (a relay normalizes Meta's webhook). */
+export interface InstagramInboundRaw {
+  account_id?: string
+  /** The sender's Instagram-scoped id (IGSID). */
+  sender_id?: string
+  sender_name?: string
+  text?: string
+  message_id?: string
+  timestamp?: string
+}
+
+/**
+ * Normalize an inbound Instagram DM. Grouped by the sender's Instagram-scoped
+ * id (IGSID), stored in teams_chat_id (the shared chat-id column). Always a
+ * customer message; plain text.
+ */
+export function parseInstagramInbound(raw: InstagramInboundRaw): InboundMessage {
+  const igsid = raw.sender_id || null
+  return {
+    channel: 'instagram',
+    account_id: raw.account_id || null,
+    message_text: truncate(raw.text ?? ''),
+    message_type: 'text',
+    timestamp: raw.timestamp || null,
+    sender_name: raw.sender_name || igsid,
+    sender_email: null,
+    sender_phone: null,
+    sender_type: 'customer',
+    direction: 'inbound',
+    replied: false,
+    reply_required: true,
+    teams_chat_id: igsid,
+    teams_message_id: raw.message_id || null,
+    whatsapp_media_url: null,
+    attachments: null,
+  }
+}

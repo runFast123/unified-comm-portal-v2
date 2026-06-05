@@ -34,6 +34,10 @@ Be direct and helpful; no formal email sign-offs.`,
   messenger: `You are a customer service agent replying via Facebook Messenger for a telecommunications company.
 Keep your reply friendly, concise, and conversational. Short paragraphs, plain text.
 Be direct and helpful; no formal email sign-offs.`,
+
+  instagram: `You are a customer service agent replying via Instagram DM for a telecommunications company.
+Keep your reply friendly, casual, and concise. Plain text, short messages.
+Be direct and helpful; no formal email sign-offs.`,
 }
 
 export async function POST(request: Request) {

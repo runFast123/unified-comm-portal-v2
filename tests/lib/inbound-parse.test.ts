@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseWhatsAppInbound, parseTeamsInbound, parseSmsInbound, parseTelegramInbound, parseMessengerInbound, MAX_MESSAGE_LENGTH } from '@/lib/channels/inbound'
+import { parseWhatsAppInbound, parseTeamsInbound, parseSmsInbound, parseTelegramInbound, parseMessengerInbound, parseInstagramInbound, MAX_MESSAGE_LENGTH } from '@/lib/channels/inbound'
 
 describe('parseWhatsAppInbound', () => {
   it('normalizes a plain text message', () => {
@@ -257,5 +257,32 @@ describe('parseMessengerInbound', () => {
     expect(empty.teams_chat_id).toBeNull()
     expect(empty.message_text).toBe('')
     expect(empty.sender_type).toBe('customer')
+  })
+})
+
+describe('parseInstagramInbound', () => {
+  it('normalizes an Instagram DM (sender IGSID -> teams_chat_id, mid -> teams_message_id)', () => {
+    const m = parseInstagramInbound({
+      account_id: 'acct-1',
+      sender_id: 'igsid-777',
+      sender_name: 'Jane',
+      text: 'hey',
+      message_id: 'mid.ig',
+      timestamp: '2026-01-01T00:00:00.000Z',
+    })
+    expect(m.channel).toBe('instagram')
+    expect(m.teams_chat_id).toBe('igsid-777')
+    expect(m.teams_message_id).toBe('mid.ig')
+    expect(m.sender_name).toBe('Jane')
+    expect(m.sender_type).toBe('customer')
+    expect(m.direction).toBe('inbound')
+    expect(m.message_text).toBe('hey')
+  })
+
+  it('falls back sender_name to the IGSID and tolerates empty payloads', () => {
+    expect(parseInstagramInbound({ sender_id: 'igsid-1', text: 'hi' }).sender_name).toBe('igsid-1')
+    const empty = parseInstagramInbound({})
+    expect(empty.teams_chat_id).toBeNull()
+    expect(empty.message_text).toBe('')
   })
 })

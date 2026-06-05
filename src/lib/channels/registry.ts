@@ -113,6 +113,17 @@ export const CHANNELS: Record<ChannelType, ChannelDescriptor> = {
     recipientField: 'teams_chat_id',
     capabilities: { inbound: true, outbound: true, attachments: false, threading: false },
   },
+  instagram: {
+    key: 'instagram',
+    label: 'Instagram',
+    filterLabel: 'Instagram Only',
+    hex: '#e4405f',
+    textClass: 'text-[#e4405f]',
+    bgClass: 'bg-[#e4405f]',
+    // Instagram DM groups by the Instagram-scoped id (IGSID), reusing teams_chat_id.
+    recipientField: 'teams_chat_id',
+    capabilities: { inbound: true, outbound: true, attachments: false, threading: false },
+  },
 }
 
 /** All channel keys, in registry (display) order. */

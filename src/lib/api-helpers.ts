@@ -183,7 +183,7 @@ export async function findOrCreateConversation(
   supabase: Awaited<ReturnType<typeof createServiceRoleClient>>,
   params: {
     account_id: string
-    channel: 'teams' | 'email' | 'whatsapp' | 'sms' | 'telegram' | 'messenger'
+    channel: 'teams' | 'email' | 'whatsapp' | 'sms' | 'telegram' | 'messenger' | 'instagram'
     teams_chat_id?: string | null
     email_thread_id?: string | null
     /** Email subject — used for the fallback subject+sender match. */
@@ -252,10 +252,12 @@ export async function findOrCreateConversation(
     if (
       (params.channel === 'teams' ||
         params.channel === 'telegram' ||
-        params.channel === 'messenger') &&
+        params.channel === 'messenger' ||
+        params.channel === 'instagram') &&
       params.teams_chat_id
     ) {
-      // Teams, Telegram and Messenger all group by an opaque chat / PSID id.
+      // Teams, Telegram, Messenger and Instagram all group by an opaque chat /
+      // PSID / IGSID id.
       query = query.eq('teams_chat_id', params.teams_chat_id)
     } else if (
       (params.channel === 'whatsapp' || params.channel === 'sms') &&
@@ -333,6 +335,7 @@ export async function findOrCreateConversation(
         sms: { col: 'participant_phone', value: params.participant_phone },
         telegram: { col: 'teams_chat_id', value: params.teams_chat_id },
         messenger: { col: 'teams_chat_id', value: params.teams_chat_id },
+        instagram: { col: 'teams_chat_id', value: params.teams_chat_id },
       }
       const key = CHANNEL_UNIQUE_KEY[params.channel]
       if (key && key.value) {

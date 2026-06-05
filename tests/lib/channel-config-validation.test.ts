@@ -11,6 +11,7 @@ describe('channel config required-field validation', () => {
     expect(REQUIRED_CONFIG_FIELDS.sms).toEqual(['account_sid', 'auth_token', 'from_number'])
     expect(REQUIRED_CONFIG_FIELDS.telegram).toEqual(['bot_token'])
     expect(REQUIRED_CONFIG_FIELDS.messenger).toEqual(['page_id', 'page_access_token'])
+    expect(REQUIRED_CONFIG_FIELDS.instagram).toEqual(['page_id', 'page_access_token'])
   })
 
   it('detects missing SMS (Twilio) fields in order', () => {

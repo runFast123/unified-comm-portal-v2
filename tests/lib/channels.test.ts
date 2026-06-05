@@ -4,7 +4,7 @@ import { getChannelLabel, getChannelColor, getChannelBgColor } from '@/lib/utils
 
 describe('channel registry', () => {
   it('registers the known channels with complete descriptors', () => {
-    expect([...CHANNEL_KEYS].sort()).toEqual(['email', 'messenger', 'sms', 'teams', 'telegram', 'whatsapp'])
+    expect([...CHANNEL_KEYS].sort()).toEqual(['email', 'instagram', 'messenger', 'sms', 'teams', 'telegram', 'whatsapp'])
     expect(CHANNEL_LIST.length).toBe(CHANNEL_KEYS.length)
     for (const c of CHANNEL_LIST) {
       expect(CHANNELS[c.key]).toBe(c) // key matches its map slot
@@ -28,6 +28,7 @@ describe('channel registry', () => {
     expect(getChannel('sms')?.label).toBe('SMS')
     expect(getChannel('telegram')?.label).toBe('Telegram')
     expect(getChannel('messenger')?.label).toBe('Messenger')
+    expect(getChannel('instagram')?.label).toBe('Instagram')
     expect(getChannel('discord')).toBeNull()
     expect(getChannel(null)).toBeNull()
     expect(getChannel(undefined)).toBeNull()
@@ -59,6 +60,10 @@ describe('channel registry', () => {
     expect(getChannelLabel('messenger')).toBe('Messenger')
     expect(getChannelColor('messenger')).toBe('text-[#0084ff]')
     expect(getChannelBgColor('messenger')).toBe('bg-[#0084ff]')
+
+    expect(getChannelLabel('instagram')).toBe('Instagram')
+    expect(getChannelColor('instagram')).toBe('text-[#e4405f]')
+    expect(getChannelBgColor('instagram')).toBe('bg-[#e4405f]')
   })
 
   it('resolveRecipient maps each channel to its recipient field', () => {
@@ -69,6 +74,7 @@ describe('channel registry', () => {
     expect(resolveRecipient('sms', src)).toBe('+15551234567') // SMS reuses participant_phone
     expect(resolveRecipient('telegram', src)).toBe('19:chat') // Telegram reuses teams_chat_id
     expect(resolveRecipient('messenger', src)).toBe('19:chat') // Messenger reuses teams_chat_id (PSID)
+    expect(resolveRecipient('instagram', src)).toBe('19:chat') // Instagram reuses teams_chat_id (IGSID)
     expect(resolveRecipient('unknown', src)).toBeNull()
     expect(resolveRecipient('email', {})).toBeNull() // missing field -> null
   })
