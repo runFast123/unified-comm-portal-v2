@@ -10,6 +10,7 @@ import {
 import { evaluateRouting, applyRoutingResult } from '@/lib/routing-engine'
 import { z } from 'zod'
 import { parseJsonBody } from '@/lib/validation'
+import { parseWhatsAppInbound } from '@/lib/channels/inbound'
 
 // Inbound relay payload (custom shape — NOT Meta's envelope; see POST below).
 // Every field is a string; we type-validate them here and keep the business
@@ -70,14 +71,12 @@ export async function POST(request: Request) {
 
     const parsed = await parseJsonBody(request, WhatsAppInboundSchema)
     if (!parsed.ok) return parsed.response
-    const {
-      sender_phone,
-      text,
-      media_url,
-      message_type: msgType,
-      timestamp,
-      account_id,
-    } = parsed.data
+    const { sender_phone, account_id } = parsed.data
+    // Normalize the raw relay payload into the canonical InboundMessage shape
+    // (media-fallback text, truncation, message_type, channel columns). The
+    // per-channel parse lives in src/lib/channels/inbound.ts so a new channel
+    // defines ONE parser instead of re-deriving these rules inline here.
+    const inbound = parseWhatsAppInbound(parsed.data)
 
     if (!account_id) {
       return NextResponse.json(
@@ -94,12 +93,9 @@ export async function POST(request: Request) {
       )
     }
 
-    // Truncate message text if too large
-    const MAX_MESSAGE_LENGTH = 50000 // 50KB max
-    let messageText = text || (media_url ? `[Media: ${msgType || 'attachment'}]` : '')
-    if (messageText.length > MAX_MESSAGE_LENGTH) {
-      messageText = messageText.substring(0, MAX_MESSAGE_LENGTH) + '... [truncated]'
-    }
+    // Normalized, truncated message text (see parseWhatsAppInbound). Aliased so
+    // the dedup / validation / dispatch below read the same value as before.
+    const messageText = inbound.message_text
 
     const supabase = await createServiceRoleClient()
 
@@ -173,16 +169,16 @@ export async function POST(request: Request) {
       .insert({
         conversation_id: conversationId,
         account_id,
-        channel: 'whatsapp',
-        sender_name: sender_phone || null,
-        sender_type: 'customer',
-        message_text: messageText,
-        message_type: msgType === 'text' ? 'text' : 'attachment',
-        direction: 'inbound',
-        whatsapp_media_url: media_url || null,
-        replied: false,
-        reply_required: true,
-        timestamp: timestamp || new Date().toISOString(),
+        channel: inbound.channel,
+        sender_name: inbound.sender_name,
+        sender_type: inbound.sender_type,
+        message_text: inbound.message_text,
+        message_type: inbound.message_type,
+        direction: inbound.direction,
+        whatsapp_media_url: inbound.whatsapp_media_url,
+        replied: inbound.replied,
+        reply_required: inbound.reply_required,
+        timestamp: inbound.timestamp || new Date().toISOString(),
         received_at: new Date().toISOString(),
       })
       .select('id')

@@ -1,0 +1,102 @@
+import type { ChannelType } from '@/types/database'
+
+/**
+ * Inbound normalization layer.
+ *
+ * Unlike the OUTBOUND side (where four send sites duplicated one dispatch and
+ * collapsed cleanly into sendViaChannel), the inbound webhooks are genuinely
+ * heterogeneous: Teams and WhatsApp use different dedup strategies, Teams has
+ * an out-of-office auto-reply and an agent-message path WhatsApp lacks, and
+ * their AI dispatch differs (Teams fires classify/reply via after(); WhatsApp
+ * calls them synchronously and lets the Phase-1 result gate Phase-2). Forcing
+ * all of that through one shared pipeline would produce a branch-at-every-step
+ * god-function — worse than today's clean per-channel routes.
+ *
+ * So the part we extract is the part that is genuinely per-channel knowledge
+ * AND pure: turning a provider/relay payload into a canonical InboundMessage
+ * (media-fallback text, truncation, message_type mapping, which DB columns the
+ * channel populates). A new channel implements ONE parser here instead of
+ * re-deriving these rules inline in a webhook. The downstream pipeline (dedup,
+ * findOrCreateConversation, message insert, routing, notifications, AI) stays
+ * in each route, composed from the existing shared helpers.
+ *
+ * These functions are PURE (no I/O, no Date.now()) so they unit-test cleanly;
+ * the webhook applies the timestamp fallback (`?? now()`) at insert time.
+ */
+
+/** Max stored message length before truncation (50 KB). */
+export const MAX_MESSAGE_LENGTH = 50000
+
+/**
+ * Canonical inbound message — the normalized superset every channel maps onto.
+ * Channel-specific identifier/content columns (teams_*, whatsapp_media_url,
+ * attachments) are null for channels that don't use them. `timestamp` is the
+ * provider-supplied time or null; the caller defaults null to now() at insert.
+ */
+export interface InboundMessage {
+  channel: ChannelType
+  account_id: string | null
+  message_text: string
+  message_type: string
+  timestamp: string | null
+  sender_name: string | null
+  sender_email: string | null
+  sender_phone: string | null
+  sender_type: 'agent' | 'customer'
+  direction: 'inbound' | 'outbound'
+  replied: boolean
+  reply_required: boolean
+  teams_chat_id: string | null
+  teams_message_id: string | null
+  whatsapp_media_url: string | null
+  attachments: unknown
+}
+
+/** Apply the shared 50 KB truncation rule. */
+function truncate(text: string): string {
+  if (text.length > MAX_MESSAGE_LENGTH) {
+    return text.substring(0, MAX_MESSAGE_LENGTH) + '... [truncated]'
+  }
+  return text
+}
+
+/** Raw WhatsApp relay payload (post Zod-validation: every field optional string). */
+export interface WhatsAppInboundRaw {
+  account_id?: string
+  sender_phone?: string
+  text?: string
+  media_url?: string
+  message_type?: string
+  timestamp?: string
+}
+
+/**
+ * Normalize a WhatsApp relay payload. WhatsApp inbound is always a customer
+ * message (no agent path): empty text with a media_url becomes a
+ * `[Media: <type>]` placeholder so the timeline shows something, and the
+ * stored message_type collapses to 'text' | 'attachment'.
+ */
+export function parseWhatsAppInbound(raw: WhatsAppInboundRaw): InboundMessage {
+  const msgType = raw.message_type
+  const mediaUrl = raw.media_url || null
+  const baseText = raw.text || (mediaUrl ? `[Media: ${msgType || 'attachment'}]` : '')
+  const senderPhone = raw.sender_phone || null
+  return {
+    channel: 'whatsapp',
+    account_id: raw.account_id || null,
+    message_text: truncate(baseText),
+    message_type: msgType === 'text' ? 'text' : 'attachment',
+    timestamp: raw.timestamp || null,
+    sender_name: senderPhone,
+    sender_email: null,
+    sender_phone: senderPhone,
+    sender_type: 'customer',
+    direction: 'inbound',
+    replied: false,
+    reply_required: true,
+    teams_chat_id: null,
+    teams_message_id: null,
+    whatsapp_media_url: mediaUrl,
+    attachments: null,
+  }
+}
