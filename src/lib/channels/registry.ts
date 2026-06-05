@@ -134,8 +134,11 @@ export const CHANNEL_LIST: ChannelDescriptor[] = Object.values(CHANNELS)
 
 /** Look up a descriptor by key; tolerant of unknown / legacy values (→ null). */
 export function getChannel(key: string | null | undefined): ChannelDescriptor | null {
-  if (!key) return null
-  return (CHANNELS as Record<string, ChannelDescriptor>)[key] ?? null
+  // hasOwnProperty guard: a plain object-literal index would otherwise resolve
+  // inherited Object.prototype members ('constructor', 'toString', …) as truthy,
+  // letting them pass isChannel(). Only OWN keys are real channels.
+  if (!key || !Object.prototype.hasOwnProperty.call(CHANNELS, key)) return null
+  return (CHANNELS as Record<string, ChannelDescriptor>)[key]
 }
 
 /** The conversation fields a send site can resolve a recipient from. */

@@ -74,6 +74,9 @@ export async function POST(request: Request) {
         .select('id')
         .eq('account_id', account_id)
         .eq('channel', 'telegram')
+        // Telegram message_id is sequential PER CHAT (resets per conversation),
+        // so dedup MUST also scope by chat or distinct customers collide.
+        .eq('teams_chat_id', chatId)
         .eq('teams_message_id', inbound.teams_message_id)
         .limit(1)
         .maybeSingle()

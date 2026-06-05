@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase-server'
 import { checkRateLimit, verifyAccountAccess } from '@/lib/api-helpers'
 import { getAllowedAccountIds, isSuperAdmin } from '@/lib/auth'
-import { isChannel } from '@/lib/channels/registry'
+import { isChannel, getChannel } from '@/lib/channels/registry'
 
 // Reject anything scheduled more than a year out. Keeps runaway/malicious
 // payloads from squatting on the scheduled-messages table forever.
@@ -93,15 +93,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Channel mismatch with conversation' }, { status: 400 })
     }
 
-    // Channel-specific recipient validation.
-    if (channel === 'email' && !body.to) {
-      return NextResponse.json({ error: 'Missing recipient email (to)' }, { status: 400 })
-    }
-    if (channel === 'teams' && !body.teams_chat_id) {
-      return NextResponse.json({ error: 'Missing teams_chat_id' }, { status: 400 })
-    }
-    if (channel === 'whatsapp' && !body.to) {
-      return NextResponse.json({ error: 'Missing recipient phone (to)' }, { status: 400 })
+    // Channel-specific recipient validation — registry-driven so EVERY channel
+    // is covered: chat-id channels (teams/telegram/messenger/instagram) need
+    // teams_chat_id; email/whatsapp/sms carry the recipient in `to`.
+    const recipientField = getChannel(channel)?.recipientField
+    const hasRecipient = recipientField === 'teams_chat_id' ? !!body.teams_chat_id : !!body.to
+    if (!hasRecipient) {
+      return NextResponse.json({ error: `Missing recipient for ${channel}` }, { status: 400 })
     }
 
     const { data: row, error } = await admin

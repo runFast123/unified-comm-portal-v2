@@ -106,8 +106,10 @@ const ADAPTERS: Record<ChannelType, ChannelAdapter> = {
 
 /** Look up the adapter for a channel, or null for an unknown channel value. */
 export function getAdapter(channel: string | null | undefined): ChannelAdapter | null {
-  if (!channel) return null
-  return (ADAPTERS as Record<string, ChannelAdapter>)[channel] ?? null
+  // hasOwnProperty guard so inherited Object.prototype members can't masquerade
+  // as a channel (see getChannel in the registry for the same fix).
+  if (!channel || !Object.prototype.hasOwnProperty.call(ADAPTERS, channel)) return null
+  return (ADAPTERS as Record<string, ChannelAdapter>)[channel]
 }
 
 /**

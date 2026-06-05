@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { MacroRunner } from '@/components/dashboard/macro-runner'
+import { getChannel } from '@/lib/channels/registry'
 import {
   CheckCircle,
   CheckCheck,
@@ -49,6 +50,7 @@ interface ConversationActionsProps {
   aiReplyStatus: string | null
   aiDraftText: string | null
   participantEmail: string | null
+  participantPhone?: string | null
   participantName?: string | null
   emailSubject: string | null
   teamsChatId?: string | null
@@ -68,6 +70,7 @@ export function ConversationActions({
   aiReplyStatus,
   aiDraftText,
   participantEmail,
+  participantPhone,
   participantName,
   emailSubject,
   teamsChatId,
@@ -75,6 +78,17 @@ export function ConversationActions({
   currentUserId,
   currentUserName,
 }: ConversationActionsProps) {
+  // Resolve the reply recipient for THIS channel from the registry: email →
+  // participant_email, whatsapp/sms → participant_phone, teams/telegram/
+  // messenger/instagram → teams_chat_id. Drives the send guard + payload so
+  // EVERY channel is replyable from the composer (not just email/teams).
+  const sendRecipient = useMemo<string | null>(() => {
+    const field = getChannel(channel)?.recipientField
+    if (field === 'participant_email') return participantEmail
+    if (field === 'participant_phone') return participantPhone ?? null
+    if (field === 'teams_chat_id') return teamsChatId ?? null
+    return null
+  }, [channel, participantEmail, participantPhone, teamsChatId])
   const router = useRouter()
   const { toast } = useToast()
   const { role: viewerRole } = useUser()
@@ -813,7 +827,7 @@ export function ConversationActions({
 
   const handleApprove = useCallback(async () => {
     if (!aiReplyId) return
-    if (!participantEmail && channel !== 'teams') {
+    if (!sendRecipient) {
       toast.error('No recipient email address found')
       return
     }
@@ -842,7 +856,7 @@ export function ConversationActions({
         account_id: accountId,
         conversation_id: conversationId,
         reply_text: aiDraftText,
-        to: participantEmail,
+        to: sendRecipient || undefined,
         subject: emailSubject ? `Re: ${emailSubject}` : 'Re: Your communication',
         teams_chat_id: teamsChatId || undefined,
         attachments: attachmentsSnapshot.length > 0
@@ -868,10 +882,10 @@ export function ConversationActions({
         },
       }
     )
-  }, [aiReplyId, accountId, aiDraftText, conversationId, participantEmail, router, toast, channel, emailSubject, teamsChatId, markWaitingOnCustomer, serverUndoableSend, isEmailChannel, attachmentsForSend])
+  }, [aiReplyId, accountId, aiDraftText, conversationId, participantEmail, sendRecipient, router, toast, channel, emailSubject, teamsChatId, markWaitingOnCustomer, serverUndoableSend, isEmailChannel, attachmentsForSend])
 
   const handleEditSend = useCallback(async () => {
-    if (!participantEmail && channel !== 'teams') {
+    if (!sendRecipient) {
       toast.error('No recipient email address found')
       return
     }
@@ -890,7 +904,7 @@ export function ConversationActions({
         account_id: accountId,
         conversation_id: conversationId,
         reply_text: textSnapshot,
-        to: participantEmail,
+        to: sendRecipient || undefined,
         subject: emailSubject ? `Re: ${emailSubject}` : 'Re: Your communication',
         teams_chat_id: teamsChatId || undefined,
         attachments: attachmentsSnapshot.length > 0
@@ -922,10 +936,10 @@ export function ConversationActions({
         },
       }
     )
-  }, [editText, aiReplyId, accountId, participantEmail, conversationId, router, toast, channel, emailSubject, teamsChatId, markWaitingOnCustomer, serverUndoableSend, isEmailChannel, attachmentsForSend])
+  }, [editText, aiReplyId, accountId, participantEmail, sendRecipient, conversationId, router, toast, channel, emailSubject, teamsChatId, markWaitingOnCustomer, serverUndoableSend, isEmailChannel, attachmentsForSend])
 
   const handleManualReply = useCallback(async () => {
-    if (!participantEmail && channel !== 'teams') {
+    if (!sendRecipient) {
       toast.error('No recipient email address found')
       return
     }
@@ -952,7 +966,7 @@ export function ConversationActions({
         account_id: accountId,
         conversation_id: conversationId,
         reply_text: textSnapshot,
-        to: participantEmail,
+        to: sendRecipient || undefined,
         subject: emailSubject ? `Re: ${emailSubject}` : 'Re: Your communication',
         teams_chat_id: teamsChatId || undefined,
         attachments: attachmentsSnapshot.length > 0
@@ -979,7 +993,7 @@ export function ConversationActions({
         },
       }
     )
-  }, [manualText, conversationId, accountId, channel, participantEmail, router, toast, emailSubject, teamsChatId, markWaitingOnCustomer, clearDraft, serverUndoableSend, isEmailChannel, attachmentsForSend, pendingAttachments.length, appendSignature])
+  }, [manualText, conversationId, accountId, channel, participantEmail, sendRecipient, router, toast, emailSubject, teamsChatId, markWaitingOnCustomer, clearDraft, serverUndoableSend, isEmailChannel, attachmentsForSend, pendingAttachments.length, appendSignature])
 
   // ── Collision guard ─────────────────────────────────────────────────
   // If another agent is actively typing in this conversation, ask for a
@@ -1032,7 +1046,7 @@ export function ConversationActions({
   }, [])
 
   const openScheduleModal = useCallback(() => {
-    if (!participantEmail && channel !== 'teams') {
+    if (!sendRecipient) {
       toast.error('No recipient email address found')
       return
     }
@@ -1045,7 +1059,7 @@ export function ConversationActions({
     d.setSeconds(0, 0)
     setScheduledFor(toLocalDatetimeValue(d))
     setShowScheduleModal(true)
-  }, [participantEmail, channel, manualText, toast, toLocalDatetimeValue])
+  }, [participantEmail, sendRecipient, channel, manualText, toast, toLocalDatetimeValue])
 
   // Quick-pick helpers
   const applyQuickPick = useCallback((kind: 'in1h' | 'tomorrow9' | 'monday9' | 'nextweek') => {
@@ -1098,7 +1112,7 @@ export function ConversationActions({
           conversation_id: conversationId,
           channel,
           reply_text: manualText,
-          to: participantEmail,
+          to: sendRecipient || undefined,
           subject: emailSubject ? `Re: ${emailSubject}` : 'Re: Your communication',
           teams_chat_id: teamsChatId || undefined,
           scheduled_for: when.toISOString(),

@@ -124,7 +124,10 @@ describe('channel outbound adapters', () => {
     expect(getAdapter('teams')).not.toBeNull()
     expect(getAdapter('whatsapp')).not.toBeNull()
     expect(getAdapter('telegram')).not.toBeNull()
+    expect(getAdapter('messenger')).not.toBeNull()
+    expect(getAdapter('instagram')).not.toBeNull()
     expect(getAdapter('discord')).toBeNull()
+    expect(getAdapter('constructor')).toBeNull() // prototype member, not a channel
     expect(getAdapter(null)).toBeNull()
     expect(getAdapter(undefined)).toBeNull()
   })

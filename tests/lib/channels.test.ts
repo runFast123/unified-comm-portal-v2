@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { CHANNELS, CHANNEL_KEYS, CHANNEL_LIST, getChannel, resolveRecipient } from '@/lib/channels/registry'
+import { CHANNELS, CHANNEL_KEYS, CHANNEL_LIST, getChannel, resolveRecipient, isChannel } from '@/lib/channels/registry'
 import { getChannelLabel, getChannelColor, getChannelBgColor } from '@/lib/utils'
 
 describe('channel registry', () => {
@@ -30,6 +30,7 @@ describe('channel registry', () => {
     expect(getChannel('messenger')?.label).toBe('Messenger')
     expect(getChannel('instagram')?.label).toBe('Instagram')
     expect(getChannel('discord')).toBeNull()
+    expect(getChannel('constructor')).toBeNull() // prototype member, not a channel
     expect(getChannel(null)).toBeNull()
     expect(getChannel(undefined)).toBeNull()
   })
@@ -77,5 +78,18 @@ describe('channel registry', () => {
     expect(resolveRecipient('instagram', src)).toBe('19:chat') // Instagram reuses teams_chat_id (IGSID)
     expect(resolveRecipient('unknown', src)).toBeNull()
     expect(resolveRecipient('email', {})).toBeNull() // missing field -> null
+  })
+
+  it('isChannel accepts only registered channels and is prototype-safe', () => {
+    for (const k of CHANNEL_KEYS) expect(isChannel(k)).toBe(true)
+    expect(isChannel('discord')).toBe(false)
+    expect(isChannel(null)).toBe(false)
+    expect(isChannel(undefined)).toBe(false)
+    expect(isChannel('')).toBe(false)
+    // inherited Object.prototype members must NOT pass (hasOwnProperty guard)
+    expect(isChannel('constructor')).toBe(false)
+    expect(isChannel('toString')).toBe(false)
+    expect(isChannel('hasOwnProperty')).toBe(false)
+    expect(isChannel('__proto__')).toBe(false)
   })
 })

@@ -317,7 +317,8 @@ export async function findOrCreateConversation(
     // Unique partial indexes per channel that a concurrent insert can collide
     // with. On a 23505 we re-select by the SAME key the unique index covers and
     // return the row the other writer won:
-    //   teams → `conversations_teams_unique_chat` (account_id, teams_chat_id)
+    //   teams/telegram/messenger/instagram → `uniq_conversations_chat`
+  //           (account_id, channel, teams_chat_id) [migration 20260605140000]
     //   email → `uniq_conversations_email_thread`  (account_id, email_thread_id)
     //           [migration 20260529120000 — the old sender-unique index is gone]
     // whatsapp has a unique index on participant_phone but its lookup key here

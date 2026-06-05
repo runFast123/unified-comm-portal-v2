@@ -619,6 +619,7 @@ export default async function ConversationPage({
               aiReplyStatus={aiReply?.status || null}
               aiDraftText={aiReply?.draft_text || aiReply?.edited_text || null}
               participantEmail={conversation.participant_email}
+              participantPhone={conversation.participant_phone || null}
               participantName={participantName}
               emailSubject={emailSubject}
               teamsChatId={conversation.teams_chat_id || null}
