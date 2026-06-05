@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { getChannel } from '@/lib/channels/registry'
 import {
   BarChart3,
   Layers,
@@ -310,9 +311,8 @@ export default function ReportsPage() {
       setMessageVolumeData(days.map((d) => ({ day: d, ...(volumeByDay[d] || { email: 0, teams: 0, whatsapp: 0 }) })))
 
       // 6. Build channel stats
+      // Channel colour + label come from the registry (single source of truth).
       const channels = ['email', 'teams', 'whatsapp'] as const
-      const channelColors: Record<string, string> = { email: '#ea4335', teams: '#6264a7', whatsapp: '#25d366' }
-      const channelLabels: Record<string, string> = { email: 'Email', teams: 'Teams', whatsapp: 'WhatsApp' }
       const cStats = channels.map((ch) => {
         const chMsgs = (messages || []).filter((m) => m.channel === ch)
         const totalMessages = chMsgs.length
@@ -330,8 +330,8 @@ export default function ReportsPage() {
         const peakHour = peakHourNum ? `${Number(peakHourNum) % 12 || 12}:00 ${Number(peakHourNum) >= 12 ? 'PM' : 'AM'}` : 'N/A'
 
         return {
-          channel: channelLabels[ch],
-          color: channelColors[ch],
+          channel: getChannel(ch)?.label ?? ch,
+          color: getChannel(ch)?.hex ?? '#888888',
           totalMessages,
           avgResponseTime: (() => {
             const chReplies = (aiReplies || []).filter((r: any) => r.channel === ch && r.sent_at && r.messages?.received_at)
@@ -353,12 +353,12 @@ export default function ReportsPage() {
       // Response time for chart
       setResponseTimeData(channels.map((ch) => {
         const chReplies = (aiReplies || []).filter((r: any) => r.channel === ch && r.sent_at && r.messages?.received_at)
-        if (chReplies.length === 0) return { channel: channelLabels[ch], avgMinutes: 0 }
+        if (chReplies.length === 0) return { channel: getChannel(ch)?.label ?? ch, avgMinutes: 0 }
         const totalMins = chReplies.reduce((sum: number, r: any) => {
           const diff = new Date(r.sent_at).getTime() - new Date(r.messages.received_at).getTime()
           return sum + Math.max(0, diff / 60000)
         }, 0)
-        return { channel: channelLabels[ch], avgMinutes: Math.round(totalMins / chReplies.length) }
+        return { channel: getChannel(ch)?.label ?? ch, avgMinutes: Math.round(totalMins / chReplies.length) }
       }))
 
       // 7. Build category breakdown
