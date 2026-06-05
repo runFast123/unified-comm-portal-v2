@@ -91,6 +91,17 @@ export const CHANNELS: Record<ChannelType, ChannelDescriptor> = {
     // Plain text SMS via Twilio: no native threading; MMS/attachments not handled yet.
     capabilities: { inbound: true, outbound: true, attachments: false, threading: false },
   },
+  telegram: {
+    key: 'telegram',
+    label: 'Telegram',
+    filterLabel: 'Telegram Only',
+    hex: '#0088cc',
+    textClass: 'text-[#0088cc]',
+    bgClass: 'bg-[#0088cc]',
+    // Telegram groups by chat id, reusing the teams_chat_id column.
+    recipientField: 'teams_chat_id',
+    capabilities: { inbound: true, outbound: true, attachments: false, threading: false },
+  },
 }
 
 /** All channel keys, in registry (display) order. */

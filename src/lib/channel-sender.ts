@@ -5,6 +5,7 @@ import {
   type TeamsConfig,
   type WhatsAppConfig,
   type SmsConfig,
+  type TelegramConfig,
 } from '@/lib/channel-config'
 
 export type SendResult =
@@ -51,6 +52,13 @@ export interface SendSmsInput {
   toPhone: string
   body: string
   configOverride?: SmsConfig
+}
+
+export interface SendTelegramInput {
+  accountId: string | null
+  chatId: string
+  body: string
+  configOverride?: TelegramConfig
 }
 
 // ─── HTML escaping (anti-XSS for outbound email) ─────────────────────
@@ -412,5 +420,45 @@ export async function verifySmsConfig(cfg: SmsConfig): Promise<SendResult> {
     return { ok: true }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : 'SMS verify failed' }
+  }
+}
+
+// ─── Telegram (Bot API) ───────────────────────────────────────────────
+
+export async function sendTelegram(input: SendTelegramInput): Promise<SendResult> {
+  try {
+    const cfg = input.configOverride ?? (await getChannelConfig(input.accountId, 'telegram'))
+    if (!cfg) return { ok: false, error: 'Telegram is not configured for this account' }
+
+    const res = await withRetry(
+      () =>
+        fetch(`https://api.telegram.org/bot${cfg.bot_token}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: input.chatId, text: input.body }),
+        }),
+      (r) => r instanceof Response && isTransientStatus(r.status)
+    )
+    if (!res.ok) return { ok: false, error: `Telegram ${res.status}: ${await res.text()}` }
+    const json = (await res.json()) as { ok?: boolean; result?: { message_id?: number }; description?: string }
+    if (!json.ok) return { ok: false, error: json.description || 'Telegram API returned ok:false' }
+    return {
+      ok: true,
+      provider_message_id: json.result?.message_id != null ? String(json.result.message_id) : undefined,
+    }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'Telegram send failed' }
+  }
+}
+
+export async function verifyTelegramConfig(cfg: TelegramConfig): Promise<SendResult> {
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${cfg.bot_token}/getMe`)
+    if (!res.ok) return { ok: false, error: `Telegram ${res.status}: ${await res.text()}` }
+    const json = (await res.json()) as { ok?: boolean; description?: string }
+    if (!json.ok) return { ok: false, error: json.description || 'Invalid bot token' }
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'Telegram verify failed' }
   }
 }

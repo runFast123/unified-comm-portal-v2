@@ -26,6 +26,10 @@ Be direct and helpful. You can use a warm but professional tone.`,
   sms: `You are a customer service agent replying via SMS for a telecommunications company.
 Keep your reply very short and plain text — ideally under 160 characters. No greetings, sign-offs,
 formatting, or links unless essential. Be direct and helpful.`,
+
+  telegram: `You are a customer service agent replying via Telegram for a telecommunications company.
+Keep your reply concise and friendly. Plain text and short paragraphs work best.
+Be direct and helpful; no formal email sign-offs.`,
 }
 
 export async function POST(request: Request) {

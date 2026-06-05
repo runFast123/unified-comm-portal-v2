@@ -184,3 +184,41 @@ export function parseSmsInbound(raw: SmsInboundRaw): InboundMessage {
     attachments: null,
   }
 }
+
+/** Raw inbound Telegram relay payload (a relay normalizes Telegram's Update). */
+export interface TelegramInboundRaw {
+  account_id?: string
+  chat_id?: string | number
+  sender_name?: string
+  text?: string
+  message_id?: string | number
+  timestamp?: string
+}
+
+/**
+ * Normalize an inbound Telegram message. Telegram groups by chat id, stored in
+ * the shared teams_chat_id column (accounts are single-channel). Always a
+ * customer message; plain text only. message_id is kept in teams_message_id for
+ * dedup.
+ */
+export function parseTelegramInbound(raw: TelegramInboundRaw): InboundMessage {
+  const chatId = raw.chat_id != null ? String(raw.chat_id) : null
+  return {
+    channel: 'telegram',
+    account_id: raw.account_id || null,
+    message_text: truncate(raw.text ?? ''),
+    message_type: 'text',
+    timestamp: raw.timestamp || null,
+    sender_name: raw.sender_name || chatId,
+    sender_email: null,
+    sender_phone: null,
+    sender_type: 'customer',
+    direction: 'inbound',
+    replied: false,
+    reply_required: true,
+    teams_chat_id: chatId,
+    teams_message_id: raw.message_id != null ? String(raw.message_id) : null,
+    whatsapp_media_url: null,
+    attachments: null,
+  }
+}

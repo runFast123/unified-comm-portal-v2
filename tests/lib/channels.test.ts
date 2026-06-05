@@ -4,7 +4,7 @@ import { getChannelLabel, getChannelColor, getChannelBgColor } from '@/lib/utils
 
 describe('channel registry', () => {
   it('registers the known channels with complete descriptors', () => {
-    expect([...CHANNEL_KEYS].sort()).toEqual(['email', 'sms', 'teams', 'whatsapp'])
+    expect([...CHANNEL_KEYS].sort()).toEqual(['email', 'sms', 'teams', 'telegram', 'whatsapp'])
     expect(CHANNEL_LIST.length).toBe(CHANNEL_KEYS.length)
     for (const c of CHANNEL_LIST) {
       expect(CHANNELS[c.key]).toBe(c) // key matches its map slot
@@ -26,7 +26,8 @@ describe('channel registry', () => {
     expect(getChannel('email')?.label).toBe('Email')
     expect(getChannel('whatsapp')?.label).toBe('WhatsApp')
     expect(getChannel('sms')?.label).toBe('SMS')
-    expect(getChannel('telegram')).toBeNull()
+    expect(getChannel('telegram')?.label).toBe('Telegram')
+    expect(getChannel('discord')).toBeNull()
     expect(getChannel(null)).toBeNull()
     expect(getChannel(undefined)).toBeNull()
   })
@@ -49,6 +50,10 @@ describe('channel registry', () => {
     expect(getChannelLabel('sms')).toBe('SMS')
     expect(getChannelColor('sms')).toBe('text-[#f22f46]')
     expect(getChannelBgColor('sms')).toBe('bg-[#f22f46]')
+
+    expect(getChannelLabel('telegram')).toBe('Telegram')
+    expect(getChannelColor('telegram')).toBe('text-[#0088cc]')
+    expect(getChannelBgColor('telegram')).toBe('bg-[#0088cc]')
   })
 
   it('resolveRecipient maps each channel to its recipient field', () => {
@@ -57,6 +62,7 @@ describe('channel registry', () => {
     expect(resolveRecipient('teams', src)).toBe('19:chat')
     expect(resolveRecipient('whatsapp', src)).toBe('+15551234567')
     expect(resolveRecipient('sms', src)).toBe('+15551234567') // SMS reuses participant_phone
+    expect(resolveRecipient('telegram', src)).toBe('19:chat') // Telegram reuses teams_chat_id
     expect(resolveRecipient('unknown', src)).toBeNull()
     expect(resolveRecipient('email', {})).toBeNull() // missing field -> null
   })

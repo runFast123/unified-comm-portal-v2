@@ -4,14 +4,16 @@ import {
   sendTeams,
   sendWhatsApp,
   sendSms,
+  sendTelegram,
   verifyEmailConfig,
   verifyTeamsConfig,
   verifyWhatsAppConfig,
   verifySmsConfig,
+  verifyTelegramConfig,
   type SendResult,
   type SendEmailAttachment,
 } from '@/lib/channel-sender'
-import type { EmailConfig, TeamsConfig, WhatsAppConfig, SmsConfig } from '@/lib/channel-config'
+import type { EmailConfig, TeamsConfig, WhatsAppConfig, SmsConfig, TelegramConfig } from '@/lib/channel-config'
 
 /**
  * Normalized outbound message — the channel-agnostic shape every send site
@@ -83,6 +85,10 @@ const ADAPTERS: Record<ChannelType, ChannelAdapter> = {
   sms: {
     send: (m) => sendSms({ accountId: m.accountId, toPhone: m.to, body: m.body }),
     verifyConfig: (cfg) => verifySmsConfig(cfg as SmsConfig),
+  },
+  telegram: {
+    send: (m) => sendTelegram({ accountId: m.accountId, chatId: m.to, body: m.body }),
+    verifyConfig: (cfg) => verifyTelegramConfig(cfg as TelegramConfig),
   },
 }
 

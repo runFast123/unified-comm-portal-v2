@@ -11,6 +11,8 @@ vi.mock('@/lib/channel-sender', () => ({
   verifyWhatsAppConfig: vi.fn(async () => ({ ok: true })),
   sendSms: vi.fn(async () => ({ ok: true, provider_message_id: 'sms-1' })),
   verifySmsConfig: vi.fn(async () => ({ ok: true })),
+  sendTelegram: vi.fn(async () => ({ ok: true, provider_message_id: 'tg-1' })),
+  verifyTelegramConfig: vi.fn(async () => ({ ok: true })),
 }))
 
 import { sendViaChannel, getAdapter } from '@/lib/channels/adapters'
@@ -19,10 +21,12 @@ import {
   sendTeams,
   sendWhatsApp,
   sendSms,
+  sendTelegram,
   verifyEmailConfig,
   verifyTeamsConfig,
   verifyWhatsAppConfig,
   verifySmsConfig,
+  verifyTelegramConfig,
 } from '@/lib/channel-sender'
 
 beforeEach(() => {
@@ -100,8 +104,8 @@ describe('channel outbound adapters', () => {
   })
 
   it('returns a failed SendResult for an unknown channel and calls no sender', async () => {
-    const res = await sendViaChannel('telegram', { accountId: 'a', to: 'x', body: 'y' })
-    expect(res).toEqual({ ok: false, error: 'Unsupported channel: telegram' })
+    const res = await sendViaChannel('discord', { accountId: 'a', to: 'x', body: 'y' })
+    expect(res).toEqual({ ok: false, error: 'Unsupported channel: discord' })
     expect(sendEmail).not.toHaveBeenCalled()
     expect(sendTeams).not.toHaveBeenCalled()
     expect(sendWhatsApp).not.toHaveBeenCalled()
@@ -111,7 +115,8 @@ describe('channel outbound adapters', () => {
     expect(getAdapter('email')).not.toBeNull()
     expect(getAdapter('teams')).not.toBeNull()
     expect(getAdapter('whatsapp')).not.toBeNull()
-    expect(getAdapter('telegram')).toBeNull()
+    expect(getAdapter('telegram')).not.toBeNull()
+    expect(getAdapter('discord')).toBeNull()
     expect(getAdapter(null)).toBeNull()
     expect(getAdapter(undefined)).toBeNull()
   })
@@ -143,5 +148,15 @@ describe('channel outbound adapters', () => {
     const smsCfg = { account_sid: 'AC1', auth_token: 't', from_number: '+1' }
     await getAdapter('sms')!.verifyConfig(smsCfg)
     expect(verifySmsConfig).toHaveBeenCalledWith(smsCfg)
+  })
+
+  it('routes telegram to sendTelegram (to -> chatId) and verifyConfig to verifyTelegramConfig', async () => {
+    const res = await sendViaChannel('telegram', { accountId: 'acct-5', to: '987654321', body: 'tg message' })
+    expect(res).toEqual({ ok: true, provider_message_id: 'tg-1' })
+    expect(sendTelegram).toHaveBeenCalledWith({ accountId: 'acct-5', chatId: '987654321', body: 'tg message' })
+
+    const tgCfg = { bot_token: '123:ABC' }
+    await getAdapter('telegram')!.verifyConfig(tgCfg)
+    expect(verifyTelegramConfig).toHaveBeenCalledWith(tgCfg)
   })
 })

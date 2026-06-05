@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseWhatsAppInbound, parseTeamsInbound, parseSmsInbound, MAX_MESSAGE_LENGTH } from '@/lib/channels/inbound'
+import { parseWhatsAppInbound, parseTeamsInbound, parseSmsInbound, parseTelegramInbound, MAX_MESSAGE_LENGTH } from '@/lib/channels/inbound'
 
 describe('parseWhatsAppInbound', () => {
   it('normalizes a plain text message', () => {
@@ -173,5 +173,50 @@ describe('parseSmsInbound', () => {
     expect(m.message_text).toBe('')
     expect(m.sender_type).toBe('customer')
     expect(m.direction).toBe('inbound')
+  })
+})
+
+describe('parseTelegramInbound', () => {
+  it('normalizes a Telegram message (chat_id -> teams_chat_id, message_id -> teams_message_id)', () => {
+    const m = parseTelegramInbound({
+      account_id: 'acct-1',
+      chat_id: 987654321,
+      sender_name: 'Jane',
+      text: 'hello',
+      message_id: 42,
+      timestamp: '2026-01-01T00:00:00.000Z',
+    })
+    expect(m).toEqual({
+      channel: 'telegram',
+      account_id: 'acct-1',
+      message_text: 'hello',
+      message_type: 'text',
+      timestamp: '2026-01-01T00:00:00.000Z',
+      sender_name: 'Jane',
+      sender_email: null,
+      sender_phone: null,
+      sender_type: 'customer',
+      direction: 'inbound',
+      replied: false,
+      reply_required: true,
+      teams_chat_id: '987654321',
+      teams_message_id: '42',
+      whatsapp_media_url: null,
+      attachments: null,
+    })
+  })
+
+  it('stringifies numeric ids and falls back sender_name to the chat id', () => {
+    const m = parseTelegramInbound({ chat_id: 555, text: 'hi' })
+    expect(m.teams_chat_id).toBe('555')
+    expect(m.sender_name).toBe('555')
+    expect(m.teams_message_id).toBeNull()
+  })
+
+  it('tolerates an empty payload', () => {
+    const m = parseTelegramInbound({})
+    expect(m.teams_chat_id).toBeNull()
+    expect(m.message_text).toBe('')
+    expect(m.sender_type).toBe('customer')
   })
 })

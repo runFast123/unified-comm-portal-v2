@@ -2,7 +2,7 @@ import { createServiceRoleClient } from '@/lib/supabase-server'
 import { encrypt, decrypt } from '@/lib/encryption'
 import { logError } from '@/lib/logger'
 
-export type Channel = 'email' | 'teams' | 'whatsapp' | 'sms'
+export type Channel = 'email' | 'teams' | 'whatsapp' | 'sms' | 'telegram'
 
 // ─── Config shapes per channel ────────────────────────────────────────
 
@@ -63,11 +63,17 @@ export interface SmsConfig {
   from_number: string
 }
 
+export interface TelegramConfig {
+  /** Bot token from @BotFather, e.g. 123456:ABC-DEF... */
+  bot_token: string
+}
+
 export type ChannelConfigMap = {
   email: EmailConfig
   teams: TeamsConfig
   whatsapp: WhatsAppConfig
   sms: SmsConfig
+  telegram: TelegramConfig
 }
 
 // Fields that should never be returned to the UI in clear text
@@ -76,6 +82,7 @@ const SECRET_FIELDS: Record<Channel, string[]> = {
   teams: ['azure_client_secret', 'delegated_refresh_token', 'delegated_access_token'],
   whatsapp: ['access_token', 'verify_token'],
   sms: ['auth_token'],
+  telegram: ['bot_token'],
 }
 
 // Fields that MUST be present (non-empty) before a channel config can be saved.
@@ -86,6 +93,7 @@ export const REQUIRED_CONFIG_FIELDS: Record<Channel, string[]> = {
   teams: ['azure_tenant_id', 'azure_client_id', 'azure_client_secret'],
   whatsapp: ['phone_number_id', 'access_token'],
   sms: ['account_sid', 'auth_token', 'from_number'],
+  telegram: ['bot_token'],
 }
 
 /**
@@ -157,11 +165,18 @@ function envSmsConfig(): SmsConfig | null {
   return { account_sid: sid, auth_token: token, from_number: from }
 }
 
+function envTelegramConfig(): TelegramConfig | null {
+  const token = process.env.TELEGRAM_BOT_TOKEN
+  if (!token) return null
+  return { bot_token: token }
+}
+
 function envConfig<C extends Channel>(channel: C): ChannelConfigMap[C] | null {
   if (channel === 'email') return envEmailConfig() as ChannelConfigMap[C] | null
   if (channel === 'teams') return envTeamsConfig() as ChannelConfigMap[C] | null
   if (channel === 'whatsapp') return envWhatsAppConfig() as ChannelConfigMap[C] | null
-  return envSmsConfig() as ChannelConfigMap[C] | null
+  if (channel === 'sms') return envSmsConfig() as ChannelConfigMap[C] | null
+  return envTelegramConfig() as ChannelConfigMap[C] | null
 }
 
 // ─── DB lookup (with env fallback) ────────────────────────────────────
