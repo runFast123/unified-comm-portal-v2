@@ -10,6 +10,7 @@ import { AISidebar } from '@/components/dashboard/ai-sidebar'
 import { ConversationActions } from '@/components/dashboard/conversation-actions'
 import { ScheduledMessagesList } from '@/components/dashboard/scheduled-messages-list'
 import { SuggestedReplies } from '@/components/dashboard/suggested-replies'
+import { ResizableBottomPanel } from '@/components/dashboard/resizable-bottom-panel'
 import { BookmarkButton } from '@/components/dashboard/conversation-bookmarks'
 import { StatusDropdown } from '@/components/dashboard/status-dropdown'
 import { ConversationTagPicker } from '@/components/dashboard/conversation-tag-picker'
@@ -591,17 +592,21 @@ export default async function ConversationPage({
             )}
           </div>
 
-          {/* Suggested replies */}
-          <SuggestedReplies
-            conversationId={id}
-            latestMessage={(messages || []).filter((m: any) => m.direction === 'inbound').pop()?.message_text || null}
-            category={classification?.category || null}
-          />
+          {/* Suggested replies + scheduled — height-adjustable on desktop (drag
+              the handle on top; double-click it to reset). The action bar below
+              stays pinned so its buttons never scroll away. */}
+          <ResizableBottomPanel>
+            <SuggestedReplies
+              conversationId={id}
+              latestMessage={(messages || []).filter((m: any) => m.direction === 'inbound').pop()?.message_text || null}
+              category={classification?.category || null}
+            />
 
-          {/* Scheduled messages for this conversation (self-hides when empty) */}
-          <div className="shrink-0 px-4 sm:px-6 pb-3">
-            <ScheduledMessagesList conversationId={id} />
-          </div>
+            {/* Scheduled messages for this conversation (self-hides when empty) */}
+            <div className="px-4 sm:px-6 pb-3">
+              <ScheduledMessagesList conversationId={id} />
+            </div>
+          </ResizableBottomPanel>
 
           {/* Bottom action bar */}
           <div className="shrink-0 border-t border-gray-200 bg-white px-4 sm:px-6 py-5">
