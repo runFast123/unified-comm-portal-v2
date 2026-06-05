@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils'
 import { ChannelIcon } from '@/components/ui/channel-icon'
 import { Layers } from 'lucide-react'
 import type { ChannelType } from '@/types/database'
+import { CHANNEL_LIST } from '@/lib/channels/registry'
 
 export type ChannelFilterValue = 'all' | ChannelType
 
@@ -12,11 +13,11 @@ interface ChannelFilterProps {
   onChange: (channel: ChannelFilterValue) => void
 }
 
+// Tabs are derived from the channel registry — a new channel shows up here
+// automatically, in registry order, with no edit to this file.
 const tabs: { value: ChannelFilterValue; label: string }[] = [
   { value: 'all', label: 'All Channels' },
-  { value: 'teams', label: 'Teams Only' },
-  { value: 'email', label: 'Email Only' },
-  { value: 'whatsapp', label: 'WhatsApp Only' },
+  ...CHANNEL_LIST.map((c) => ({ value: c.key, label: c.filterLabel })),
 ]
 
 export function ChannelFilter({ activeChannel, onChange }: ChannelFilterProps) {

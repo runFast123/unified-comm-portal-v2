@@ -1,5 +1,6 @@
-import { MessageSquare, Mail, Phone } from 'lucide-react'
+import { MessageSquare, Mail, Phone, type LucideIcon } from 'lucide-react'
 import type { ChannelType } from '@/types/database'
+import { getChannel } from '@/lib/channels/registry'
 
 export interface ChannelIconProps {
   channel: ChannelType
@@ -7,13 +8,17 @@ export interface ChannelIconProps {
   className?: string
 }
 
+// Icon components live here (not in the registry) so the registry stays free of
+// React/lucide imports. Add a new channel's icon here alongside its registry
+// entry; the colour comes from the registry descriptor.
+const ICONS: Record<ChannelType, LucideIcon> = {
+  teams: MessageSquare,
+  email: Mail,
+  whatsapp: Phone,
+}
+
 export function ChannelIcon({ channel, size = 18, className }: ChannelIconProps) {
-  switch (channel) {
-    case 'teams':
-      return <MessageSquare size={size} className={className ?? 'text-[#6264a7]'} />
-    case 'email':
-      return <Mail size={size} className={className ?? 'text-[#ea4335]'} />
-    case 'whatsapp':
-      return <Phone size={size} className={className ?? 'text-[#25d366]'} />
-  }
+  const Icon = ICONS[channel] ?? MessageSquare
+  const textClass = getChannel(channel)?.textClass ?? 'text-gray-500'
+  return <Icon size={size} className={className ?? textClass} />
 }

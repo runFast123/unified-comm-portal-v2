@@ -1,33 +1,25 @@
 import { clsx, type ClassValue } from 'clsx'
 import { formatDistanceToNow } from 'date-fns'
 import type { ChannelType, Priority, Sentiment, Urgency } from '@/types/database'
+import { getChannel } from '@/lib/channels/registry'
 
 export function cn(...inputs: ClassValue[]) {
   return clsx(inputs)
 }
 
+// Channel display helpers now delegate to the single channel registry
+// (src/lib/channels/registry.ts) so label/colours live in ONE place. The `??`
+// fallbacks keep them total for any future/unknown channel value.
 export function getChannelColor(channel: ChannelType): string {
-  switch (channel) {
-    case 'teams': return 'text-[#6264a7]'
-    case 'email': return 'text-[#ea4335]'
-    case 'whatsapp': return 'text-[#25d366]'
-  }
+  return getChannel(channel)?.textClass ?? 'text-gray-500'
 }
 
 export function getChannelBgColor(channel: ChannelType): string {
-  switch (channel) {
-    case 'teams': return 'bg-[#6264a7]'
-    case 'email': return 'bg-[#ea4335]'
-    case 'whatsapp': return 'bg-[#25d366]'
-  }
+  return getChannel(channel)?.bgClass ?? 'bg-gray-500'
 }
 
 export function getChannelLabel(channel: ChannelType): string {
-  switch (channel) {
-    case 'teams': return 'Teams'
-    case 'email': return 'Email'
-    case 'whatsapp': return 'WhatsApp'
-  }
+  return getChannel(channel)?.label ?? channel
 }
 
 export function getPriorityColor(priority: Priority): string {
