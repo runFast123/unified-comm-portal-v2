@@ -8,6 +8,15 @@ describe('channel config required-field validation', () => {
     expect(REQUIRED_CONFIG_FIELDS.email).toEqual(['smtp_host', 'smtp_user', 'smtp_password'])
     expect(REQUIRED_CONFIG_FIELDS.teams).toEqual(['azure_tenant_id', 'azure_client_id', 'azure_client_secret'])
     expect(REQUIRED_CONFIG_FIELDS.whatsapp).toEqual(['phone_number_id', 'access_token'])
+    expect(REQUIRED_CONFIG_FIELDS.sms).toEqual(['account_sid', 'auth_token', 'from_number'])
+  })
+
+  it('detects missing SMS (Twilio) fields in order', () => {
+    expect(firstMissingConfigField('sms', {})).toBe('account_sid')
+    expect(firstMissingConfigField('sms', { account_sid: 'AC1', auth_token: 't' })).toBe('from_number')
+    expect(
+      firstMissingConfigField('sms', { account_sid: 'AC1', auth_token: 't', from_number: '+1' })
+    ).toBeNull()
   })
 
   it('returns the first missing field, or null when all present', () => {

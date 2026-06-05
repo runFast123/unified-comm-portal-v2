@@ -1,4 +1,4 @@
-import { MessageSquare, Mail, Phone, type LucideIcon } from 'lucide-react'
+import { MessageSquare, Mail, Phone, MessageCircle, type LucideIcon } from 'lucide-react'
 import type { ChannelType } from '@/types/database'
 import { getChannel } from '@/lib/channels/registry'
 
@@ -15,6 +15,7 @@ const ICONS: Record<ChannelType, LucideIcon> = {
   teams: MessageSquare,
   email: Mail,
   whatsapp: Phone,
+  sms: MessageCircle,
 }
 
 export function ChannelIcon({ channel, size = 18, className }: ChannelIconProps) {

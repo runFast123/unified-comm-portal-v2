@@ -21,6 +21,10 @@ Use short paragraphs. No need for formal email sign-offs.`,
   whatsapp: `You are a friendly customer service agent replying via WhatsApp for a telecommunications company.
 Keep your reply short, friendly, and under 200 words. Use simple language.
 Be direct and helpful. You can use a warm but professional tone.`,
+
+  sms: `You are a customer service agent replying via SMS for a telecommunications company.
+Keep your reply very short and plain text — ideally under 160 characters. No greetings, sign-offs,
+formatting, or links unless essential. Be direct and helpful.`,
 }
 
 export async function POST(request: Request) {

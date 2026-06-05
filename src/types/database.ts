@@ -1,4 +1,4 @@
-export type ChannelType = 'teams' | 'email' | 'whatsapp'
+export type ChannelType = 'teams' | 'email' | 'whatsapp' | 'sms'
 export type SenderType = 'customer' | 'agent' | 'ai'
 export type MessageType = 'text' | 'attachment' | 'card' | 'system'
 export type Direction = 'inbound' | 'outbound'
@@ -456,7 +456,7 @@ export interface AssignmentState {
 // filtering doesn't need to know about views — the existing inbox query
 // already does the work. See `src/components/inbox/saved-view-modal.tsx`.
 export interface SavedViewFilters {
-  channel?: 'all' | 'email' | 'teams' | 'whatsapp'
+  channel?: 'all' | ChannelType
   account_ids?: string[]
   status?: 'all' | 'active' | 'in_progress' | 'waiting_on_customer' | 'resolved' | 'escalated'
   priority?: 'all' | 'low' | 'medium' | 'high' | 'urgent'

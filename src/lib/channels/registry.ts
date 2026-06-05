@@ -70,6 +70,16 @@ export const CHANNELS: Record<ChannelType, ChannelDescriptor> = {
     bgClass: 'bg-[#25d366]',
     capabilities: { inbound: true, outbound: true, attachments: true, threading: true },
   },
+  sms: {
+    key: 'sms',
+    label: 'SMS',
+    filterLabel: 'SMS Only',
+    hex: '#f22f46',
+    textClass: 'text-[#f22f46]',
+    bgClass: 'bg-[#f22f46]',
+    // Plain text SMS via Twilio: no native threading; MMS/attachments not handled yet.
+    capabilities: { inbound: true, outbound: true, attachments: false, threading: false },
+  },
 }
 
 /** All channel keys, in registry (display) order. */

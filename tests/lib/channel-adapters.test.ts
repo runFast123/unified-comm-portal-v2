@@ -9,6 +9,8 @@ vi.mock('@/lib/channel-sender', () => ({
   verifyEmailConfig: vi.fn(async () => ({ ok: true })),
   verifyTeamsConfig: vi.fn(async () => ({ ok: true })),
   verifyWhatsAppConfig: vi.fn(async () => ({ ok: true })),
+  sendSms: vi.fn(async () => ({ ok: true, provider_message_id: 'sms-1' })),
+  verifySmsConfig: vi.fn(async () => ({ ok: true })),
 }))
 
 import { sendViaChannel, getAdapter } from '@/lib/channels/adapters'
@@ -16,9 +18,11 @@ import {
   sendEmail,
   sendTeams,
   sendWhatsApp,
+  sendSms,
   verifyEmailConfig,
   verifyTeamsConfig,
   verifyWhatsAppConfig,
+  verifySmsConfig,
 } from '@/lib/channel-sender'
 
 beforeEach(() => {
@@ -129,5 +133,15 @@ describe('channel outbound adapters', () => {
     expect(verifyEmailConfig).toHaveBeenCalledTimes(1)
     expect(verifyTeamsConfig).toHaveBeenCalledTimes(1)
     expect(verifyWhatsAppConfig).toHaveBeenCalledTimes(1)
+  })
+
+  it('routes sms to sendSms (to -> toPhone) and verifyConfig to verifySmsConfig', async () => {
+    const res = await sendViaChannel('sms', { accountId: 'acct-4', to: '+15557654321', body: 'sms message' })
+    expect(res).toEqual({ ok: true, provider_message_id: 'sms-1' })
+    expect(sendSms).toHaveBeenCalledWith({ accountId: 'acct-4', toPhone: '+15557654321', body: 'sms message' })
+
+    const smsCfg = { account_sid: 'AC1', auth_token: 't', from_number: '+1' }
+    await getAdapter('sms')!.verifyConfig(smsCfg)
+    expect(verifySmsConfig).toHaveBeenCalledWith(smsCfg)
   })
 })

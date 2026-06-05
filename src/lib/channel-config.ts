@@ -2,7 +2,7 @@ import { createServiceRoleClient } from '@/lib/supabase-server'
 import { encrypt, decrypt } from '@/lib/encryption'
 import { logError } from '@/lib/logger'
 
-export type Channel = 'email' | 'teams' | 'whatsapp'
+export type Channel = 'email' | 'teams' | 'whatsapp' | 'sms'
 
 // ─── Config shapes per channel ────────────────────────────────────────
 
@@ -56,10 +56,18 @@ export interface WhatsAppConfig {
   graph_version: string
 }
 
+export interface SmsConfig {
+  account_sid: string
+  auth_token: string
+  /** The Twilio sending number in E.164, e.g. +14155552671. */
+  from_number: string
+}
+
 export type ChannelConfigMap = {
   email: EmailConfig
   teams: TeamsConfig
   whatsapp: WhatsAppConfig
+  sms: SmsConfig
 }
 
 // Fields that should never be returned to the UI in clear text
@@ -67,6 +75,7 @@ const SECRET_FIELDS: Record<Channel, string[]> = {
   email: ['smtp_password', 'imap_password', 'google_refresh_token', 'google_access_token'],
   teams: ['azure_client_secret', 'delegated_refresh_token', 'delegated_access_token'],
   whatsapp: ['access_token', 'verify_token'],
+  sms: ['auth_token'],
 }
 
 // Fields that MUST be present (non-empty) before a channel config can be saved.
@@ -76,6 +85,7 @@ export const REQUIRED_CONFIG_FIELDS: Record<Channel, string[]> = {
   email: ['smtp_host', 'smtp_user', 'smtp_password'],
   teams: ['azure_tenant_id', 'azure_client_id', 'azure_client_secret'],
   whatsapp: ['phone_number_id', 'access_token'],
+  sms: ['account_sid', 'auth_token', 'from_number'],
 }
 
 /**
@@ -139,10 +149,19 @@ function envWhatsAppConfig(): WhatsAppConfig | null {
   }
 }
 
+function envSmsConfig(): SmsConfig | null {
+  const sid = process.env.TWILIO_ACCOUNT_SID
+  const token = process.env.TWILIO_AUTH_TOKEN
+  const from = process.env.TWILIO_FROM_NUMBER
+  if (!sid || !token || !from) return null
+  return { account_sid: sid, auth_token: token, from_number: from }
+}
+
 function envConfig<C extends Channel>(channel: C): ChannelConfigMap[C] | null {
   if (channel === 'email') return envEmailConfig() as ChannelConfigMap[C] | null
   if (channel === 'teams') return envTeamsConfig() as ChannelConfigMap[C] | null
-  return envWhatsAppConfig() as ChannelConfigMap[C] | null
+  if (channel === 'whatsapp') return envWhatsAppConfig() as ChannelConfigMap[C] | null
+  return envSmsConfig() as ChannelConfigMap[C] | null
 }
 
 // ─── DB lookup (with env fallback) ────────────────────────────────────

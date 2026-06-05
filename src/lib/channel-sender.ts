@@ -4,6 +4,7 @@ import {
   type EmailConfig,
   type TeamsConfig,
   type WhatsAppConfig,
+  type SmsConfig,
 } from '@/lib/channel-config'
 
 export type SendResult =
@@ -43,6 +44,13 @@ export interface SendWhatsAppInput {
   toPhone: string
   body: string
   configOverride?: WhatsAppConfig
+}
+
+export interface SendSmsInput {
+  accountId: string | null
+  toPhone: string
+  body: string
+  configOverride?: SmsConfig
 }
 
 // ─── HTML escaping (anti-XSS for outbound email) ─────────────────────
@@ -358,5 +366,51 @@ export async function verifyWhatsAppConfig(cfg: WhatsAppConfig): Promise<SendRes
     return { ok: true }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : 'WhatsApp verify failed' }
+  }
+}
+
+// ─── SMS (Twilio) ─────────────────────────────────────────────────────
+
+export async function sendSms(input: SendSmsInput): Promise<SendResult> {
+  try {
+    const cfg = input.configOverride ?? (await getChannelConfig(input.accountId, 'sms'))
+    if (!cfg) return { ok: false, error: 'SMS is not configured for this account' }
+
+    // Twilio REST API: HTTP Basic auth (AccountSid:AuthToken), form-encoded body.
+    const auth = Buffer.from(`${cfg.account_sid}:${cfg.auth_token}`).toString('base64')
+    const res = await withRetry(
+      () =>
+        fetch(
+          `https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(cfg.account_sid)}/Messages.json`,
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Basic ${auth}`,
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({ From: cfg.from_number, To: input.toPhone, Body: input.body }),
+          }
+        ),
+      (r) => r instanceof Response && isTransientStatus(r.status)
+    )
+    if (!res.ok) return { ok: false, error: `Twilio ${res.status}: ${await res.text()}` }
+    const json = (await res.json()) as { sid?: string }
+    return { ok: true, provider_message_id: json.sid }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'SMS send failed' }
+  }
+}
+
+export async function verifySmsConfig(cfg: SmsConfig): Promise<SendResult> {
+  try {
+    const auth = Buffer.from(`${cfg.account_sid}:${cfg.auth_token}`).toString('base64')
+    const res = await fetch(
+      `https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(cfg.account_sid)}.json`,
+      { headers: { Authorization: `Basic ${auth}` } }
+    )
+    if (!res.ok) return { ok: false, error: `Twilio ${res.status}: ${await res.text()}` }
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'SMS verify failed' }
   }
 }

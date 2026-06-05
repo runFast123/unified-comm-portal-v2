@@ -296,7 +296,10 @@ export default function AISettingsClient({ companyAccountIds, companyId }: AISet
             ...a,
             ai_confidence_threshold: thresholdDecimal,
             ai_trust_mode: enableTrustMode,
-            ai_system_prompt: prompts[a.channel_type] ?? a.ai_system_prompt,
+            // SMS (and any future channel without a prompt editor here) falls
+            // back to the account's existing prompt; its default lives in
+            // ai-reply's CHANNEL_SYSTEM_PROMPTS.
+            ai_system_prompt: (prompts as Record<string, string | undefined>)[a.channel_type] ?? a.ai_system_prompt,
           }))
         )
       }
