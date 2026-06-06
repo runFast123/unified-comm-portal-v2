@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-client'
 import type { Account } from '@/types/database'
-import { CHANNEL_KEYS } from '@/lib/channels/registry'
+import { CHANNEL_KEYS, isChannel } from '@/lib/channels/registry'
 import { useUser } from '@/context/user-context'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -624,7 +624,7 @@ export default function ChannelsPage() {
   if (openMenuId) {
     const [accId, ch] = openMenuId.split(':')
     const acc = accounts.find((a) => a.id === accId)
-    if (acc && (ch === 'email' || ch === 'teams' || ch === 'whatsapp')) {
+    if (acc && isChannel(ch)) {
       menuContext = { key: openMenuId, account: acc, channel: ch as Channel, state: configs[openMenuId] }
     }
   }

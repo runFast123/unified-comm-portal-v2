@@ -299,16 +299,16 @@ export default function ReportsPage() {
       if (accountIdFilter) sheetsQuery = sheetsQuery.or(accountIdFilter.map(id => `account_id.eq.${id}`).concat('account_id.is.null').join(','))
       const { data: sheets } = await sheetsQuery
 
-      // 5. Build message volume by day
-      const volumeByDay: Record<string, { email: number; teams: number; whatsapp: number }> = {}
+      // 5. Build message volume by day — all registered channels (not just 3).
+      const volumeByDay: Record<string, Record<string, number>> = {}
       ;(messages || []).forEach((m) => {
         const day = getDayName(new Date(m.received_at))
-        if (!volumeByDay[day]) volumeByDay[day] = { email: 0, teams: 0, whatsapp: 0 }
-        const ch = m.channel as 'email' | 'teams' | 'whatsapp'
-        if (volumeByDay[day][ch] !== undefined) volumeByDay[day][ch]++
+        if (!volumeByDay[day]) volumeByDay[day] = {}
+        volumeByDay[day][m.channel] = (volumeByDay[day][m.channel] || 0) + 1
       })
       const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-      setMessageVolumeData(days.map((d) => ({ day: d, ...(volumeByDay[d] || { email: 0, teams: 0, whatsapp: 0 }) })))
+      const zeroChannels = Object.fromEntries(CHANNEL_KEYS.map((k) => [k, 0]))
+      setMessageVolumeData(days.map((d) => ({ day: d, ...zeroChannels, ...(volumeByDay[d] || {}) })))
 
       // 6. Build channel stats
       // Channel colour + label come from the registry (single source of truth).

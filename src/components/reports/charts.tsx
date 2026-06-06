@@ -15,6 +15,7 @@ import {
   Tooltip,
   Legend,
 } from 'recharts'
+import { CHANNEL_LIST } from '@/lib/channels/registry'
 
 // ─── Shared palette (Linear / Vercel / Stripe inspired) ──────────────────────
 export const CHART_COLORS = {
@@ -32,9 +33,17 @@ export const CHANNEL_COLORS: Record<string, string> = {
   teams: CHART_COLORS.teams,
   email: CHART_COLORS.email,
   whatsapp: CHART_COLORS.whatsapp,
+  sms: '#f22f46',
+  telegram: '#0088cc',
+  messenger: '#0084ff',
+  instagram: '#e4405f',
   Teams: CHART_COLORS.teams,
   Email: CHART_COLORS.email,
   WhatsApp: CHART_COLORS.whatsapp,
+  SMS: '#f22f46',
+  Telegram: '#0088cc',
+  Messenger: '#0084ff',
+  Instagram: '#e4405f',
 }
 
 // Rotating colors for categories (soft, saturation-balanced)
@@ -73,7 +82,7 @@ const LEGEND_STYLE: React.CSSProperties = {
 
 // --- Chart Components (all accept data via props) ---
 
-export function MessageVolumeChart({ data }: { data: { day: string; email: number; teams: number; whatsapp: number }[] }) {
+export function MessageVolumeChart({ data }: { data: Array<{ day: string } & Record<string, number>> }) {
   if (!data || data.length === 0) {
     return <div className="flex items-center justify-center h-[300px] text-gray-400 text-sm">No message volume data available yet.</div>
   }
@@ -91,9 +100,10 @@ export function MessageVolumeChart({ data }: { data: { day: string; email: numbe
           cursor={{ stroke: '#e5e7eb', strokeWidth: 1 }}
         />
         <Legend wrapperStyle={LEGEND_STYLE} iconType="circle" iconSize={8} />
-        <Line type="monotone" dataKey="email" name="Email" stroke={CHANNEL_COLORS.email} strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} />
-        <Line type="monotone" dataKey="teams" name="Teams" stroke={CHANNEL_COLORS.teams} strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} />
-        <Line type="monotone" dataKey="whatsapp" name="WhatsApp" stroke={CHANNEL_COLORS.whatsapp} strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+        {/* One line per registered channel (registry order + brand colour). */}
+        {CHANNEL_LIST.map((c) => (
+          <Line key={c.key} type="monotone" dataKey={c.key} name={c.label} stroke={c.hex} strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+        ))}
       </LineChart>
     </ResponsiveContainer>
   )

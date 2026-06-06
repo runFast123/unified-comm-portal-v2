@@ -13,9 +13,6 @@ import {
   AlertOctagon,
 
   TrendingUp,
-  Mail,
-  MessageSquare,
-  Phone,
   Filter,
   X,
   ChevronDown,
@@ -24,6 +21,7 @@ import {
   AlertTriangle,
   Globe,
 } from 'lucide-react'
+import { CHANNEL_KEYS } from '@/lib/channels/registry'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ChannelIcon } from '@/components/ui/channel-icon'
@@ -86,11 +84,12 @@ const defaultKPIs: DashboardKPIs = {
   topCategory: { name: 'N/A', count: 0 },
 }
 
-const defaultChannelStats: ChannelStats[] = [
-  { channel: 'teams', messageCount: 0, pendingCount: 0, aiSentCount: 0 },
-  { channel: 'email', messageCount: 0, pendingCount: 0, aiSentCount: 0 },
-  { channel: 'whatsapp', messageCount: 0, pendingCount: 0, aiSentCount: 0 },
-]
+const defaultChannelStats: ChannelStats[] = CHANNEL_KEYS.map((channel) => ({
+  channel,
+  messageCount: 0,
+  pendingCount: 0,
+  aiSentCount: 0,
+}))
 
 function getDateRangeStart(range: DateRange, customFrom?: string): string {
   const now = new Date()
@@ -158,14 +157,9 @@ function getDateRangeLabel(range: DateRange): string {
 }
 
 function getChannelColoredIcon(channel: ChannelType) {
-  switch (channel) {
-    case 'email':
-      return <Mail className="h-5 w-5 text-red-500" />
-    case 'teams':
-      return <MessageSquare className="h-5 w-5 text-purple-500" />
-    case 'whatsapp':
-      return <Phone className="h-5 w-5 text-green-500" />
-  }
+  // Registry-driven so every channel (not just email/teams/whatsapp) gets an
+  // icon + colour; previously returned undefined for the others.
+  return <ChannelIcon channel={channel} size={20} />
 }
 
 export default function DashboardPage() {
@@ -584,7 +578,7 @@ export default function DashboardPage() {
         }
 
         // --- Process channel stats ---
-        const channels: ChannelType[] = ['teams', 'email', 'whatsapp']
+        const channels = CHANNEL_KEYS
         const processedChannelStats: ChannelStats[] = channels.map((ch) => {
           const messageCount = (channelMessagesResult.data ?? [])
             .filter((r: { channel: string }) => r.channel === ch).length

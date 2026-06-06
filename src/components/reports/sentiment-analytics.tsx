@@ -7,7 +7,8 @@ import { ReportCard } from '@/components/reports/report-card'
 import { Badge } from '@/components/ui/badge'
 import { createClient } from '@/lib/supabase-client'
 import { cn, timeAgo } from '@/lib/utils'
-import { CHANNEL_KEYS } from '@/lib/channels/registry'
+import { CHANNEL_KEYS, CHANNEL_LIST } from '@/lib/channels/registry'
+import type { ChannelType } from '@/types/database'
 import {
   TrendingUp,
   TrendingDown,
@@ -257,7 +258,7 @@ interface ChannelSentiment {
 export function SentimentAnalyticsTab({ dateStart, activeCompanyId, companyAccountIds }: { dateStart: string; activeCompanyId: string | null; companyAccountIds: string[] }) {
   const [loading, setLoading] = useState(true)
   const [modalData, setModalData] = useState<{ title: string; messages: SentimentMessage[]; initialFilter?: 'all' | 'positive' | 'neutral' | 'negative' } | null>(null)
-  const [channelFilter, setChannelFilter] = useState<'all' | 'email' | 'teams' | 'whatsapp'>('all')
+  const [channelFilter, setChannelFilter] = useState<'all' | ChannelType>('all')
   const [overallScore, setOverallScore] = useState(0)
   const [totals, setTotals] = useState({ positive: 0, neutral: 0, negative: 0, total: 0 })
   const [channelSentiments, setChannelSentiments] = useState<ChannelSentiment[]>([])
@@ -502,12 +503,10 @@ export function SentimentAnalyticsTab({ dateStart, activeCompanyId, companyAccou
     <div className="space-y-6">
       {/* Channel Filter Tabs */}
       <div className="flex items-center gap-0.5 rounded-lg border border-gray-200/80 bg-gray-50 p-1 shadow-[0_1px_2px_rgba(16,24,40,0.04)] w-fit">
-        {[
-          { value: 'all' as const, label: 'All Channels' },
-          { value: 'email' as const, label: 'Email' },
-          { value: 'teams' as const, label: 'Teams' },
-          { value: 'whatsapp' as const, label: 'WhatsApp' },
-        ].map(tab => (
+        {([
+          { value: 'all', label: 'All Channels' },
+          ...CHANNEL_LIST.map((c) => ({ value: c.key, label: c.label })),
+        ] as Array<{ value: 'all' | ChannelType; label: string }>).map(tab => (
           <button
             key={tab.value}
             onClick={() => setChannelFilter(tab.value)}

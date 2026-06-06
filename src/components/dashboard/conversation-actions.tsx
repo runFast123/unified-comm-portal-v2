@@ -1474,7 +1474,7 @@ export function ConversationActions({
         <div className="flex items-start gap-2 rounded-lg bg-blue-50 border border-blue-200 px-3 py-2 text-xs text-blue-800">
           <Info size={14} className="shrink-0 mt-0.5 text-blue-600" />
           <span>
-            Replied from {channel === 'teams' ? 'Teams' : channel === 'whatsapp' ? 'WhatsApp' : 'Gmail'} directly? Click <strong>&quot;Mark as Replied&quot;</strong> to sync the status here.
+            Replied from {getChannel(channel)?.label ?? 'this channel'} directly? Click <strong>&quot;Mark as Replied&quot;</strong> to sync the status here.
           </span>
         </div>
       )}

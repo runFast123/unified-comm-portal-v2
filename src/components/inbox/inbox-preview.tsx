@@ -3,14 +3,12 @@
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { ChannelIcon } from '@/components/ui/channel-icon'
 import {
   ExternalLink,
   Loader2,
   Brain,
   Sparkles,
-  Mail,
-  MessageSquare,
-  Phone,
   Clock,
   Building2,
   AlertTriangle,
@@ -56,14 +54,7 @@ interface ConversationData {
 }
 
 function getChannelIcon(channel: ChannelType) {
-  switch (channel) {
-    case 'email':
-      return <Mail className="h-4 w-4 text-red-500" />
-    case 'teams':
-      return <MessageSquare className="h-4 w-4 text-purple-500" />
-    case 'whatsapp':
-      return <Phone className="h-4 w-4 text-green-500" />
-  }
+  return <ChannelIcon channel={channel} size={16} />
 }
 
 function SentimentIcon({ sentiment }: { sentiment: string }) {
