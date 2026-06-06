@@ -42,8 +42,11 @@ import { CopyField } from '@/components/ui/copy-field'
 type Channel = 'email' | 'teams' | 'whatsapp' | 'sms' | 'telegram' | 'messenger' | 'instagram'
 
 interface ConfigState {
-  source: 'db' | 'env' | 'none'
+  source: 'db' | 'env' | 'none' | 'db_broken'
   config: Record<string, unknown> | null
+  // Persisted Test-Connection result for the account's own (db) credentials.
+  lastTestedAt?: string | null
+  lastTestOk?: boolean | null
 }
 
 const CHANNEL_META: Record<Channel, { label: string; Icon: typeof Mail; color: string }> = {
@@ -577,6 +580,25 @@ export default function ChannelsPage() {
     }
   }
 
+  // Test an account's SAVED credentials (no form config) and persist the
+  // result, then refresh the row so the verified / failed badge updates.
+  const handleTestSaved = async (account: Account, channel: Channel) => {
+    try {
+      const res = await fetch('/api/channels/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel, account_id: account.id }),
+      })
+      const json = await res.json()
+      if (json.ok) toast.success('Connection verified')
+      else toast.error('Test failed: ' + (json.error || 'unknown error'))
+    } catch (err) {
+      toast.error((err as Error).message)
+    } finally {
+      await loadConfigStatus(account.id, channel)
+    }
+  }
+
   if (loading) {
     return (
       <div className="space-y-6 p-6">
@@ -786,16 +808,19 @@ export default function ChannelsPage() {
                   // Status chip text (compact). For OAuth-connected DB rows we append a
                   // suffix so the single chip conveys both storage + auth mode.
                   let statusLabel: string | null = null
-                  let statusTone: 'db' | 'env' | 'none' | null = null
+                  let statusTone: 'db' | 'env' | 'none' | 'broken' | null = null
                   if (state?.source === 'db') {
                     statusTone = 'db'
                     statusLabel =
-                      isDelegated ? 'Custom \u00b7 Teams OAuth'
-                      : isGmailOAuth ? 'Custom \u00b7 Gmail OAuth'
-                      : 'Custom'
+                      isDelegated ? 'Your credentials \u00b7 Teams OAuth'
+                      : isGmailOAuth ? 'Your credentials \u00b7 Gmail OAuth'
+                      : 'Your credentials'
                   } else if (state?.source === 'env') {
                     statusTone = 'env'
-                    statusLabel = 'Default env'
+                    statusLabel = 'Platform default'
+                  } else if (state?.source === 'db_broken') {
+                    statusTone = 'broken'
+                    statusLabel = 'Credentials error'
                   } else if (state?.source === 'none') {
                     statusTone = 'none'
                     statusLabel = 'Not configured'
@@ -804,7 +829,12 @@ export default function ChannelsPage() {
                   const showGmailOAuthButton = channel === 'email' && !isGmailOAuth
                   const showTeamsOAuthButton =
                     channel === 'teams' && state?.source === 'db' && !isDelegated
-                  const primaryLabel = state?.source === 'db' ? 'Update creds' : 'Configure'
+                  const primaryLabel =
+                    state?.source === 'db'
+                      ? 'Update credentials'
+                      : state?.source === 'env'
+                        ? 'Use your own credentials'
+                        : 'Configure'
                   const menuOpen = openMenuId === key
 
                   return (
@@ -820,7 +850,9 @@ export default function ChannelsPage() {
                                 ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
                                 : statusTone === 'env'
                                   ? 'bg-blue-50 text-blue-700 ring-blue-200'
-                                  : 'bg-amber-50 text-amber-700 ring-amber-200')
+                                  : statusTone === 'broken'
+                                    ? 'bg-red-50 text-red-700 ring-red-200'
+                                    : 'bg-amber-50 text-amber-700 ring-amber-200')
                             }
                           >
                             {statusTone === 'db' && (
@@ -830,6 +862,41 @@ export default function ChannelsPage() {
                               <ShieldCheck className="h-3 w-3 flex-shrink-0" />
                             )}
                             {statusLabel}
+                          </span>
+                        )}
+                        {/* Test-Connection gate — only for the account's own (db)
+                            credentials, and not OAuth-connected configs (their
+                            "Connected as …" chip is the verification signal). */}
+                        {state?.source === 'db' && !isDelegated && !isGmailOAuth && (
+                          <span
+                            title={
+                              state.lastTestOk === true
+                                ? 'Credentials passed the last connection test'
+                                : state.lastTestOk === false
+                                  ? 'Last connection test failed — open ⋮ → Test connection'
+                                  : 'Saved but not yet tested — open ⋮ → Test connection'
+                            }
+                            className={
+                              'inline-flex flex-shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ' +
+                              (state.lastTestOk === true
+                                ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
+                                : state.lastTestOk === false
+                                  ? 'bg-red-50 text-red-700 ring-red-200'
+                                  : 'bg-amber-50 text-amber-700 ring-amber-200')
+                            }
+                          >
+                            {state.lastTestOk === true ? (
+                              <CheckCircle className="h-3 w-3 flex-shrink-0" />
+                            ) : state.lastTestOk === false ? (
+                              <AlertTriangle className="h-3 w-3 flex-shrink-0" />
+                            ) : (
+                              <KeyRound className="h-3 w-3 flex-shrink-0" />
+                            )}
+                            {state.lastTestOk === true
+                              ? 'Verified'
+                              : state.lastTestOk === false
+                                ? 'Test failed'
+                                : 'Not tested'}
                           </span>
                         )}
                         {oauthEmail && (
@@ -972,12 +1039,25 @@ export default function ChannelsPage() {
               type="button"
               onClick={() => {
                 setOpenMenuId(null)
+                handleTestSaved(menuContext!.account, menuContext!.channel)
+              }}
+              className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+            >
+              <CheckCircle className="h-4 w-4 text-gray-500" />
+              Test connection
+            </button>
+          )}
+          {menuContext.state?.source === 'db' && (
+            <button
+              type="button"
+              onClick={() => {
+                setOpenMenuId(null)
                 handleDeleteCreds(menuContext!.account, menuContext!.channel)
               }}
               className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
             >
               <Trash2 className="h-4 w-4 text-gray-500" />
-              Remove saved creds
+              Remove my credentials
             </button>
           )}
           {menuContext.channel === 'email' &&

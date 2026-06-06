@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase-server'
 import { getAdapter } from '@/lib/channels/adapters'
-import { isChannel } from '@/lib/channels/registry'
+import { isChannel, CHANNEL_KEYS } from '@/lib/channels/registry'
 import { checkRateLimit, verifyAccountAccess } from '@/lib/api-helpers'
 import {
   getChannelConfig,
+  recordChannelConfigTest,
   type Channel,
   type EmailConfig,
   type TeamsConfig,
@@ -36,7 +37,7 @@ export async function POST(request: Request) {
     const body = (await request.json()) as Partial<TestBody> & { channel?: Channel }
     const { channel, account_id } = body
     if (!isChannel(channel)) {
-      return NextResponse.json({ error: 'channel must be email|teams|whatsapp' }, { status: 400 })
+      return NextResponse.json({ error: `channel must be one of: ${CHANNEL_KEYS.join(', ')}` }, { status: 400 })
     }
 
     // Tenant scope: when falling back to an account's SAVED credentials, ensure
@@ -50,10 +51,16 @@ export async function POST(request: Request) {
     // creds) and verify them via the channel adapter — one dispatch for all
     // channels instead of a per-channel case.
     const adapter = getAdapter(channel)
-    if (!adapter) return NextResponse.json({ error: 'channel must be email|teams|whatsapp' }, { status: 400 })
+    if (!adapter) return NextResponse.json({ error: 'Unsupported channel' }, { status: 400 })
     const cfg = body.config ?? (await getChannelConfig(account_id ?? null, channel))
     if (!cfg) return NextResponse.json({ ok: false, error: 'No credentials configured' })
-    return NextResponse.json(await adapter.verifyConfig(cfg))
+    const result = await adapter.verifyConfig(cfg)
+    // When testing an account's SAVED credentials (not an ad-hoc form test),
+    // persist the result so the admin UI can show a verified / failed gate.
+    if (!body.config && account_id) {
+      await recordChannelConfigTest(account_id, channel, result.ok, result.ok ? null : result.error)
+    }
+    return NextResponse.json(result)
   } catch (err) {
     return NextResponse.json(
       { ok: false, error: err instanceof Error ? err.message : 'Test failed' },

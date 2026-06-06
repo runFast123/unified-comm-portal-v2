@@ -301,7 +301,16 @@ export async function saveChannelConfig<C extends Channel>(
   const { error } = await supabase
     .from('channel_configs')
     .upsert(
-      { account_id: accountId, channel, config_encrypted: ciphertext },
+      {
+        account_id: accountId,
+        channel,
+        config_encrypted: ciphertext,
+        // New/updated credentials are unverified until re-tested — clear any
+        // prior Test-Connection result so the gate badge reflects the new secret.
+        last_tested_at: null,
+        last_test_ok: null,
+        last_test_error: null,
+      },
       { onConflict: 'account_id,channel' }
     )
   if (error) throw new Error(`Failed to save channel config: ${error.message}`)
@@ -314,14 +323,20 @@ export async function getMaskedChannelConfig<C extends Channel>(
 ): Promise<{
   source: 'db' | 'env' | 'none' | 'db_broken'
   config: Partial<ChannelConfigMap[C]> | null
+  lastTestedAt: string | null
+  lastTestOk: boolean | null
 }> {
   const supabase = await createServiceRoleClient()
   const { data } = await supabase
     .from('channel_configs')
-    .select('config_encrypted')
+    .select('config_encrypted, last_tested_at, last_test_ok')
     .eq('account_id', accountId)
     .eq('channel', channel)
     .maybeSingle()
+
+  // Test-status only exists on a saved (db) row; null for env/none.
+  const lastTestedAt = (data as { last_tested_at?: string | null } | null)?.last_tested_at ?? null
+  const lastTestOk = (data as { last_test_ok?: boolean | null } | null)?.last_test_ok ?? null
 
   let raw: ChannelConfigMap[C] | null = null
   let source: 'db' | 'env' | 'none' | 'db_broken' = 'none'
@@ -358,13 +373,36 @@ export async function getMaskedChannelConfig<C extends Channel>(
   // otherwise apply — the admin should repair the row, not silently run
   // against stale env defaults.
   if (dbBroken) source = 'db_broken'
-  if (!raw) return { source, config: null }
+  if (!raw) return { source, config: null, lastTestedAt, lastTestOk }
 
   const masked: Record<string, unknown> = { ...raw }
   for (const f of SECRET_FIELDS[channel]) {
     if (masked[f]) masked[f] = '••••••••'
   }
-  return { source, config: masked as Partial<ChannelConfigMap[C]> }
+  return { source, config: masked as Partial<ChannelConfigMap[C]>, lastTestedAt, lastTestOk }
+}
+
+/**
+ * Persist the result of a Test-Connection against an account+channel's SAVED
+ * credentials, so the admin UI can show a verified/failed gate. No-op when the
+ * account has no own (db) row — env/platform defaults aren't per-tenant tested.
+ */
+export async function recordChannelConfigTest(
+  accountId: string,
+  channel: Channel,
+  ok: boolean,
+  error?: string | null
+): Promise<void> {
+  const supabase = await createServiceRoleClient()
+  await supabase
+    .from('channel_configs')
+    .update({
+      last_tested_at: new Date().toISOString(),
+      last_test_ok: ok,
+      last_test_error: ok ? null : (error ?? 'Test failed'),
+    })
+    .eq('account_id', accountId)
+    .eq('channel', channel)
 }
 
 export async function deleteChannelConfig(accountId: string, channel: Channel): Promise<void> {

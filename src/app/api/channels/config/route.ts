@@ -57,7 +57,7 @@ export async function GET(request: Request) {
   const channel = url.searchParams.get('channel') as Channel | null
   if (!accountId) return NextResponse.json({ error: 'account_id required' }, { status: 400 })
   if (!channel || !CHANNELS.includes(channel)) {
-    return NextResponse.json({ error: 'channel must be email|teams|whatsapp' }, { status: 400 })
+    return NextResponse.json({ error: `channel must be one of: ${CHANNELS.join(', ')}` }, { status: 400 })
   }
 
   // Tenant scope: the service-role client below bypasses RLS, so confirm the
@@ -81,7 +81,7 @@ export async function POST(request: Request) {
     const { account_id, channel, config } = body
     if (!account_id) return NextResponse.json({ error: 'account_id required' }, { status: 400 })
     if (!channel || !CHANNELS.includes(channel)) {
-      return NextResponse.json({ error: 'channel must be email|teams|whatsapp' }, { status: 400 })
+      return NextResponse.json({ error: `channel must be one of: ${CHANNELS.join(', ')}` }, { status: 400 })
     }
     if (!config || typeof config !== 'object') {
       return NextResponse.json({ error: 'config object required' }, { status: 400 })
@@ -120,7 +120,7 @@ export async function DELETE(request: Request) {
   const channel = url.searchParams.get('channel') as Channel | null
   if (!accountId) return NextResponse.json({ error: 'account_id required' }, { status: 400 })
   if (!channel || !CHANNELS.includes(channel)) {
-    return NextResponse.json({ error: 'channel must be email|teams|whatsapp' }, { status: 400 })
+    return NextResponse.json({ error: `channel must be one of: ${CHANNELS.join(', ')}` }, { status: 400 })
   }
 
   // Tenant scope: block deleting another company's channel config.
