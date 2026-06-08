@@ -101,7 +101,6 @@ export async function POST(request: Request) {
         conversation_id: conversationId,
         account_id,
         channel: inbound.channel,
-        teams_chat_id: inbound.teams_chat_id,
         teams_message_id: inbound.teams_message_id,
         sender_name: inbound.sender_name,
         sender_type: inbound.sender_type,
