@@ -38,8 +38,13 @@ export async function POST(request: Request) {
   }
   const accountId = widget.account_id
 
-  // Rate limit per (widget, session) to curb spam from a single visitor.
-  if (!(await checkRateLimit(`widget_${key}_${sessionId}`, 30, 60))) {
+  // Rate limit on TWO keys: a per-widget (account-level) ceiling caps abuse from
+  // an attacker rotating the client-supplied session_id, and a tighter per-session
+  // cap throttles a single visitor. Both must pass.
+  if (
+    !(await checkRateLimit(`widget_acct_${key}`, 100, 60)) ||
+    !(await checkRateLimit(`widget_${key}_${sessionId}`, 30, 60))
+  ) {
     return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429, headers: WIDGET_CORS })
   }
 
