@@ -9,6 +9,11 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 
+// merge / unmerge now gate on action:conversation.merge; grant it here.
+vi.mock('@/lib/permissions/server', () => ({
+  userIdCan: vi.fn(async () => true),
+}))
+
 vi.mock('next/headers', () => ({
   headers: async () => ({ get: () => null }),
   cookies: async () => ({ getAll: () => [], set: () => {} }),

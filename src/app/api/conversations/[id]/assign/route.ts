@@ -14,6 +14,7 @@ import { NextResponse } from 'next/server'
 
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase-server'
 import { verifyAccountAccess } from '@/lib/api-helpers'
+import { userIdCan } from '@/lib/permissions/server'
 import { getCurrentUser, isSupervisor } from '@/lib/auth'
 
 interface PostBody {
@@ -58,6 +59,9 @@ export async function POST(
     const allowed = await verifyAccountAccess(user.id, conv.account_id)
     if (!allowed) {
       return NextResponse.json({ error: 'Forbidden: account scope mismatch' }, { status: 403 })
+    }
+    if (!(await userIdCan(user.id, 'action:conversation.assign'))) {
+      return NextResponse.json({ error: 'Missing permission: action:conversation.assign' }, { status: 403 })
     }
 
     // ── Phase 2: role-tier enforcement ──

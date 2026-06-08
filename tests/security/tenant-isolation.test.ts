@@ -19,6 +19,12 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 
+// Gated endpoints (channels/config) now call userIdCan; grant it. This test is
+// about TENANT isolation (verifyAccountAccess), not RBAC permissions.
+vi.mock('@/lib/permissions/server', () => ({
+  userIdCan: vi.fn(async () => true),
+}))
+
 // next/headers — channels/config + accounts read cookies()/headers() indirectly.
 vi.mock('next/headers', () => ({
   headers: async () => ({ get: () => null }),

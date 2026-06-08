@@ -8,6 +8,11 @@
 
 import { vi } from 'vitest'
 
+// The send route now gates on action:message.send + channel:*; grant them here.
+vi.mock('@/lib/permissions/server', () => ({
+  userIdCan: vi.fn(async () => true),
+}))
+
 // ---- Mocks ---------------------------------------------------------
 
 // Freeze the clock so the dedup window check is deterministic.

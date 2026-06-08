@@ -14,6 +14,7 @@ import {
 import { verifyAccountAccess, checkRateLimit } from '@/lib/api-helpers'
 import { unmergeConversations } from '@/lib/conversation-merge'
 import { getCurrentUser, isSupervisor } from '@/lib/auth'
+import { userIdCan } from '@/lib/permissions/server'
 
 interface Body {
   secondary_conversation_id?: string
@@ -70,6 +71,10 @@ export async function POST(
           { status: 403 }
         )
       }
+    }
+
+    if (!(await userIdCan(user.id, 'action:conversation.merge'))) {
+      return NextResponse.json({ error: 'Missing permission: action:conversation.merge' }, { status: 403 })
     }
 
     // ── Phase 2: role-tier enforcement ──

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase-server'
 import { isCompanyAdmin, isSuperAdmin } from '@/lib/auth'
+import { userIdCan } from '@/lib/permissions/server'
 
 interface AdminCtx {
   userId: string
@@ -74,6 +75,10 @@ interface DeleteBody {
 export async function POST(request: Request) {
   const gate = await requireAdmin()
   if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: gate.status })
+
+  if (!(await userIdCan(gate.ctx.userId, 'action:users.manage'))) {
+    return NextResponse.json({ error: 'Missing permission: action:users.manage' }, { status: 403 })
+  }
 
   let body: DeleteBody
   try {

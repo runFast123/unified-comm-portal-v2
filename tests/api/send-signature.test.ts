@@ -10,6 +10,11 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 
+// The send route now gates on action:message.send + channel:*; grant them here.
+vi.mock('@/lib/permissions/server', () => ({
+  userIdCan: vi.fn(async () => true),
+}))
+
 vi.mock('next/headers', () => ({
   headers: async () => ({ get: () => null }),
   cookies: async () => ({ getAll: () => [], set: () => {} }),

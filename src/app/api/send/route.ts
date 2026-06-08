@@ -3,6 +3,7 @@ import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supab
 import { sendViaChannel } from '@/lib/channels/adapters'
 import { resolveRecipient, isChannel } from '@/lib/channels/registry'
 import { checkRateLimit, verifyAccountAccess, getReplyToMessageId } from '@/lib/api-helpers'
+import { userIdCan } from '@/lib/permissions/server'
 import { getRequestId } from '@/lib/request-id'
 import { logError, logInfo } from '@/lib/logger'
 import { resolveSignature, appendSignatureToBody } from '@/lib/email-signature'
@@ -83,6 +84,14 @@ export async function POST(request: Request) {
     const hasAccountAccess = await verifyAccountAccess(user.id, account_id)
     if (!hasAccountAccess) {
       return NextResponse.json({ error: 'Forbidden: account scope mismatch', request_id: requestId }, { status: 403 })
+    }
+
+    // RBAC: gate sending in general + access to this specific channel.
+    if (!(await userIdCan(user.id, 'action:message.send'))) {
+      return NextResponse.json({ error: 'You do not have permission to send messages', request_id: requestId }, { status: 403 })
+    }
+    if (!(await userIdCan(user.id, `channel:${channel}`))) {
+      return NextResponse.json({ error: `You do not have access to the ${channel} channel`, request_id: requestId }, { status: 403 })
     }
 
     // Confirm the conversation actually belongs to this account.

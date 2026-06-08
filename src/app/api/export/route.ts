@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase-server'
 import { verifyAccountAccess } from '@/lib/api-helpers'
 import { isSuperAdmin } from '@/lib/auth'
+import { userIdCan } from '@/lib/permissions/server'
 
 /**
  * GET /api/export?type=messages&from=2026-01-01&to=2026-12-31&account_id=...
@@ -27,6 +28,11 @@ export async function GET(request: Request) {
       .select('role, account_id, company_id')
       .eq('id', user.id)
       .maybeSingle()
+
+    // RBAC: gate data export (super_admin passes through userIdCan).
+    if (!(await userIdCan(user.id, 'action:conversation.export'))) {
+      return NextResponse.json({ error: 'Missing permission: action:conversation.export' }, { status: 403 })
+    }
 
     // super_admin sees everything; all other roles (admin, company_admin,
     // company_member, viewer, reviewer) are scoped to their company / their

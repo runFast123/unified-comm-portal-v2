@@ -9,6 +9,7 @@ import {
   type ChannelConfigMap,
 } from '@/lib/channel-config'
 import { verifyAccountAccess } from '@/lib/api-helpers'
+import { userIdCan } from '@/lib/permissions/server'
 import { CHANNEL_KEYS } from '@/lib/channels/registry'
 
 const CHANNELS = CHANNEL_KEYS as Channel[]
@@ -91,6 +92,9 @@ export async function POST(request: Request) {
     if (!(await verifyAccountAccess(gate.ctx.userId, account_id))) {
       return NextResponse.json({ error: 'Forbidden: account scope mismatch' }, { status: 403 })
     }
+    if (!(await userIdCan(gate.ctx.userId, 'action:credentials.manage'))) {
+      return NextResponse.json({ error: 'Missing permission: action:credentials.manage' }, { status: 403 })
+    }
 
     // Minimal shape validation per channel — required fields are declared in the
     // channel-config registry (REQUIRED_CONFIG_FIELDS) so a new channel needs no
@@ -126,6 +130,9 @@ export async function DELETE(request: Request) {
   // Tenant scope: block deleting another company's channel config.
   if (!(await verifyAccountAccess(gate.ctx.userId, accountId))) {
     return NextResponse.json({ error: 'Forbidden: account scope mismatch' }, { status: 403 })
+  }
+  if (!(await userIdCan(gate.ctx.userId, 'action:credentials.manage'))) {
+    return NextResponse.json({ error: 'Missing permission: action:credentials.manage' }, { status: 403 })
   }
 
   await deleteChannelConfig(accountId, channel)

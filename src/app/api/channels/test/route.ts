@@ -3,6 +3,7 @@ import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supab
 import { getAdapter } from '@/lib/channels/adapters'
 import { isChannel, CHANNEL_KEYS } from '@/lib/channels/registry'
 import { checkRateLimit, verifyAccountAccess } from '@/lib/api-helpers'
+import { userIdCan } from '@/lib/permissions/server'
 import {
   getChannelConfig,
   recordChannelConfigTest,
@@ -45,6 +46,9 @@ export async function POST(request: Request) {
     // credential-validity oracle (and triggers live auth with their secrets).
     if (account_id && !(await verifyAccountAccess(user.id, account_id))) {
       return NextResponse.json({ error: 'Forbidden: account scope mismatch' }, { status: 403 })
+    }
+    if (!(await userIdCan(user.id, 'action:credentials.manage'))) {
+      return NextResponse.json({ error: 'Missing permission: action:credentials.manage' }, { status: 403 })
     }
 
     // Resolve credentials (caller-provided config, else the account's saved/env
