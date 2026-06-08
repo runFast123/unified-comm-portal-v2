@@ -21,6 +21,7 @@ import {
 } from '@/components/dashboard/inbox-facets-sidebar'
 import type { InboxFacets } from '@/app/api/inbox/facets/route'
 import { createClient } from '@/lib/supabase-client'
+import { CHANNEL_KEYS, isChannel } from '@/lib/channels/registry'
 import { decodeHtmlEntities } from '@/lib/utils'
 import { useToast } from '@/components/ui/toast'
 import { useRealtimeMessages } from '@/hooks/useRealtimeMessages'
@@ -89,9 +90,17 @@ function derivePriority(urgency: string | null | undefined): Priority {
 }
 
 export default function InboxPage() {
-  const { isAdmin, account_id: userAccountId, companyAccountIds, activeCompanyId } = useUser()
+  const { isAdmin, account_id: userAccountId, companyAccountIds, activeCompanyId, permissions } = useUser()
   const { toast } = useToast()
   const searchParams = useSearchParams()
+  // RBAC channel visibility: the channels this user may see. When no permission
+  // set is present (provider outside the dashboard), treat as unrestricted so we
+  // never blank the inbox.
+  const allowedChannels = useMemo(
+    () => (permissions.length === 0 ? CHANNEL_KEYS : CHANNEL_KEYS.filter((c) => permissions.includes(`channel:${c}`))),
+    [permissions]
+  )
+  const channelRestricted = allowedChannels.length < CHANNEL_KEYS.length
   const [filters, setFilters] = useState<InboxFilters>(() => {
     // Initialize filters from URL search params if present
     if (typeof window === 'undefined') return defaultFilters
@@ -100,7 +109,7 @@ export default function InboxPage() {
     const category = params.get('category')
     const sentiment = params.get('sentiment')
     return {
-      channel: (channel && ['teams', 'email', 'whatsapp'].includes(channel) ? channel : 'all') as InboxFilters['channel'],
+      channel: (channel && isChannel(channel) ? channel : 'all') as InboxFilters['channel'],
       category: (category || 'all') as InboxFilters['category'],
       sentiment: (sentiment || 'all') as InboxFilters['sentiment'],
       priority: 'all' as InboxFilters['priority'],
@@ -470,6 +479,14 @@ export default function InboxPage() {
         inboxCountQuery = inboxCountQuery.in('account_id', resolvedAccountIds)
       }
 
+      // RBAC: hide channels this user can't access (skipped when unrestricted).
+      if (channelRestricted) {
+        messagesQuery = messagesQuery.in('channel', allowedChannels)
+        newsletterCountQuery = newsletterCountQuery.in('channel', allowedChannels)
+        spamCountQuery = spamCountQuery.in('channel', allowedChannels)
+        inboxCountQuery = inboxCountQuery.in('channel', allowedChannels)
+      }
+
       const [messagesResult, newsletterCountResult, spamCountResult, inboxCountResult] = await Promise.all([
         messagesQuery,
         newsletterCountQuery,
@@ -627,6 +644,7 @@ export default function InboxPage() {
       else moreQuery = moreQuery.eq('is_spam', true).not('spam_reason', 'in', '(newsletter,marketing,automated_notification,ai_classified_newsletter)')
 
       if (filters.channel !== 'all') moreQuery = moreQuery.eq('channel', filters.channel)
+      if (channelRestricted) moreQuery = moreQuery.in('channel', allowedChannels)
       // Scope to the active tenant. `activeCompanyId === null` is super_admin
       // combined view → run unscoped. Zero-account tenants pass `[]` → no rows.
       if (activeCompanyId) moreQuery = moreQuery.in('account_id', companyAccountIds)

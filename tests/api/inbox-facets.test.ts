@@ -10,6 +10,15 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 
+// The facets route now resolves channel-visibility permissions; grant all 7
+// channels so these count tests aren't restricted by RBAC.
+vi.mock('@/lib/permissions/server', () => ({
+  getEffectivePermissions: vi.fn(async () => new Set([
+    'channel:email', 'channel:teams', 'channel:whatsapp', 'channel:sms',
+    'channel:telegram', 'channel:messenger', 'channel:instagram',
+  ])),
+}))
+
 vi.mock('next/headers', () => ({
   headers: async () => ({ get: () => null }),
   // `get` returns undefined → no `selected_company_id` cookie set, i.e. the

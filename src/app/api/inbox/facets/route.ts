@@ -22,6 +22,8 @@ import {
   createServiceRoleClient,
 } from '@/lib/supabase-server'
 import { CHANNEL_KEYS } from '@/lib/channels/registry'
+import { getEffectivePermissions } from '@/lib/permissions/server'
+import type { UserRole } from '@/types/database'
 
 // Channels we surface in the sidebar. Anything outside this list still gets
 // counted in `total` but doesn't appear as a chip.
@@ -92,6 +94,7 @@ async function fetchMatchingMessageIds(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   admin: any,
   allowedAccountIds: string[] | null,
+  allowedChannels: string[] | null,
   filters: FacetFilters,
   excludeKey: keyof FacetFilters | null,
   currentUserId: string,
@@ -117,6 +120,14 @@ async function fetchMatchingMessageIds(
   }
   if (allowedAccountIds && allowedAccountIds.length > 0) {
     mq = mq.in('account_id', allowedAccountIds)
+  }
+
+  // RBAC: restrict to the channels this user may see (empty = none visible).
+  if (allowedChannels) {
+    if (allowedChannels.length === 0) {
+      return { messages: [], classifications: new Map(), conversations: new Map() }
+    }
+    mq = mq.in('channel', allowedChannels)
   }
 
   // Caller-provided account scope (overrides allowed when narrower).
@@ -284,6 +295,19 @@ export async function GET(request: Request) {
     }
   }
 
+  // RBAC channel visibility — restrict facet counts to channels this user may
+  // see (null = unrestricted: super_admin or all-channel users).
+  let allowedChannels: string[] | null = null
+  if (!isSuperAdmin(profile.role)) {
+    const perms = await getEffectivePermissions({
+      id: authUser.id,
+      role: profile.role as UserRole,
+      company_id: profile.company_id,
+    })
+    const allowed = CHANNEL_KEYS.filter((c) => perms.has(`channel:${c}`))
+    if (allowed.length < CHANNEL_KEYS.length) allowedChannels = allowed
+  }
+
   const url = new URL(request.url)
   const filters = readFilters(url)
 
@@ -292,6 +316,7 @@ export async function GET(request: Request) {
   const base = await fetchMatchingMessageIds(
     admin,
     allowedAccountIds,
+    allowedChannels,
     {},
     null,
     authUser.id,
