@@ -58,7 +58,6 @@ export async function POST(request: Request) {
       conversation_id: conversationId,
       account_id: accountId,
       channel: 'livechat',
-      teams_chat_id: sessionId,
       sender_name: visitorName,
       sender_type: 'customer',
       message_text: text,
