@@ -26,6 +26,9 @@ const AGENT_ACTIONS = [
   'action:conversation.merge',
   'action:conversation.export',
   'action:message.send',
+  // AI assist is available to everyone today → grant by default (non-breaking).
+  'action:ai.compose',
+  'action:ai.summarize',
 ]
 
 // Companies is super_admin-only today (sidebar restricts it). Company admins get

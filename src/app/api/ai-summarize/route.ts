@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase-server'
 import { callAI, verifyAccountAccess } from '@/lib/api-helpers'
+import { userIdCan } from '@/lib/permissions/server'
 import { AIBudgetExceededError } from '@/lib/ai-usage'
 import { CircuitBreakerOpenError } from '@/lib/ai-circuit-breaker'
 import { logError } from '@/lib/logger'
@@ -31,6 +32,11 @@ export async function POST(request: Request) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  // RBAC: gate the AI summarize feature.
+  if (!(await userIdCan(user.id, 'action:ai.summarize'))) {
+    return NextResponse.json({ error: 'AI summarize is not enabled for your role' }, { status: 403 })
   }
 
   let body: { conversation_id?: string; force?: boolean }

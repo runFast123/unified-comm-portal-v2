@@ -294,7 +294,7 @@ export function DashboardShell({
     : undefined
 
   return (
-    <UserProvider user={user} serverCompanyAccountIds={companyAccountIds} activeCompanyId={activeCompanyId}>
+    <UserProvider user={user} serverCompanyAccountIds={companyAccountIds} activeCompanyId={activeCompanyId} permissions={permissions}>
     <div className="flex h-screen overflow-hidden bg-background" style={rootStyle}>
       <Sidebar
         user={user}

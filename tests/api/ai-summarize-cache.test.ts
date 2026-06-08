@@ -28,6 +28,12 @@ vi.mock('@/lib/api-helpers', async () => {
   }
 })
 
+// The summarize route now gates on action:ai.summarize; grant it in these
+// cache-behavior tests so the RBAC gate doesn't short-circuit the route.
+vi.mock('@/lib/permissions/server', () => ({
+  userIdCan: vi.fn(async () => true),
+}))
+
 // Mutable fixtures the mocked supabase client reads from.
 const fixture = {
   user: { id: 'user-1' } as { id: string } | null,

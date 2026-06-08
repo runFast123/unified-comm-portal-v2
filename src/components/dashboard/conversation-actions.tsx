@@ -91,7 +91,7 @@ export function ConversationActions({
   }, [channel, participantEmail, participantPhone, teamsChatId])
   const router = useRouter()
   const { toast } = useToast()
-  const { role: viewerRole } = useUser()
+  const { role: viewerRole, can } = useUser()
   const isReadOnly = READ_ONLY_ROLES.has(viewerRole)
   // Phase 2 gate: `company_member` keeps reply / escalate / resolve but loses
   // medium-trust ops (AI approve, edit-AI-draft). Anything supervisor-or-above
@@ -408,7 +408,7 @@ export function ConversationActions({
     conversationId,
     text: manualText,
     cursorPos,
-    enabled: smartComposeEnabled && showManualReply,
+    enabled: smartComposeEnabled && showManualReply && can('action:ai.compose'),
     isSendInFlight: isSending,
     textareaRef: manualTextareaRef,
   })

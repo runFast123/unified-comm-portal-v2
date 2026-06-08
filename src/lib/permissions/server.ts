@@ -63,3 +63,26 @@ export async function userHasPermission(user: PermissionUser, key: string): Prom
   if (user.role === 'super_admin') return true
   return (await getEffectivePermissions(user)).has(key)
 }
+
+/**
+ * For API routes that already authenticated the caller via the session: check a
+ * permission by user id (loads role/company via service-role). super_admin is
+ * always allowed. Returns false for an unknown user.
+ */
+export async function userIdCan(userId: string, permission: string): Promise<boolean> {
+  const supabase = await createServiceRoleClient()
+  const { data: profile } = await supabase
+    .from('users')
+    .select('role, company_id')
+    .eq('id', userId)
+    .maybeSingle()
+  if (!profile) return false
+  const role = ((profile as { role?: string }).role ?? 'viewer') as UserRole
+  if (role === 'super_admin') return true
+  const perms = await getEffectivePermissions({
+    id: userId,
+    role,
+    company_id: (profile as { company_id?: string | null }).company_id ?? null,
+  })
+  return perms.has(permission)
+}

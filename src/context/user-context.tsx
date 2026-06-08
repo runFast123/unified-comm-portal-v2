@@ -27,6 +27,10 @@ interface UserContextType {
    * means "show everything across all tenants" for super_admin.
    */
   activeCompanyId: string | null
+  /** Effective RBAC permission keys for the current user. */
+  permissions: string[]
+  /** Whether the user holds a permission key (no set provided → ungated → true). */
+  can: (permission: string) => boolean
 }
 
 const UserContext = createContext<UserContextType>({
@@ -37,13 +41,17 @@ const UserContext = createContext<UserContextType>({
   isAdmin: false,
   companyAccountIds: [],
   activeCompanyId: null,
+  permissions: [],
+  can: () => true,
 })
 
-export function UserProvider({ user, serverCompanyAccountIds, activeCompanyId = null, children }: {
-  user: Omit<UserContextType, 'isAdmin' | 'companyAccountIds' | 'activeCompanyId'>
+export function UserProvider({ user, serverCompanyAccountIds, activeCompanyId = null, permissions, children }: {
+  user: Omit<UserContextType, 'isAdmin' | 'companyAccountIds' | 'activeCompanyId' | 'permissions' | 'can'>
   serverCompanyAccountIds?: string[]
   /** Server-resolved active tenant id. `null` = super_admin combined view. */
   activeCompanyId?: string | null
+  /** Server-resolved effective permission keys (RBAC). */
+  permissions?: string[]
   children: React.ReactNode
 }) {
   // Start with server-provided IDs. Use the server value WHEN IT IS DEFINED
@@ -98,8 +106,12 @@ export function UserProvider({ user, serverCompanyAccountIds, activeCompanyId = 
       .catch(() => { /* keep the initial IDs */ })
   }, [user.role, user.account_id])
 
+  const perms = permissions ?? []
+  // No set provided (provider used outside the dashboard layout) → don't gate.
+  const can = (permission: string) => perms.length === 0 || perms.includes(permission)
+
   return (
-    <UserContext.Provider value={{ ...user, isAdmin: ADMIN_ROLES.has(user.role), companyAccountIds, activeCompanyId }}>
+    <UserContext.Provider value={{ ...user, isAdmin: ADMIN_ROLES.has(user.role), companyAccountIds, activeCompanyId, permissions: perms, can }}>
       {children}
     </UserContext.Provider>
   )

@@ -52,6 +52,8 @@ export const ACTION_PERMISSIONS = {
   'action:credentials.manage': 'Manage channel credentials (BYOC)',
   'action:users.manage': 'Manage users',
   'action:permissions.manage': 'Manage roles & permissions',
+  'action:ai.compose': 'AI compose & autocomplete',
+  'action:ai.summarize': 'AI summarize conversations',
 } as const
 
 export type SectionPermission = keyof typeof SECTION_PERMISSIONS

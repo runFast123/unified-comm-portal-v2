@@ -25,6 +25,7 @@ import { Button } from '@/components/ui/button'
 import { cn, getSentimentColor, getUrgencyColor } from '@/lib/utils'
 import type { MessageClassification, AIReply } from '@/types/database'
 import { ThreadSummary } from '@/components/dashboard/thread-summary'
+import { useUser } from '@/context/user-context'
 
 export interface SentimentPoint {
   sentiment: 'positive' | 'neutral' | 'negative'
@@ -284,6 +285,7 @@ export function AISidebar({
   teamsContext,
   conversationId,
 }: AISidebarProps) {
+  const { can } = useUser()
   const [draftExpanded, setDraftExpanded] = useState(false)
   const [copied, setCopied] = useState(false)
 
@@ -309,7 +311,7 @@ export function AISidebar({
   return (
     <div className="space-y-4">
       {/* AI-generated thread summary (on-demand) */}
-      {conversationId && <ThreadSummary conversationId={conversationId} />}
+      {conversationId && can('action:ai.summarize') && <ThreadSummary conversationId={conversationId} />}
 
       {/* Teams Context Card */}
       {channel === 'teams' && teamsContext && (
