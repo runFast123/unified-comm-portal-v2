@@ -1,12 +1,14 @@
 import { redirect } from 'next/navigation'
-import { cookies } from 'next/headers'
+import { cookies, headers } from 'next/headers'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase-server'
 import { DashboardShell } from '@/components/dashboard/dashboard-shell'
 import { BackgroundPoller } from '@/components/dashboard/background-poller'
 import { KeyboardShortcutProvider } from '@/components/dashboard/keyboard-shortcuts'
 import { AdminOnboardingBanner } from '@/components/dashboard/admin-onboarding-banner'
 import { isSuperAdmin } from '@/lib/auth'
-import type { User } from '@/types/database'
+import { getEffectivePermissions } from '@/lib/permissions/server'
+import { sectionForPath, firstAccessibleRoute } from '@/lib/permissions/routes'
+import type { User, UserRole } from '@/types/database'
 import type { CompanyOption } from '@/components/dashboard/company-switcher'
 
 // Force dynamic rendering — layout must run on every request to compute
@@ -44,6 +46,28 @@ export default async function DashboardLayout({
   }
 
   const userCompanyId = (profile?.company_id as string | null | undefined) ?? null
+
+  // ── RBAC: resolve effective permissions + guard the requested route ──
+  // Effective set = code baseline (mirrors today's gating) + sparse DB overrides.
+  const effectivePerms = await getEffectivePermissions({
+    id: authUser.id,
+    role: user.role as UserRole,
+    company_id: userCompanyId,
+  })
+  // Server route guard: block direct navigation to a section the user lacks.
+  // super_admin is all-access; default permissions mirror today, so no redirect
+  // happens until an admin explicitly restricts access. firstAccessibleRoute only
+  // returns routes the user CAN reach, so this can't loop.
+  if (user.role !== 'super_admin') {
+    const reqHeaders = await headers()
+    const currentPath = reqHeaders.get('x-pathname') ?? ''
+    const section = sectionForPath(currentPath)
+    if (section && !effectivePerms.has(section)) {
+      const fallback = firstAccessibleRoute(effectivePerms)
+      if (fallback !== currentPath) redirect(fallback)
+    }
+  }
+  const permissions = [...effectivePerms]
 
   // ── Multi-tenancy: accessible companies + branding ──────────────────
   // super_admin sees all companies; everyone else sees their own (and any
@@ -209,6 +233,7 @@ export default async function DashboardLayout({
       brandLogoUrl={activeCompany?.logo_url ?? null}
       brandAccentColor={activeCompany?.accent_color ?? null}
       brandCompanyName={activeCompany?.name ?? null}
+      permissions={permissions}
     >
       {/* One-time onboarding hint for fresh super_admins. Self-hides via
           localStorage once dismissed; renders nothing for non-admins. */}

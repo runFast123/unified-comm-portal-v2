@@ -27,6 +27,9 @@ export async function middleware(request: NextRequest) {
   const requestId = resolveRequestId(request)
   const forwardedHeaders = new Headers(request.headers)
   forwardedHeaders.set(REQUEST_ID_HEADER, requestId)
+  // Expose the request path to server components / layouts (Next doesn't pass
+  // pathname to them) so the dashboard layout can run RBAC route guards.
+  forwardedHeaders.set('x-pathname', request.nextUrl.pathname)
 
   // Best-effort Sentry scope tag. Wrapped in try/catch + dynamic import so a
   // missing DSN / failed import never blocks the request. Edge-runtime

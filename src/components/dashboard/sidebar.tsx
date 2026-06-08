@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
@@ -39,6 +39,7 @@ import { signOut } from '@/lib/auth-actions'
 import { useRealtimeMessages } from '@/hooks/useRealtimeMessages'
 import type { User, SavedView } from '@/types/database'
 import { SavedViewModal, getSavedViewIcon } from '@/components/inbox/saved-view-modal'
+import { sectionForPath, ADMIN_SECTION_KEYS } from '@/lib/permissions/routes'
 
 interface SidebarProps {
   user: Pick<User, 'email' | 'full_name' | 'role' | 'account_id'>
@@ -57,6 +58,11 @@ interface SidebarProps {
     timeReports?: boolean
     csat?: boolean
   }
+  /**
+   * Server-resolved effective permission keys (RBAC). When provided, the sidebar
+   * hides sections/items the user lacks. Omitted → legacy role-only gating.
+   */
+  permissions?: string[]
 }
 
 interface NavItem {
@@ -138,6 +144,7 @@ export function Sidebar({
   brandLogoUrl = null,
   brandCompanyName = null,
   enabledAdminPages,
+  permissions,
 }: SidebarProps) {
   const pathname = usePathname()
   const [hasNewMessages, setHasNewMessages] = useState(false)
@@ -156,6 +163,22 @@ export function Sidebar({
   const isAdmin =
     user.role === 'admin' || user.role === 'company_admin' || user.role === 'super_admin'
 
+  // ── RBAC: filter nav by the user's effective section permissions ──────
+  // `permissions` is the server-resolved set (code baseline + DB overrides).
+  // When omitted (older call-sites) fall back to legacy role gating so nothing
+  // breaks. super_admin is all-access.
+  const permSet = useMemo(() => (permissions ? new Set(permissions) : null), [permissions])
+  const itemAllowed = (item: NavItem): boolean => {
+    if (item.roles && item.roles.length > 0 && !item.roles.some((r) => user.role === r)) {
+      return false
+    }
+    if (permSet && user.role !== 'super_admin') {
+      const section = sectionForPath(item.href)
+      if (section && !permSet.has(section)) return false
+    }
+    return true
+  }
+
   // Build the report section. Time Reports + CSAT only render when the page
   // exists (caller passes enabledAdminPages). Time Reports lives under Reports
   // because it's a metric, not a config screen.
@@ -168,30 +191,32 @@ export function Sidebar({
       ? [{ label: 'CSAT', href: '/admin/csat', icon: Smile }]
       : []),
     REPORT_ITEMS_BASE[2], // Observability
-  ]
+  ].filter(itemAllowed)
 
-  // Strip Companies from the admin section if the user isn't a super_admin —
-  // keeps the role-restricted UI from leaking even a placeholder row.
-  const visibleAdminItems = ADMIN_ITEMS.filter((item) => {
-    if (!item.roles || item.roles.length === 0) return true
-    return item.roles.some((r) => user.role === r)
-  })
+  const visibleAdminItems = ADMIN_ITEMS.filter(itemAllowed)
 
-  // Section definitions — defaultOpen reflects the SSR-safe default
-  // (every section open). The actual persisted/per-viewport state is
-  // synced in the useEffect below to avoid hydration mismatches.
+  // The Admin group shows when the user can reach at least one admin section
+  // (permission-driven); falls back to the legacy isAdmin flag when no
+  // permission set was supplied.
+  const hasAnyAdminSection = permSet
+    ? user.role === 'super_admin' || ADMIN_SECTION_KEYS.some((k) => permSet.has(k))
+    : isAdmin
+
+  // Section definitions — defaultOpen reflects the SSR-safe default (every
+  // section open). Empty groups are dropped so a fully-denied section doesn't
+  // render a bare header.
   const sections: NavSection[] = [
-    { key: 'inbox', label: 'Inbox', items: INBOX_ITEMS, defaultOpen: true },
-    { key: 'customers', label: 'Customers', items: CUSTOMER_ITEMS, defaultOpen: true },
+    { key: 'inbox', label: 'Inbox', items: INBOX_ITEMS.filter(itemAllowed), defaultOpen: true },
+    { key: 'customers', label: 'Customers', items: CUSTOMER_ITEMS.filter(itemAllowed), defaultOpen: true },
     { key: 'reports', label: 'Reports', items: reportItems, defaultOpen: true },
     {
       key: 'admin',
       label: 'Admin',
       items: visibleAdminItems,
-      visible: isAdmin,
+      visible: hasAnyAdminSection,
       defaultOpen: true,
     },
-  ]
+  ].filter((s) => s.visible !== false && s.items.length > 0)
 
   // Sync localStorage-backed state once on mount. Until this fires the
   // sidebar uses its SSR-safe defaults (collapsed=false, every section

@@ -30,6 +30,7 @@ import { CompanySwitcher, type CompanyOption } from '@/components/dashboard/comp
 import { CommandPalette } from '@/components/ui/command-palette'
 import { KeyboardShortcuts } from '@/components/ui/keyboard-shortcuts'
 import { UserProvider } from '@/context/user-context'
+import { sectionForPath } from '@/lib/permissions/routes'
 import type { User } from '@/types/database'
 
 interface DashboardShellProps {
@@ -55,6 +56,8 @@ interface DashboardShellProps {
   brandLogoUrl?: string | null
   brandAccentColor?: string | null
   brandCompanyName?: string | null
+  /** Server-resolved effective permission keys (RBAC) for nav gating. */
+  permissions?: string[]
   children: React.ReactNode
 }
 
@@ -196,6 +199,7 @@ export function DashboardShell({
   brandLogoUrl = null,
   brandAccentColor = null,
   brandCompanyName = null,
+  permissions,
   children,
 }: DashboardShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -300,6 +304,7 @@ export function DashboardShell({
         brandLogoUrl={brandLogoUrl}
         brandCompanyName={brandCompanyName}
         enabledAdminPages={{ timeReports: true }}
+        permissions={permissions}
       />
 
       {/* Main content area */}
@@ -450,7 +455,14 @@ export function DashboardShell({
             </div>
             <div className="max-h-80 overflow-y-auto px-3 py-2 space-y-0.5">
               {moreNavItems
-                .filter((item) => !item.roles || item.roles.includes(user.role))
+                .filter((item) => {
+                  if (item.roles && !item.roles.includes(user.role)) return false
+                  if (permissions && user.role !== 'super_admin') {
+                    const s = sectionForPath(item.href)
+                    if (s && !permissions.includes(s)) return false
+                  }
+                  return true
+                })
                 .map((item) => (
                 <Link
                   key={item.href}
