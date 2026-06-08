@@ -12,7 +12,7 @@ const orgJsonLd = {
       name: SITE_NAME,
       url: SITE_URL,
       description: SITE_DESCRIPTION,
-      slogan: 'One AI inbox for email, Teams & WhatsApp',
+      slogan: 'One AI inbox for every channel',
     },
     {
       '@type': 'WebSite',

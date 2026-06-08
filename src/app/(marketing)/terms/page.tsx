@@ -19,7 +19,7 @@ const sections: LegalSection[] = [
   {
     heading: 'The service',
     paragraphs: [
-      'Unified is a multi-channel, multi-tenant communication workspace that brings email, Microsoft Teams and WhatsApp into a single inbox, with collaboration, automation and AI-assisted reply drafting. Access is currently invite-only and provisioned by us.',
+      'Unified is a multi-channel, multi-tenant communication workspace that brings email, Microsoft Teams, WhatsApp, SMS, Telegram, Facebook Messenger, Instagram and an embeddable website live-chat widget into a single inbox, with collaboration, automation and AI-assisted reply drafting. Access is currently invite-only and provisioned by us.',
     ],
   },
   {

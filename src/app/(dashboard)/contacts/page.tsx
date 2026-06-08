@@ -356,7 +356,7 @@ export default function ContactsPage() {
             title={contacts.length === 0 ? 'No contacts yet' : 'No matching contacts'}
             description={
               contacts.length === 0
-                ? 'Contacts auto-create as customers reach out across email, Teams, or WhatsApp. Want to import a list instead?'
+                ? 'Contacts auto-create as customers reach out across any connected channel. Want to import a list instead?'
                 : 'Try clearing your search or filter criteria.'
             }
             action={

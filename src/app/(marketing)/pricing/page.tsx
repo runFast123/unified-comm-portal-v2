@@ -17,7 +17,7 @@ const TIERS = [
     tagline: 'For small teams getting organised.',
     highlight: false,
     features: [
-      'Unified inbox (Email + WhatsApp)',
+      'Unified inbox — Email, WhatsApp & website live chat',
       'Up to 5 agents',
       'Statuses, tags & assignment',
       'Reply templates',
@@ -30,10 +30,10 @@ const TIERS = [
     highlight: true,
     features: [
       'Everything in Starter',
-      'All channels incl. Microsoft Teams',
+      'All 8 channels — incl. Teams, SMS, Telegram & social',
       'AI-drafted replies (approval-gated)',
       'SLA tracking & CSAT surveys',
-      'Knowledge base',
+      'Knowledge base & macros',
       'Role-based access control',
     ],
   },
@@ -44,10 +44,10 @@ const TIERS = [
     features: [
       'Everything in Growth',
       'Multi-tenant: unlimited brands',
-      'Tenant-level data isolation (RLS)',
+      'Tenant & channel-level data isolation (RLS)',
+      'Bring-your-own-credentials + per-role AI models',
       'Super-admin controls & audit trail',
       'Priority onboarding & support',
-      'Custom integrations',
     ],
   },
 ]

@@ -21,13 +21,22 @@ export const SITE_NAME = 'Unified Communication Portal'
 
 export const SITE_SHORT_NAME = 'Unified'
 
-export const SITE_TAGLINE = 'One AI inbox for email, Teams & WhatsApp'
+export const SITE_TAGLINE = 'One AI inbox for every channel'
 
 export const SITE_DESCRIPTION =
-  'Unified Communication Portal brings email, Microsoft Teams and WhatsApp into a single AI-powered shared inbox — with smart routing, AI-drafted replies, SLA tracking, CSAT and true multi-brand support for in-house teams and BPOs.'
+  'Unified Communication Portal brings email, Teams, WhatsApp, SMS, Telegram, Messenger, Instagram and website live chat into one AI-powered shared inbox — with smart routing, approval-gated AI replies, role-based access, bring-your-own-credentials and true multi-brand isolation for in-house teams and BPOs.'
 
 /** Channels we unify — reused across marketing pages and structured data. */
-export const CHANNELS = ['Email', 'Microsoft Teams', 'WhatsApp'] as const
+export const CHANNELS = [
+  'Email',
+  'Microsoft Teams',
+  'WhatsApp',
+  'SMS',
+  'Telegram',
+  'Messenger',
+  'Instagram',
+  'Live Chat',
+] as const
 
 /**
  * Where the marketing "Request a demo" / contact form routes. The contact form

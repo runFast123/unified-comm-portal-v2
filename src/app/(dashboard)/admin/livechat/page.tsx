@@ -115,7 +115,7 @@ export default function LiveChatAdminPage() {
       {loading ? (
         <div className="text-sm text-gray-500">Loading…</div>
       ) : !widget ? (
-        <div className="rounded-xl border bg-white p-8 text-center">
+        <div className="animate-slide-up rounded-xl border bg-white p-8 text-center">
           <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
             <span className="text-2xl">💬</span>
           </div>
@@ -134,7 +134,7 @@ export default function LiveChatAdminPage() {
       ) : (
         <div className="space-y-6">
           {/* Embed snippet */}
-          <section className="rounded-xl border bg-white p-5">
+          <section className="animate-slide-up rounded-xl border bg-white p-5">
             <div className="flex items-center justify-between">
               <h2 className="font-semibold text-gray-900">Embed snippet</h2>
               <label className="flex items-center gap-2 text-sm text-gray-600">

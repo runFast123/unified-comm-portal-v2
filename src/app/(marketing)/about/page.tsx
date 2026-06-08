@@ -7,7 +7,7 @@ import { Reveal } from '@/components/marketing/reveal'
 export const metadata: Metadata = {
   title: 'About',
   description:
-    'Unified Communication Portal is on a mission to bring every customer conversation — email, Teams and WhatsApp — into one AI-powered, multi-tenant workspace for teams and BPOs.',
+    'Unified Communication Portal is on a mission to bring every customer conversation — email, Teams, WhatsApp, SMS, Telegram, Messenger, Instagram and website live chat — into one AI-powered, multi-tenant workspace for teams and BPOs.',
   alternates: { canonical: '/about' },
 }
 
@@ -24,7 +24,7 @@ export default function AboutPage() {
       <PageHeader
         eyebrow="About"
         title="We bring every conversation together"
-        subtitle="Support teams juggle too many inboxes, apps and spreadsheets. Unified exists to put email, Teams and WhatsApp — and the AI to handle them — in one trustworthy place."
+        subtitle="Support teams juggle too many inboxes, apps and spreadsheets. Unified exists to put every channel — email, chat, SMS, social and website live chat — and the AI to handle them, in one trustworthy place."
       />
 
       {/* Mission */}
@@ -55,7 +55,7 @@ export default function AboutPage() {
             <Reveal delay={120}>
               <div className="grid grid-cols-2 gap-4">
                 {[
-                  { k: '3', v: 'Channels, one inbox' },
+                  { k: '8', v: 'Channels, one inbox' },
                   { k: '100%', v: 'Tenant isolation' },
                   { k: 'AI', v: 'Drafts, you approve' },
                   { k: '1', v: 'Platform, many brands' },

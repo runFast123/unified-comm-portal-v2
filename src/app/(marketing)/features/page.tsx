@@ -1,7 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import {
-  Inbox,
   Sparkles,
   Share2,
   Gauge,
@@ -11,13 +10,17 @@ import {
   MessageSquare,
   MessagesSquare,
   ShieldCheck,
-  Users,
   Tag,
-  Bell,
   ClipboardList,
   Bot,
   ArrowRight,
   Check,
+  Smartphone,
+  Send,
+  Facebook,
+  Instagram,
+  KeyRound,
+  Cpu,
 } from 'lucide-react'
 import { PageHeader } from '@/components/marketing/page-header'
 import { Reveal } from '@/components/marketing/reveal'
@@ -25,7 +28,7 @@ import { Reveal } from '@/components/marketing/reveal'
 export const metadata: Metadata = {
   title: 'Features',
   description:
-    'Explore Unified Communication Portal: one shared inbox for email, Teams and WhatsApp, AI-drafted replies, smart routing, SLA & CSAT tracking, knowledge base, templates and true multi-tenant isolation.',
+    'Explore Unified Communication Portal: one shared inbox for email, Teams, WhatsApp, SMS, Telegram, Messenger, Instagram and website live chat — with AI-drafted replies, role-based access, bring-your-own-credentials, SLA & CSAT tracking and true multi-tenant isolation.',
   alternates: { canonical: '/features' },
 }
 
@@ -33,12 +36,16 @@ const GROUPS = [
   {
     eyebrow: 'One inbox',
     title: 'Bring every channel together',
-    body: 'Email, Microsoft Teams and WhatsApp arrive in the same threaded workspace — automatically de-duplicated and organised so nothing is missed.',
+    body: 'Email, Teams, WhatsApp, SMS, Telegram, Messenger, Instagram and an embeddable website live-chat widget all arrive in the same threaded workspace — automatically de-duplicated and organised so nothing is missed.',
     items: [
       { icon: Mail, title: 'Email', body: 'Full IMAP/SMTP sync with proper threading, attachments and Message-ID de-duplication.' },
       { icon: MessagesSquare, title: 'Microsoft Teams', body: 'Internal escalations and team chatter alongside customer conversations.' },
       { icon: MessageSquare, title: 'WhatsApp', body: 'Meet customers on the channel they already use, in the same shared inbox.' },
-      { icon: Inbox, title: 'Unified threads', body: 'One continuous history per customer, no matter how many channels they touch.' },
+      { icon: Smartphone, title: 'SMS', body: 'Two-way texting via Twilio — universal, fast, threaded by phone number.' },
+      { icon: Send, title: 'Telegram', body: 'Bot-powered Telegram chats, grouped per customer automatically.' },
+      { icon: Facebook, title: 'Messenger', body: 'Facebook Page messages answered from the same shared queue.' },
+      { icon: Instagram, title: 'Instagram', body: 'Instagram DMs handled right alongside every other channel.' },
+      { icon: MessagesSquare, title: 'Website live chat', body: 'An embeddable chat widget — one line of code, real-time replies into the inbox.' },
     ],
   },
   {
@@ -49,7 +56,7 @@ const GROUPS = [
       { icon: Share2, title: 'Assignment & routing', body: 'Send conversations to the right person and avoid two agents replying at once.' },
       { icon: Tag, title: 'Statuses & tags', body: 'Organise by status and custom tags so your queue always reflects reality.' },
       { icon: BookOpen, title: 'Knowledge base', body: 'A shared source of truth so answers stay accurate and on-brand.' },
-      { icon: ClipboardList, title: 'Reply templates', body: 'Save and reuse your best responses for instant, consistent replies.' },
+      { icon: ClipboardList, title: 'Templates & macros', body: 'Save and reuse your best responses for instant, consistent replies.' },
     ],
   },
   {
@@ -60,16 +67,17 @@ const GROUPS = [
       { icon: Bot, title: 'AI-drafted replies', body: 'A ready-to-edit response in seconds, grounded in the whole thread.' },
       { icon: Sparkles, title: 'Tone & suggestions', body: 'Smart wording and template suggestions to match your voice.' },
       { icon: ShieldCheck, title: 'Approval-gated sending', body: 'AI never auto-sends — a human approves every customer message.' },
-      { icon: Bell, title: 'Notifications', body: 'Stay on top of new messages, assignments and mentions in real time.' },
+      { icon: Cpu, title: 'Per-role AI models', body: 'Admins choose which AI provider and model each role or user is allowed to use.' },
     ],
   },
   {
     eyebrow: 'Trust & scale',
     title: 'Enterprise-ready foundations',
-    body: 'Run many brands from one platform with measurable service quality and airtight data separation.',
+    body: 'Run many brands from one platform with airtight data separation, granular control and measurable service quality.',
     items: [
-      { icon: Building2, title: 'Multi-tenant', body: 'Each company is fully isolated with row-level security — data never crosses.' },
-      { icon: Users, title: 'Roles & permissions', body: 'From member to supervisor, admin and super admin — scoped to each tenant.' },
+      { icon: Building2, title: 'Multi-tenant isolation', body: 'Each company is fully separated with row-level security — data never crosses.' },
+      { icon: ShieldCheck, title: 'Role-based access', body: 'An admin console gates sections, channels, AI features and actions — per role and per user.' },
+      { icon: KeyRound, title: 'Bring your own credentials', body: 'Connect each tenant’s own provider accounts — encrypted, test-gated, platform defaults as fallback.' },
       { icon: Gauge, title: 'SLA tracking', body: 'Keep your promises with response-time timers and clear visibility.' },
       { icon: ClipboardList, title: 'CSAT surveys', body: 'Measure satisfaction automatically after every resolved conversation.' },
     ],

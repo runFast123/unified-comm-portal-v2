@@ -21,7 +21,7 @@ const sections: LegalSection[] = [
     heading: 'Information we collect',
     bullets: [
       'Account information: name, work email, company and role, used to create and secure your workspace.',
-      'Customer communications data: the email, Microsoft Teams and WhatsApp messages, attachments and contact details that flow through the inbox you connect.',
+      'Customer communications data: the email, Teams, WhatsApp, SMS, Telegram, Messenger, Instagram and website live-chat messages, attachments and contact details that flow through the inbox you connect.',
       'Usage data: log and diagnostic information such as request identifiers, timestamps and feature usage, used to operate and improve the service.',
       'Cookies: strictly necessary cookies for authentication and session management.',
     ],

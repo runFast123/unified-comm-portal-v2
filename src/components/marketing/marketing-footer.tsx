@@ -36,14 +36,19 @@ export function MarketingFooter() {
           <div className="col-span-2 md:col-span-2">
             <Logo />
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-gray-500">
-              One AI-powered inbox for email, Microsoft Teams &amp; WhatsApp — so your
-              team answers every customer faster, together.
+              One AI-powered inbox for email, Teams, WhatsApp, SMS, Telegram, social DMs
+              &amp; website live chat — so your team answers every customer faster, together.
             </p>
-            <div className="mt-5 flex items-center gap-2">
+            <div className="mt-5 flex max-w-xs flex-wrap items-center gap-1.5">
               {[
                 { label: 'Email', cls: 'bg-[#ea4335]' },
                 { label: 'Teams', cls: 'bg-[#6264a7]' },
                 { label: 'WhatsApp', cls: 'bg-[#25d366]' },
+                { label: 'SMS', cls: 'bg-[#ec4899]' },
+                { label: 'Telegram', cls: 'bg-[#0088cc]' },
+                { label: 'Messenger', cls: 'bg-[#0084ff]' },
+                { label: 'Instagram', cls: 'bg-[#e4405f]' },
+                { label: 'Live Chat', cls: 'bg-[#16a34a]' },
               ].map((c) => (
                 <span
                   key={c.label}

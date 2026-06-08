@@ -21,6 +21,11 @@ import {
   Bot,
   Workflow,
   Plug,
+  Send,
+  Facebook,
+  Instagram,
+  Smartphone,
+  KeyRound,
 } from 'lucide-react'
 import { Reveal } from '@/components/marketing/reveal'
 import { CountUp } from '@/components/marketing/count-up'
@@ -29,25 +34,29 @@ import { SITE_URL, SITE_NAME, SITE_DESCRIPTION } from '@/lib/site'
 export const metadata: Metadata = {
   description: SITE_DESCRIPTION,
   alternates: { canonical: '/' },
-  openGraph: { url: SITE_URL, title: `${SITE_NAME} — One AI inbox for email, Teams & WhatsApp` },
+  openGraph: { url: SITE_URL, title: `${SITE_NAME} — One AI inbox for every channel` },
 }
 
 const FAQ = [
   {
     q: 'Which channels does Unified support?',
-    a: 'Unified brings email, Microsoft Teams and WhatsApp into one shared inbox today. Every message — no matter where it arrives — lands in the same place, threaded and ready for your team.',
+    a: 'Eight, in one shared inbox: email, Microsoft Teams, WhatsApp, SMS, Telegram, Facebook Messenger, Instagram DM, and an embeddable website live-chat widget. Every message — wherever it arrives — lands in the same place, threaded and ready for your team.',
   },
   {
     q: 'Does the AI send replies on its own?',
-    a: 'No. The AI drafts a reply in seconds and your agent reviews, edits and approves it before anything is sent. You stay in control of every customer-facing message.',
+    a: 'No. The AI drafts a reply in seconds and your agent reviews, edits and approves it before anything is sent. You stay in control of every customer-facing message — and admins can choose which AI model each role or user is allowed to use.',
   },
   {
     q: 'Can one workspace run multiple brands or clients?',
-    a: 'Yes. Unified is multi-tenant by design. Each company is fully isolated at the database level, so a BPO or agency can run many brands side by side without data ever crossing between them.',
+    a: 'Yes. Unified is multi-tenant by design. Each company is fully isolated at the database level with row-level security, so a BPO or agency can run many brands side by side without data ever crossing between them.',
   },
   {
     q: 'How do roles and permissions work?',
-    a: 'Granular roles — from company member to supervisor, company admin and super admin — control who can see, reply, assign and configure. Access is scoped to each tenant automatically.',
+    a: 'A full role-based access console lets admins decide — per role and per user — exactly which sections, channels, AI features and actions each person can use. Channel visibility is even enforced at the database, so an agent only ever sees the conversations they are cleared for.',
+  },
+  {
+    q: 'Can we use our own provider credentials?',
+    a: 'Yes — bring-your-own-credentials is first-class. Each tenant connects its own email, WhatsApp, Twilio, Telegram and Meta accounts behind a test-connection gate, or falls back to the platform defaults. Your keys are encrypted and never leave your tenant.',
   },
   {
     q: 'How do we get started?',
@@ -78,8 +87,8 @@ const softwareJsonLd = {
 const FEATURES = [
   {
     icon: Inbox,
-    title: 'One shared inbox',
-    body: 'Email, Microsoft Teams and WhatsApp in a single threaded workspace. No more tab-hopping or missed messages.',
+    title: 'One shared inbox, 8 channels',
+    body: 'Email, Teams, WhatsApp, SMS, Telegram, Messenger, Instagram and website live chat — in a single threaded workspace. No more tab-hopping.',
   },
   {
     icon: Sparkles,
@@ -87,9 +96,24 @@ const FEATURES = [
     body: 'The assistant writes a context-aware reply in seconds. Your agent reviews and approves — AI never sends on its own.',
   },
   {
+    icon: MessagesSquare,
+    title: 'Website live chat',
+    body: 'Drop a chat bubble on any site with one line of code. Visitor chats land in the same inbox; your replies stream back in real time.',
+  },
+  {
     icon: Share2,
     title: 'Smart routing & assignment',
     body: 'Conversations land with the right person automatically, with assignment, statuses, tags and collision-free collaboration.',
+  },
+  {
+    icon: ShieldCheck,
+    title: 'Granular role-based access',
+    body: 'An admin console controls who can see which sections, channels, AI features and actions — per role and per user, enforced down to the database.',
+  },
+  {
+    icon: KeyRound,
+    title: 'Bring your own credentials',
+    body: 'Connect each tenant’s own email, WhatsApp, Twilio, Telegram and Meta accounts — encrypted, test-gated, with platform defaults as a fallback.',
   },
   {
     icon: Gauge,
@@ -112,7 +136,7 @@ const STEPS = [
   {
     icon: Plug,
     title: 'Connect your channels',
-    body: 'Plug in email, Teams and WhatsApp. Messages start flowing into one place — automatically threaded and de-duplicated.',
+    body: 'Plug in email, chat, SMS and social — or drop the live-chat widget on your site. Messages flow into one place, threaded and de-duplicated.',
   },
   {
     icon: Users,
@@ -138,6 +162,11 @@ function ChannelBadge({ name }: { name: string }) {
     Email: { cls: 'bg-[#ea4335]', Icon: Mail },
     Teams: { cls: 'bg-[#6264a7]', Icon: MessagesSquare },
     WhatsApp: { cls: 'bg-[#25d366]', Icon: MessageSquare },
+    SMS: { cls: 'bg-[#ec4899]', Icon: Smartphone },
+    Telegram: { cls: 'bg-[#0088cc]', Icon: Send },
+    Messenger: { cls: 'bg-[#0084ff]', Icon: Facebook },
+    Instagram: { cls: 'bg-[#e4405f]', Icon: Instagram },
+    'Live Chat': { cls: 'bg-[#16a34a]', Icon: MessagesSquare },
   }
   const { cls, Icon } = map[name]
   return (
@@ -183,9 +212,9 @@ export default function LandingPage() {
                 <span className="text-gradient">One intelligent inbox.</span>
               </h1>
               <p className="mt-6 max-w-xl text-balance text-lg leading-relaxed text-gray-600">
-                Unified brings email, Microsoft Teams and WhatsApp together in a single
-                AI-powered workspace — so your team replies faster, together, across every
-                brand you run.
+                Unified brings email, Teams, WhatsApp, SMS, Telegram, social DMs and website
+                live chat into a single AI-powered workspace — so your team replies faster,
+                together, across every brand you run.
               </p>
 
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
@@ -239,6 +268,7 @@ export default function LandingPage() {
                       {[
                         { n: 'Ava Chen', c: 'Email', t: 'Refund on order #4821', cls: 'border-l-[#ea4335]', active: true },
                         { n: 'Liam Patel', c: 'WhatsApp', t: 'Where is my delivery?', cls: 'border-l-[#25d366]' },
+                        { n: 'Website visitor', c: 'Live Chat', t: 'Is this in stock?', cls: 'border-l-[#16a34a]' },
                         { n: 'Ops Team', c: 'Teams', t: 'Escalation: VIP account', cls: 'border-l-[#6264a7]' },
                       ].map((m) => (
                         <div
@@ -309,6 +339,11 @@ export default function LandingPage() {
                 'Email',
                 'Microsoft Teams',
                 'WhatsApp',
+                'SMS',
+                'Telegram',
+                'Messenger',
+                'Instagram',
+                'Website live chat',
                 'AI drafted replies',
                 'Smart routing',
                 'SLA timers',
@@ -317,6 +352,7 @@ export default function LandingPage() {
                 'Knowledge base',
                 'Multi-tenant',
                 'Role-based access',
+                'Bring your own credentials',
               ].map((item) => (
                 <span key={`${dup}-${item}`} className="inline-flex items-center gap-2">
                   <span className="h-1.5 w-1.5 rounded-full bg-teal-400" />
@@ -333,7 +369,7 @@ export default function LandingPage() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-2 gap-6 lg:grid-cols-4">
             {[
-              { to: 3, suffix: '', label: 'Channels in one inbox' },
+              { to: 8, suffix: '', label: 'Channels in one inbox' },
               { to: 100, suffix: '%', label: 'Tenant data isolation' },
               { to: 24, suffix: '/7', label: 'Automated message sync' },
               { to: 1, suffix: '', label: 'Workspace, every brand' },
@@ -436,7 +472,8 @@ export default function LandingPage() {
                 'Context-aware drafts from the whole thread',
                 'Tone and template suggestions',
                 'Approval-gated — AI never auto-sends',
-                'Works across email, Teams and WhatsApp',
+                'Per-role AI model assignment by admins',
+                'Works across all eight channels',
               ].map((t) => (
                 <li key={t} className="flex items-start gap-3 text-teal-50">
                   <Check className="mt-0.5 h-5 w-5 shrink-0 text-emerald-300" />

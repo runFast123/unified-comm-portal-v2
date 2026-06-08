@@ -1,7 +1,7 @@
 import { ImageResponse } from 'next/og'
 import { SITE_URL } from '@/lib/site'
 
-export const alt = 'Unified Communication Portal — One AI inbox for email, Teams & WhatsApp'
+export const alt = 'Unified Communication Portal — One AI inbox for every channel'
 export const size = { width: 1200, height: 630 }
 export const contentType = 'image/png'
 
@@ -51,14 +51,14 @@ export default function OpengraphImage() {
             Every customer conversation. One intelligent inbox.
           </div>
           <div style={{ display: 'flex', marginTop: 24, fontSize: 30, color: 'rgba(255,255,255,0.85)', maxWidth: 880 }}>
-            AI-powered shared inbox for Email, Microsoft Teams &amp; WhatsApp.
+            AI-powered shared inbox for email, chat, SMS &amp; social — 8 channels in one.
           </div>
         </div>
 
         {/* footer row */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', gap: 14 }}>
-            {['Email', 'Teams', 'WhatsApp'].map((c) => (
+            {['Email', 'WhatsApp', 'Teams', 'SMS', 'Instagram', 'Live Chat'].map((c) => (
               <div
                 key={c}
                 style={{
