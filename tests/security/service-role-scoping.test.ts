@@ -70,6 +70,10 @@ const ALLOWLIST: Record<string, string> = {
   'csat/[token]/route.ts': 'public CSAT — the HMAC token in the URL is the auth',
   'mentions/route.ts': 'user-scoped (mentioned_user_id = auth.uid())',
   'send/cancel/route.ts': 'owner-scoped (pending_sends.created_by = auth.uid() → 403 on mismatch)',
+  'widget/config/route.ts': 'public live-chat widget — the widget_key in the request is the auth; resolves to its account (no user session)',
+  'widget/loader/route.ts': 'public live-chat widget loader — widget_key is the auth; serves the embed JS for its account',
+  'widget/message/route.ts': 'public live-chat widget — widget_key is the auth; writes are pinned to the key\'s account',
+  'widget/poll/route.ts': 'public live-chat widget — widget_key + unguessable session_id are the auth; reads scoped to the account + session',
 }
 
 function listRouteFiles(dir: string): string[] {

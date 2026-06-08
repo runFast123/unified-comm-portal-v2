@@ -40,6 +40,7 @@ export const SECTION_PERMISSIONS = {
   'section:admin.health': 'Admin · Health',
   'section:admin.logs': 'Admin · Logs',
   'section:admin.roles': 'Admin · Roles & Permissions',
+  'section:admin.livechat': 'Admin · Live Chat',
 } as const
 
 // ─── Actions (capabilities beyond page visibility) ───────────────────────────
@@ -112,4 +113,5 @@ export const ROUTE_TO_SECTION: Record<string, SectionPermission> = {
   '/admin/health': 'section:admin.health',
   '/admin/logs': 'section:admin.logs',
   '/admin/roles': 'section:admin.roles',
+  '/admin/livechat': 'section:admin.livechat',
 }

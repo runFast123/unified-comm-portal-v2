@@ -115,6 +115,7 @@ const ADMIN_ITEMS: NavItem[] = [
   { label: 'Companies', href: '/admin/companies', icon: Building2, roles: ['super_admin'] },
   { label: 'Account Settings', href: '/admin/accounts', icon: Settings },
   { label: 'Channels', href: '/admin/channels', icon: Plug },
+  { label: 'Live Chat', href: '/admin/livechat', icon: MessageSquare },
   { label: 'Users', href: '/admin/users', icon: UserCog },
   { label: 'Roles & Permissions', href: '/admin/roles', icon: ShieldCheck },
   { label: 'Routing', href: '/admin/routing', icon: GitBranch },
