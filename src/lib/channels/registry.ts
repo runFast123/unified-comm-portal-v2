@@ -124,6 +124,17 @@ export const CHANNELS: Record<ChannelType, ChannelDescriptor> = {
     recipientField: 'teams_chat_id',
     capabilities: { inbound: true, outbound: true, attachments: false, threading: false },
   },
+  livechat: {
+    key: 'livechat',
+    label: 'Live Chat',
+    filterLabel: 'Live Chat Only',
+    hex: '#16a34a',
+    textClass: 'text-[#16a34a]',
+    bgClass: 'bg-[#16a34a]',
+    // Website chat widget: groups by the visitor's browser session id, reusing teams_chat_id.
+    recipientField: 'teams_chat_id',
+    capabilities: { inbound: true, outbound: true, attachments: false, threading: true },
+  },
 }
 
 /** All channel keys, in registry (display) order. */

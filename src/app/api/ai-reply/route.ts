@@ -38,6 +38,10 @@ Be direct and helpful; no formal email sign-offs.`,
   instagram: `You are a customer service agent replying via Instagram DM for a telecommunications company.
 Keep your reply friendly, casual, and concise. Plain text, short messages.
 Be direct and helpful; no formal email sign-offs.`,
+
+  livechat: `You are a live chat support agent on the company's website for a telecommunications company.
+The visitor is chatting in real time, so reply briefly, warmly, and conversationally — short and quick.
+Plain text, no formal email sign-offs.`,
 }
 
 export async function POST(request: Request) {

@@ -2,7 +2,7 @@ import { createServiceRoleClient } from '@/lib/supabase-server'
 import { encrypt, decrypt } from '@/lib/encryption'
 import { logError } from '@/lib/logger'
 
-export type Channel = 'email' | 'teams' | 'whatsapp' | 'sms' | 'telegram' | 'messenger' | 'instagram'
+export type Channel = 'email' | 'teams' | 'whatsapp' | 'sms' | 'telegram' | 'messenger' | 'instagram' | 'livechat'
 
 // ─── Config shapes per channel ────────────────────────────────────────
 
@@ -84,6 +84,14 @@ export interface InstagramConfig {
   graph_version?: string
 }
 
+export interface LivechatConfig {
+  // Live Chat has no provider credentials — the embeddable widget's public key +
+  // appearance live in the `livechat_widgets` table (looked up by widget_key by
+  // the unauthenticated public widget endpoints). This exists only to satisfy the
+  // channel registry; it carries no secrets.
+  enabled?: boolean
+}
+
 export type ChannelConfigMap = {
   email: EmailConfig
   teams: TeamsConfig
@@ -92,6 +100,7 @@ export type ChannelConfigMap = {
   telegram: TelegramConfig
   messenger: MessengerConfig
   instagram: InstagramConfig
+  livechat: LivechatConfig
 }
 
 // Fields that should never be returned to the UI in clear text
@@ -103,6 +112,7 @@ const SECRET_FIELDS: Record<Channel, string[]> = {
   telegram: ['bot_token'],
   messenger: ['page_access_token'],
   instagram: ['page_access_token'],
+  livechat: [],
 }
 
 // Fields that MUST be present (non-empty) before a channel config can be saved.
@@ -116,6 +126,7 @@ export const REQUIRED_CONFIG_FIELDS: Record<Channel, string[]> = {
   telegram: ['bot_token'],
   messenger: ['page_id', 'page_access_token'],
   instagram: ['page_id', 'page_access_token'],
+  livechat: [],
 }
 
 /**
@@ -214,7 +225,8 @@ function envConfig<C extends Channel>(channel: C): ChannelConfigMap[C] | null {
   if (channel === 'sms') return envSmsConfig() as ChannelConfigMap[C] | null
   if (channel === 'telegram') return envTelegramConfig() as ChannelConfigMap[C] | null
   if (channel === 'messenger') return envMessengerConfig() as ChannelConfigMap[C] | null
-  return envInstagramConfig() as ChannelConfigMap[C] | null
+  if (channel === 'instagram') return envInstagramConfig() as ChannelConfigMap[C] | null
+  return null // livechat has no env credentials
 }
 
 // ─── DB lookup (with env fallback) ────────────────────────────────────

@@ -102,6 +102,13 @@ const ADAPTERS: Record<ChannelType, ChannelAdapter> = {
     send: (m) => sendInstagram({ accountId: m.accountId, recipientId: m.to, body: m.body }),
     verifyConfig: (cfg) => verifyInstagramConfig(cfg as InstagramConfig),
   },
+  livechat: {
+    // Live Chat has no external provider: the outbound reply is written to the
+    // messages table by the send site, and the visitor's embedded widget polls
+    // it. So send is a no-op success and there's nothing to verify.
+    send: async () => ({ ok: true }),
+    verifyConfig: async () => ({ ok: true }),
+  },
 }
 
 /** Look up the adapter for a channel, or null for an unknown channel value. */

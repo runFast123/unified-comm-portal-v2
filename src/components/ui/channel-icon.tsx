@@ -1,4 +1,4 @@
-import { MessageSquare, Mail, Phone, MessageCircle, Send, Facebook, Instagram, type LucideIcon } from 'lucide-react'
+import { MessageSquare, Mail, Phone, MessageCircle, Send, Facebook, Instagram, MessagesSquare, type LucideIcon } from 'lucide-react'
 import type { ChannelType } from '@/types/database'
 import { getChannel } from '@/lib/channels/registry'
 
@@ -19,6 +19,7 @@ const ICONS: Record<ChannelType, LucideIcon> = {
   telegram: Send,
   messenger: Facebook,
   instagram: Instagram,
+  livechat: MessagesSquare,
 }
 
 export function ChannelIcon({ channel, size = 18, className }: ChannelIconProps) {

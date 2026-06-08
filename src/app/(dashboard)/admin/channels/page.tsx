@@ -39,7 +39,7 @@ import {
 } from 'lucide-react'
 import { CopyField } from '@/components/ui/copy-field'
 
-type Channel = 'email' | 'teams' | 'whatsapp' | 'sms' | 'telegram' | 'messenger' | 'instagram'
+type Channel = 'email' | 'teams' | 'whatsapp' | 'sms' | 'telegram' | 'messenger' | 'instagram' | 'livechat'
 
 interface ConfigState {
   source: 'db' | 'env' | 'none' | 'db_broken'
@@ -57,6 +57,7 @@ const CHANNEL_META: Record<Channel, { label: string; Icon: typeof Mail; color: s
   telegram: { label: 'Telegram', Icon: Send, color: 'text-sky-600' },
   messenger: { label: 'Messenger', Icon: Facebook, color: 'text-blue-500' },
   instagram: { label: 'Instagram', Icon: Instagram, color: 'text-rose-600' },
+  livechat: { label: 'Live Chat (website widget)', Icon: MessageSquare, color: 'text-green-600' },
 }
 
 // Channel-specific identifier (what uniquely locates this account on the provider side)
@@ -72,6 +73,7 @@ const IDENTIFIER_FIELD: Record<Channel, { key: string; label: string; placeholde
   messenger: { key: 'teams_user_id', label: 'Facebook Page name or ID', placeholder: 'My Business Page' },
   // Instagram reuses teams_user_id for the IG handle.
   instagram: { key: 'teams_user_id', label: 'Instagram handle (@account)', placeholder: '@youraccount' },
+  livechat: { key: 'teams_user_id', label: 'Widget', placeholder: '—' },
 }
 
 // Credential fields per channel (what lives in channel_configs, encrypted)
@@ -121,6 +123,9 @@ const CRED_FIELDS: Record<
     { key: 'page_access_token', label: 'Page Access Token (Meta app, instagram_manage_messages)', type: 'password', required: true },
     { key: 'graph_version', label: 'Graph API Version', placeholder: 'v21.0' },
   ],
+  // Live Chat has no provider credentials — it's managed on the dedicated Live
+  // Chat admin page, not as an encrypted channel_configs credential set.
+  livechat: [],
 }
 
 function defaultCreds(channel: Channel): Record<string, unknown> {
@@ -344,6 +349,7 @@ export default function ChannelsPage() {
     telegram: ['bot_token'],
     messenger: ['page_access_token'],
     instagram: ['page_access_token'],
+    livechat: [],
   }
 
   const openCreate = (channel: Channel) => {
@@ -628,7 +634,7 @@ export default function ChannelsPage() {
     )
   }
 
-  const grouped: Record<Channel, Account[]> = { email: [], teams: [], whatsapp: [], sms: [], telegram: [], messenger: [], instagram: [] }
+  const grouped: Record<Channel, Account[]> = { email: [], teams: [], whatsapp: [], sms: [], telegram: [], messenger: [], instagram: [], livechat: [] }
   for (const a of accounts) {
     const ch = a.channel_type as Channel
     if (grouped[ch]) grouped[ch].push(a)
@@ -670,7 +676,8 @@ export default function ChannelsPage() {
         </Button>
       </div>
 
-      {(CHANNEL_KEYS as Channel[]).map((channel) => {
+      {/* Live Chat has no provider credentials — managed on its own admin page. */}
+      {(CHANNEL_KEYS.filter((c) => c !== 'livechat') as Channel[]).map((channel) => {
         const meta = CHANNEL_META[channel]
         const list = grouped[channel]
         return (
@@ -1130,7 +1137,7 @@ export default function ChannelsPage() {
               </button>
             </div>
             <div className="grid gap-3 p-5 sm:grid-cols-3">
-              {(CHANNEL_KEYS as Channel[]).map((ch) => {
+              {(CHANNEL_KEYS.filter((c) => c !== 'livechat') as Channel[]).map((ch) => {
                 const m = CHANNEL_META[ch]
                 const n = grouped[ch].length
                 // Match the palette tone to each channel's icon color.

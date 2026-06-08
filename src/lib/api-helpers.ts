@@ -183,7 +183,7 @@ export async function findOrCreateConversation(
   supabase: Awaited<ReturnType<typeof createServiceRoleClient>>,
   params: {
     account_id: string
-    channel: 'teams' | 'email' | 'whatsapp' | 'sms' | 'telegram' | 'messenger' | 'instagram'
+    channel: 'teams' | 'email' | 'whatsapp' | 'sms' | 'telegram' | 'messenger' | 'instagram' | 'livechat'
     teams_chat_id?: string | null
     email_thread_id?: string | null
     /** Email subject — used for the fallback subject+sender match. */
@@ -253,7 +253,8 @@ export async function findOrCreateConversation(
       (params.channel === 'teams' ||
         params.channel === 'telegram' ||
         params.channel === 'messenger' ||
-        params.channel === 'instagram') &&
+        params.channel === 'instagram' ||
+        params.channel === 'livechat') &&
       params.teams_chat_id
     ) {
       // Teams, Telegram, Messenger and Instagram all group by an opaque chat /
@@ -337,6 +338,7 @@ export async function findOrCreateConversation(
         telegram: { col: 'teams_chat_id', value: params.teams_chat_id },
         messenger: { col: 'teams_chat_id', value: params.teams_chat_id },
         instagram: { col: 'teams_chat_id', value: params.teams_chat_id },
+        livechat: { col: 'teams_chat_id', value: params.teams_chat_id },
       }
       const key = CHANNEL_UNIQUE_KEY[params.channel]
       if (key && key.value) {

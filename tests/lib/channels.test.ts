@@ -4,7 +4,7 @@ import { getChannelLabel, getChannelColor, getChannelBgColor } from '@/lib/utils
 
 describe('channel registry', () => {
   it('registers the known channels with complete descriptors', () => {
-    expect([...CHANNEL_KEYS].sort()).toEqual(['email', 'instagram', 'messenger', 'sms', 'teams', 'telegram', 'whatsapp'])
+    expect([...CHANNEL_KEYS].sort()).toEqual(['email', 'instagram', 'livechat', 'messenger', 'sms', 'teams', 'telegram', 'whatsapp'])
     expect(CHANNEL_LIST.length).toBe(CHANNEL_KEYS.length)
     for (const c of CHANNEL_LIST) {
       expect(CHANNELS[c.key]).toBe(c) // key matches its map slot

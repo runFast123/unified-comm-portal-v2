@@ -15,7 +15,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 vi.mock('@/lib/permissions/server', () => ({
   getEffectivePermissions: vi.fn(async () => new Set([
     'channel:email', 'channel:teams', 'channel:whatsapp', 'channel:sms',
-    'channel:telegram', 'channel:messenger', 'channel:instagram',
+    'channel:telegram', 'channel:messenger', 'channel:instagram', 'channel:livechat',
   ])),
 }))
 
@@ -230,7 +230,7 @@ describe('GET /api/inbox/facets', () => {
     // Channels — email=2 (m1,m2), teams=1 (m3), whatsapp=1 (m4); the remaining
     // registered channels have no messages here (facets surface ALL channels).
     expect(body.channels).toEqual({
-      email: 2, teams: 1, whatsapp: 1, sms: 0, telegram: 0, messenger: 0, instagram: 0,
+      email: 2, teams: 1, whatsapp: 1, sms: 0, telegram: 0, messenger: 0, instagram: 0, livechat: 0,
     })
     // Sentiments
     expect(body.sentiments).toEqual({ positive: 1, neutral: 2, negative: 1 })
