@@ -39,6 +39,7 @@ export const SECTION_PERMISSIONS = {
   'section:admin.webhooks': 'Admin · Webhooks',
   'section:admin.health': 'Admin · Health',
   'section:admin.logs': 'Admin · Logs',
+  'section:admin.roles': 'Admin · Roles & Permissions',
 } as const
 
 // ─── Actions (capabilities beyond page visibility) ───────────────────────────
@@ -108,4 +109,5 @@ export const ROUTE_TO_SECTION: Record<string, SectionPermission> = {
   '/admin/webhooks': 'section:admin.webhooks',
   '/admin/health': 'section:admin.health',
   '/admin/logs': 'section:admin.logs',
+  '/admin/roles': 'section:admin.roles',
 }
