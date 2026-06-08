@@ -15,6 +15,11 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 
+// The compose route now gates on action:ai.compose; grant it in these tests.
+vi.mock('@/lib/permissions/server', () => ({
+  userIdCan: vi.fn(async () => true),
+}))
+
 // ---- Mocks ---------------------------------------------------------
 
 const { callAIMock, rateLimitMock, verifyAccessMock } = vi.hoisted(() => ({

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase-server'
 import { callAI, verifyAccountAccess, checkRateLimit } from '@/lib/api-helpers'
+import { userIdCan } from '@/lib/permissions/server'
 import { AIBudgetExceededError } from '@/lib/ai-usage'
 import { CircuitBreakerOpenError } from '@/lib/ai-circuit-breaker'
 import { logError } from '@/lib/logger'
@@ -38,6 +39,11 @@ export async function POST(request: Request) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  // RBAC: gate the AI compose feature.
+  if (!(await userIdCan(user.id, 'action:ai.compose'))) {
+    return NextResponse.json({ error: 'AI compose is not enabled for your role' }, { status: 403 })
   }
 
   // ── Per-user rate limit ────────────────────────────────────────────
