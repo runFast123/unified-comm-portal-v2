@@ -148,6 +148,7 @@ export async function POST(request: Request) {
     // (post-call) when an account_id is supplied — see src/lib/api-helpers.ts.
     const summary = await callAI(SYSTEM_PROMPT, userMessage, {
       account_id: conversation.account_id,
+      user_id: user.id,
       endpoint: 'ai-summarize',
     })
     const cleaned = (summary || '').trim()

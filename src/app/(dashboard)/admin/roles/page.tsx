@@ -44,7 +44,7 @@ function baselineHas(role: string, key: string): boolean {
 export default function RolesPage() {
   const { toast } = useToast()
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState<'roles' | 'users'>('roles')
+  const [tab, setTab] = useState<'roles' | 'users' | 'models'>('roles')
   const [deltas, setDeltas] = useState<Map<string, boolean>>(new Map())
   const [users, setUsers] = useState<UserRow[]>([])
   const [savingCell, setSavingCell] = useState<string | null>(null)
@@ -53,6 +53,12 @@ export default function RolesPage() {
   const [selectedUser, setSelectedUser] = useState<UserRow | null>(null)
   const [overrides, setOverrides] = useState<Map<string, 'allow' | 'deny'>>(new Map())
   const [userLoading, setUserLoading] = useState(false)
+
+  // Models tab — per-role / per-user AI model assignment.
+  const [modelProviders, setModelProviders] = useState<{ id: string; name: string; model: string }[]>([])
+  const [roleModelMap, setRoleModelMap] = useState<Map<string, string>>(new Map())
+  const [userModelMap, setUserModelMap] = useState<Map<string, string>>(new Map())
+  const [modelLoading, setModelLoading] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -72,6 +78,56 @@ export default function RolesPage() {
   }, [toast])
 
   useEffect(() => { load() }, [load])
+
+  const loadModels = useCallback(async () => {
+    setModelLoading(true)
+    try {
+      const res = await fetch('/api/admin/permissions/models')
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to load models')
+      setModelProviders(data.providers ?? [])
+      const rm = new Map<string, string>()
+      const um = new Map<string, string>()
+      for (const a of (data.assignments ?? []) as Array<{ role: string | null; user_id: string | null; ai_provider_id: string }>) {
+        if (a.role) rm.set(a.role, a.ai_provider_id)
+        else if (a.user_id) um.set(a.user_id, a.ai_provider_id)
+      }
+      setRoleModelMap(rm)
+      setUserModelMap(um)
+    } catch (e) {
+      toast.error((e as Error).message)
+    } finally {
+      setModelLoading(false)
+    }
+  }, [toast])
+
+  useEffect(() => { loadModels() }, [loadModels])
+
+  const setModel = async (scope: 'role' | 'user', key: string, providerId: string | null) => {
+    const map = scope === 'role' ? roleModelMap : userModelMap
+    const setMap = scope === 'role' ? setRoleModelMap : setUserModelMap
+    const prev = new Map(map)
+    const next = new Map(map)
+    if (providerId) next.set(key, providerId)
+    else next.delete(key)
+    setMap(next)
+    try {
+      const res = await fetch('/api/admin/permissions/models', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(
+          scope === 'role'
+            ? { scope, role: key, ai_provider_id: providerId }
+            : { scope, user_id: key, ai_provider_id: providerId }
+        ),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Save failed')
+    } catch (e) {
+      setMap(prev)
+      toast.error((e as Error).message)
+    }
+  }
 
   const effective = (role: string, key: string): boolean => {
     if (role === 'super_admin') return true
@@ -186,7 +242,7 @@ export default function RolesPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-gray-200">
-        {(['roles', 'users'] as const).map((t) => (
+        {(['roles', 'users', 'models'] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -197,12 +253,21 @@ export default function RolesPage() {
                 : 'border-transparent text-gray-500 hover:text-gray-700')
             }
           >
-            {t === 'roles' ? 'By role' : 'By user'}
+            {t === 'roles' ? 'By role' : t === 'users' ? 'By user' : 'AI models'}
           </button>
         ))}
       </div>
 
-      {tab === 'roles' ? (
+      {tab === 'models' ? (
+        <ModelsTab
+          providers={modelProviders}
+          roleModel={roleModelMap}
+          userModel={userModelMap}
+          users={users}
+          loading={modelLoading}
+          onSet={setModel}
+        />
+      ) : tab === 'roles' ? (
         <div className="overflow-x-auto rounded-lg border border-gray-200">
           <table className="min-w-full border-collapse text-sm">
             <thead>
@@ -382,5 +447,89 @@ function GroupRows({
         </tr>
       ))}
     </>
+  )
+}
+
+// ── Models tab: assign a specific AI provider to a role or user ──────────────
+function ModelsTab({
+  providers,
+  roleModel,
+  userModel,
+  users,
+  loading,
+  onSet,
+}: {
+  providers: { id: string; name: string; model: string }[]
+  roleModel: Map<string, string>
+  userModel: Map<string, string>
+  users: UserRow[]
+  loading: boolean
+  onSet: (scope: 'role' | 'user', key: string, providerId: string | null) => void
+}) {
+  if (loading) {
+    return (
+      <div className="flex h-32 items-center justify-center text-gray-400">
+        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading models…
+      </div>
+    )
+  }
+  if (providers.length === 0) {
+    return (
+      <div className="rounded-lg border border-gray-200 p-6 text-center text-sm text-gray-500">
+        No AI providers configured for this company yet. Add one in <strong>AI Settings</strong> first.
+      </div>
+    )
+  }
+  const Dropdown = ({ value, onChange }: { value: string; onChange: (v: string | null) => void }) => (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value || null)}
+      className="rounded-md border border-gray-300 bg-white px-2 py-1 text-sm text-gray-700"
+    >
+      <option value="">Company default</option>
+      {providers.map((p) => (
+        <option key={p.id} value={p.id}>
+          {p.name} · {p.model}
+        </option>
+      ))}
+    </select>
+  )
+  return (
+    <div className="space-y-6">
+      <div className="flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-[13px] text-blue-800">
+        <Info className="mt-0.5 h-4 w-4 flex-shrink-0" />
+        <span>
+          Assign a specific model to a role or user. Unassigned = the company default (set in AI Settings).
+          A user assignment wins over their role. Applies to user-triggered AI (e.g. Summarize).
+        </span>
+      </div>
+      <div className="rounded-lg border border-gray-200">
+        <div className="border-b bg-gray-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">By role</div>
+        <div className="divide-y">
+          {ROLE_COLUMNS.filter((r) => !r.locked).map((r) => (
+            <div key={r.role} className="flex items-center justify-between px-4 py-2">
+              <span className="text-sm text-gray-700">{r.label}</span>
+              <Dropdown value={roleModel.get(r.role) ?? ''} onChange={(v) => onSet('role', r.role, v)} />
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="rounded-lg border border-gray-200">
+        <div className="border-b bg-gray-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">By user</div>
+        <div className="max-h-[50vh] divide-y overflow-y-auto">
+          {users.length === 0 && (
+            <div className="px-4 py-6 text-center text-sm text-gray-400">No users in this company.</div>
+          )}
+          {users.map((u) => (
+            <div key={u.id} className="flex items-center justify-between px-4 py-2">
+              <span className="text-sm text-gray-700">
+                {u.full_name || u.email} <span className="text-xs text-gray-400">({u.role})</span>
+              </span>
+              <Dropdown value={userModel.get(u.id) ?? ''} onChange={(v) => onSet('user', u.id, v)} />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
   )
 }

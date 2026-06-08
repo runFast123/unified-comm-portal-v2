@@ -427,7 +427,40 @@ interface AIConfig {
  * caller still gets a usable config. Throws only when neither DB nor env
  * provides an API key.
  */
-async function getAIConfig(accountId?: string): Promise<AIConfig> {
+/**
+ * Resolve the ai_providers id assigned to a user (RBAC model assignment):
+ * user-level assignment first, then the user's role-level assignment. Returns
+ * null when neither exists — getAIConfig then uses the company's active model.
+ */
+async function resolveAssignedProviderId(
+  supabase: Awaited<ReturnType<typeof createServiceRoleClient>>,
+  companyId: string,
+  userId: string,
+): Promise<string | null> {
+  const { data: userAssign } = await supabase
+    .from('ai_model_assignments')
+    .select('ai_provider_id')
+    .eq('company_id', companyId)
+    .eq('user_id', userId)
+    .maybeSingle()
+  const ua = (userAssign as { ai_provider_id?: string } | null)?.ai_provider_id
+  if (ua) return ua
+  const { data: u } = await supabase.from('users').select('role').eq('id', userId).maybeSingle()
+  const role = (u as { role?: string } | null)?.role
+  if (role) {
+    const { data: roleAssign } = await supabase
+      .from('ai_model_assignments')
+      .select('ai_provider_id')
+      .eq('company_id', companyId)
+      .eq('role', role)
+      .maybeSingle()
+    const ra = (roleAssign as { ai_provider_id?: string } | null)?.ai_provider_id
+    if (ra) return ra
+  }
+  return null
+}
+
+async function getAIConfig(accountId?: string, userId?: string): Promise<AIConfig> {
   try {
     const supabase = await createServiceRoleClient()
 
@@ -442,6 +475,31 @@ async function getAIConfig(accountId?: string): Promise<AIConfig> {
         .eq('id', accountId)
         .maybeSingle()
       companyId = (account as { company_id?: string | null } | null)?.company_id ?? null
+    }
+
+    // 0. Per-user / per-role MODEL ASSIGNMENT (RBAC). When the user (or their
+    //    role) has an assigned provider in THIS company, route to it instead of
+    //    the company's active one. Purely additive — no userId / no assignment
+    //    falls through to the existing active-provider logic below.
+    if (userId && companyId) {
+      const assignedId = await resolveAssignedProviderId(supabase, companyId, userId)
+      if (assignedId) {
+        const { data: assigned } = await supabase
+          .from('ai_providers')
+          .select('base_url, api_key, model, max_tokens, temperature')
+          .eq('id', assignedId)
+          .eq('company_id', companyId)
+          .maybeSingle()
+        if (assigned?.api_key) {
+          return {
+            base_url: assigned.base_url,
+            api_key: assigned.api_key,
+            model: assigned.model,
+            max_tokens: assigned.max_tokens,
+            temperature: Number(assigned.temperature),
+          }
+        }
+      }
     }
 
     if (companyId) {
@@ -544,6 +602,8 @@ const AI_RETRY_DELAYS = [1000, 3000] // exponential backoff
  */
 export interface CallAIContext {
   account_id?: string
+  /** When set, AI calls route to this user's assigned model (RBAC), if any. */
+  user_id?: string
   endpoint?: AIEndpoint
   request_id?: string
 }
@@ -567,7 +627,7 @@ export async function callAI(
     await assertWithinBudget(ctx.account_id)
   }
 
-  const config = await getAIConfig(ctx.account_id)
+  const config = await getAIConfig(ctx.account_id, ctx.user_id)
   let lastError: Error | null = null
   // Metrics envelope around the retry loop. We measure END-TO-END duration
   // (including retries + backoff sleeps) so the operational dashboard reflects
