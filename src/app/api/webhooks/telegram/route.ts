@@ -67,16 +67,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Empty message — nothing to process' }, { status: 400 })
     }
 
-    // Dedup on the Telegram message id (unique per chat) when present.
+    const conversationId = await findOrCreateConversation(supabase, {
+      account_id,
+      channel: 'telegram',
+      teams_chat_id: chatId,
+      participant_name: inbound.sender_name,
+    })
+
+    // Dedup on the Telegram message id when present. Telegram's message_id is
+    // sequential PER CHAT (resets per conversation), so scope by conversation_id
+    // (the chat) — the messages table has NO teams_chat_id column to scope by.
+    // Runs after findOrCreateConversation so the conversation (chat) id is known.
     if (inbound.teams_message_id) {
       const { data: existingMsg } = await supabase
         .from('messages')
         .select('id')
-        .eq('account_id', account_id)
-        .eq('channel', 'telegram')
-        // Telegram message_id is sequential PER CHAT (resets per conversation),
-        // so dedup MUST also scope by chat or distinct customers collide.
-        .eq('teams_chat_id', chatId)
+        .eq('conversation_id', conversationId)
         .eq('teams_message_id', inbound.teams_message_id)
         .limit(1)
         .maybeSingle()
@@ -87,13 +93,6 @@ export async function POST(request: Request) {
         )
       }
     }
-
-    const conversationId = await findOrCreateConversation(supabase, {
-      account_id,
-      channel: 'telegram',
-      teams_chat_id: chatId,
-      participant_name: inbound.sender_name,
-    })
 
     const { data: message, error: msgError } = await supabase
       .from('messages')
