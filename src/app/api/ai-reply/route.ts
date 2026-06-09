@@ -590,6 +590,26 @@ export async function POST(request: Request) {
             .from('ai_replies')
             .update({ status: 'sent', sent_at: new Date().toISOString(), delivery_status: 'sent' })
             .eq('id', aiReply.id)
+          // Live chat has NO external provider — the visitor's widget reads replies
+          // from `messages` (the adapter send is a no-op). For the OTHER channels the
+          // provider transmits the reply, but livechat must record the outbound row
+          // here or the visitor never sees the auto-reply. The insert trigger then
+          // broadcasts it over realtime + the widget poll picks it up.
+          if (channelKey === 'livechat') {
+            await supabase.from('messages').insert({
+              conversation_id,
+              account_id,
+              channel: 'livechat',
+              sender_name: 'Assistant',
+              sender_type: 'agent',
+              message_text: replyText,
+              message_type: 'text',
+              direction: 'outbound',
+              replied: true,
+              reply_required: false,
+              timestamp: new Date().toISOString(),
+            })
+          }
         } else if (sendResult) {
           // Send returned but reported failure — keep row pending_approval,
           // mark delivery_status so the admin UI flags it.

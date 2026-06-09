@@ -70,6 +70,17 @@ export async function POST(request: Request) {
       )
     }
 
+    // Guard the conversation-grouping key: without teams_chat_id,
+    // findOrCreateConversation falls back to "any active Teams conversation" and
+    // would mis-group this message into an unrelated thread. All real Teams
+    // payloads carry it (matches the Telegram/Messenger/Instagram guards).
+    if (!teams_chat_id || (typeof teams_chat_id === 'string' && teams_chat_id.trim().length === 0)) {
+      return NextResponse.json(
+        { error: 'Missing or empty required field: teams_chat_id', request_id: requestId },
+        { status: 400 }
+      )
+    }
+
     // Normalize into the canonical InboundMessage (truncation, message_type,
     // agent/customer role -> sender_type/direction/replied). The per-channel
     // parse lives in src/lib/channels/inbound.ts; messageText is aliased so the

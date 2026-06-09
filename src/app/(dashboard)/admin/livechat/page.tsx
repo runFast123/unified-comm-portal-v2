@@ -138,6 +138,12 @@ export default function LiveChatAdminPage() {
         if (bh.open) setBhOpen(bh.open)
         if (bh.close) setBhClose(bh.close)
         if (bh.tz) setBhTz(bh.tz)
+      } else {
+        // No schedule on this widget — reset to defaults so we never carry the
+        // previously-selected widget's hours over and accidentally save them here.
+        setBhDays(['mon', 'tue', 'wed', 'thu', 'fri'])
+        setBhOpen('09:00')
+        setBhClose('17:00')
       }
     }
   }
@@ -180,8 +186,10 @@ export default function LiveChatAdminPage() {
   }
 
   function applyUpdated(w: Widget) {
+    // Update the list so the switcher pill, enable dot, embed key + the derived
+    // `widget` reflect the save — but DON'T re-sync the whole form, which would
+    // clobber unsaved edits in the other sections (each section has its own Save).
     setWidgets((prev) => prev.map((x) => (x.id === w.id ? w : x)))
-    sync(w)
   }
 
   async function createWidget() {
