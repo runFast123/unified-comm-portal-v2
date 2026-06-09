@@ -10,6 +10,9 @@ interface Widget {
   title: string
   color: string
   welcome_message: string
+  subtitle: string
+  launcher_text: string
+  position: string
   is_enabled: boolean
 }
 
@@ -24,6 +27,17 @@ interface Stats {
 }
 
 const OPEN_STATUSES = new Set(['active', 'in_progress', 'waiting_on_customer', 'escalated'])
+
+const PRESETS = ['#16a34a', '#2563eb', '#7c3aed', '#db2777', '#ea580c', '#0891b2', '#111827']
+
+/** Readable text color (dark/light) for a given accent — mirrors the widget's contrast(). */
+function readableText(hex: string): string {
+  const h = (hex || '').replace('#', '')
+  const f = h.length === 3 ? h.split('').map((c) => c + c).join('') : h
+  const r = parseInt(f.slice(0, 2), 16), g = parseInt(f.slice(2, 4), 16), b = parseInt(f.slice(4, 6), 16)
+  if (Number.isNaN(r)) return '#fff'
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.62 ? '#111827' : '#fff'
+}
 
 function timeAgo(iso: string | null): string {
   if (!iso) return ''
@@ -49,6 +63,9 @@ export default function LiveChatAdminPage() {
   const [title, setTitle] = useState('')
   const [color, setColor] = useState('#16a34a')
   const [welcome, setWelcome] = useState('')
+  const [subtitle, setSubtitle] = useState('')
+  const [launcherText, setLauncherText] = useState('')
+  const [position, setPosition] = useState<'left' | 'right'>('right')
 
   useEffect(() => {
     setOrigin(window.location.origin)
@@ -61,6 +78,9 @@ export default function LiveChatAdminPage() {
       setTitle(w.title)
       setColor(w.color)
       setWelcome(w.welcome_message)
+      setSubtitle(w.subtitle || '')
+      setLauncherText(w.launcher_text || '')
+      setPosition(w.position === 'left' ? 'left' : 'right')
     }
   }
 
@@ -106,7 +126,7 @@ export default function LiveChatAdminPage() {
     }
   }
 
-  async function save(patch: Partial<Pick<Widget, 'title' | 'color' | 'welcome_message' | 'is_enabled'>>) {
+  async function save(patch: Partial<Pick<Widget, 'title' | 'color' | 'welcome_message' | 'subtitle' | 'launcher_text' | 'position' | 'is_enabled'>>) {
     setSaving(true)
     setError(null)
     try {
@@ -137,6 +157,7 @@ export default function LiveChatAdminPage() {
   }
 
   const volMax = stats ? Math.max(...stats.dailyVolume.map((d) => d.count), 1) : 1
+  const fg = readableText(color)
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
@@ -319,6 +340,7 @@ export default function LiveChatAdminPage() {
               {/* Appearance */}
               <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
                 <h2 className="text-sm font-semibold text-gray-900">Appearance</h2>
+                <p className="text-xs text-gray-500">Make the widget match your brand — changes show in the live preview.</p>
                 <div className="mt-4 space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Header title</label>
@@ -326,18 +348,72 @@ export default function LiveChatAdminPage() {
                       value={title}
                       onChange={(e) => setTitle(e.target.value)}
                       maxLength={80}
+                      placeholder="Chat with us"
+                      className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Subtitle <span className="font-normal text-gray-400">· optional</span>
+                    </label>
+                    <input
+                      value={subtitle}
+                      onChange={(e) => setSubtitle(e.target.value)}
+                      maxLength={120}
+                      placeholder="We typically reply in a few minutes"
                       className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                     />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Accent color</label>
-                    <div className="mt-1 flex items-center gap-3">
+                    <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                      {PRESETS.map((p) => (
+                        <button
+                          key={p}
+                          type="button"
+                          onClick={() => setColor(p)}
+                          title={p}
+                          aria-label={`Use ${p}`}
+                          className={`h-7 w-7 rounded-full ring-2 ring-offset-1 transition ${color.toLowerCase() === p ? 'ring-gray-900' : 'ring-transparent hover:ring-gray-300'}`}
+                          style={{ backgroundColor: p }}
+                        />
+                      ))}
+                    </div>
+                    <div className="mt-2.5 flex items-center gap-3">
                       <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="h-9 w-12 rounded border" />
                       <input
                         value={color}
                         onChange={(e) => setColor(e.target.value)}
-                        className="w-32 rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm"
+                        className="w-32 rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm uppercase"
                       />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Launcher label <span className="font-normal text-gray-400">· optional</span>
+                    </label>
+                    <input
+                      value={launcherText}
+                      onChange={(e) => setLauncherText(e.target.value)}
+                      maxLength={40}
+                      placeholder="Need help?"
+                      className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    />
+                    <p className="mt-1 text-xs text-gray-400">A small label shown next to the chat bubble.</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Position</label>
+                    <div className="mt-1.5 inline-flex rounded-lg border border-gray-200 bg-gray-50 p-0.5">
+                      {(['left', 'right'] as const).map((p) => (
+                        <button
+                          key={p}
+                          type="button"
+                          onClick={() => setPosition(p)}
+                          className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${position === p ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                        >
+                          Bottom {p}
+                        </button>
+                      ))}
                     </div>
                   </div>
                   <div>
@@ -347,11 +423,12 @@ export default function LiveChatAdminPage() {
                       onChange={(e) => setWelcome(e.target.value)}
                       maxLength={500}
                       rows={2}
+                      placeholder="Hi! How can we help you today?"
                       className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                     />
                   </div>
                   <button
-                    onClick={() => save({ title, color, welcome_message: welcome })}
+                    onClick={() => save({ title, color, welcome_message: welcome, subtitle, launcher_text: launcherText, position })}
                     disabled={saving}
                     className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800 disabled:opacity-60"
                   >
@@ -369,15 +446,18 @@ export default function LiveChatAdminPage() {
                 <div className="mt-4 rounded-xl border border-gray-200 bg-gradient-to-b from-gray-50 to-gray-100 p-4">
                   {/* mock chat window */}
                   <div className="mx-auto max-w-[260px] overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-lg">
-                    <div className="flex items-center justify-between px-4 py-3 text-sm font-semibold text-white" style={{ backgroundColor: color }}>
-                      <span className="truncate">{title || 'Chat with us'}</span>
-                      <span className="opacity-80">×</span>
+                    <div className="flex items-center justify-between gap-2 px-4 py-3" style={{ backgroundColor: color, color: fg }}>
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-semibold leading-tight">{title || 'Chat with us'}</div>
+                        {subtitle && <div className="truncate text-[11px] leading-tight opacity-85">{subtitle}</div>}
+                      </div>
+                      <span className="shrink-0 opacity-80">×</span>
                     </div>
                     <div className="space-y-2 bg-gray-50 px-3 py-3">
                       <div className="max-w-[85%] rounded-2xl rounded-tl-sm border border-gray-100 bg-white px-3 py-2 text-xs text-gray-700">
                         {welcome || 'Hi! How can we help you today?'}
                       </div>
-                      <div className="ml-auto max-w-[85%] rounded-2xl rounded-tr-sm px-3 py-2 text-xs text-white" style={{ backgroundColor: color }}>
+                      <div className="ml-auto max-w-[85%] rounded-2xl rounded-tr-sm px-3 py-2 text-xs" style={{ backgroundColor: color, color: fg }}>
                         Is this in stock?
                       </div>
                     </div>
@@ -385,15 +465,20 @@ export default function LiveChatAdminPage() {
                       <div className="flex-1 truncate rounded-full border border-gray-200 px-3 py-1.5 text-xs text-gray-400">
                         Type a message…
                       </div>
-                      <div className="rounded-full px-2.5 py-1.5 text-[11px] font-semibold text-white" style={{ backgroundColor: color }}>
+                      <div className="rounded-full px-2.5 py-1.5 text-[11px] font-semibold" style={{ backgroundColor: color, color: fg }}>
                         Send
                       </div>
                     </div>
                   </div>
-                  {/* mock launcher bubble */}
-                  <div className="mt-3 flex justify-end">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-full shadow-lg" style={{ backgroundColor: color }}>
-                      <svg viewBox="0 0 24 24" fill="white" className="h-5 w-5">
+                  {/* mock launcher bubble (+ optional label) — position-aware */}
+                  <div className={`mt-3 flex items-center gap-2 ${position === 'left' ? 'flex-row-reverse justify-start' : 'justify-end'}`}>
+                    {launcherText && (
+                      <span className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 shadow-sm">
+                        {launcherText}
+                      </span>
+                    )}
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full shadow-lg" style={{ backgroundColor: color, color: fg }}>
+                      <svg viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5">
                         <path d="M12 3C6.5 3 2 6.6 2 11c0 2.1 1 4 2.7 5.4-.1 1.2-.6 2.4-1.5 3.3 1.6-.2 3.1-.8 4.3-1.7 1.4.5 2.9.8 4.5.8 5.5 0 10-3.6 10-8s-4.5-8-10-8z" />
                       </svg>
                     </div>

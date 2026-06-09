@@ -19,7 +19,14 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Widget not found' }, { status: 404, headers: WIDGET_CORS })
   }
   return NextResponse.json(
-    { title: widget.title, color: widget.color, welcome_message: widget.welcome_message },
+    {
+      title: widget.title,
+      color: widget.color,
+      welcome_message: widget.welcome_message,
+      subtitle: widget.subtitle,
+      launcher_text: widget.launcher_text,
+      position: widget.position,
+    },
     { headers: WIDGET_CORS }
   )
 }

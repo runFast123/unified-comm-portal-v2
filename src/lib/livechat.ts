@@ -19,6 +19,9 @@ export interface ResolvedWidget {
   title: string
   color: string
   welcome_message: string
+  subtitle: string
+  launcher_text: string
+  position: string
 }
 
 /** Resolve an ENABLED widget by its public key. null if missing or disabled. */
@@ -28,12 +31,20 @@ export async function resolveWidget(
 ): Promise<ResolvedWidget | null> {
   const { data } = await supabase
     .from('livechat_widgets')
-    .select('account_id, title, color, welcome_message, is_enabled')
+    .select('account_id, title, color, welcome_message, subtitle, launcher_text, position, is_enabled')
     .eq('widget_key', widgetKey)
     .maybeSingle()
   const w = data as (ResolvedWidget & { is_enabled: boolean }) | null
   if (!w || !w.is_enabled) return null
-  return { account_id: w.account_id, title: w.title, color: w.color, welcome_message: w.welcome_message }
+  return {
+    account_id: w.account_id,
+    title: w.title,
+    color: w.color,
+    welcome_message: w.welcome_message,
+    subtitle: w.subtitle ?? '',
+    launcher_text: w.launcher_text ?? '',
+    position: w.position === 'left' ? 'left' : 'right',
+  }
 }
 
 /** A public, unguessable widget key for the embed snippet. */
