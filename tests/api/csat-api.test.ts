@@ -19,6 +19,14 @@ vi.mock('next/headers', () => ({
   cookies: async () => ({ getAll: () => [], set: () => {} }),
 }))
 
+// RBAC permission gate — the status route now checks action:message.send; these
+// tests verify route LOGIC, not the permission engine, so grant the permission.
+vi.mock('@/lib/permissions/server', () => ({
+  userIdCan: vi.fn(async () => true),
+  userHasPermission: vi.fn(async () => true),
+  getEffectivePermissions: vi.fn(async () => new Set<string>()),
+}))
+
 // ─── Shared fixture state across all suites ──────────────────────────
 
 interface SurveyFixture {

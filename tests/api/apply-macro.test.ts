@@ -15,6 +15,14 @@ vi.mock('next/headers', () => ({
   cookies: async () => ({ getAll: () => [], set: () => {} }),
 }))
 
+// RBAC permission gate — these tests verify route LOGIC, not the permission
+// engine (covered by its own tests), so grant the permission.
+vi.mock('@/lib/permissions/server', () => ({
+  userIdCan: vi.fn(async () => true),
+  userHasPermission: vi.fn(async () => true),
+  getEffectivePermissions: vi.fn(async () => new Set<string>()),
+}))
+
 interface Conv {
   id: string
   account_id: string
@@ -191,6 +199,18 @@ describe('POST /api/conversations/[id]/apply-macro', () => {
     )
     expect(res.status).toBe(403)
     // Nothing applied.
+    expect(fixture.updates.find((u) => u.table === 'conversations')).toBeUndefined()
+  })
+
+  it('403 when the user lacks action:message.send (RBAC enforcement)', async () => {
+    const { userIdCan } = await import('@/lib/permissions/server')
+    vi.mocked(userIdCan).mockResolvedValueOnce(false)
+    const res = await POST(
+      jsonReq('http://localhost/api/conversations/conv-1/apply-macro', { macro_id: 'macro-1' }),
+      ctx('conv-1'),
+    )
+    expect(res.status).toBe(403)
+    // The permission gate runs before the macro is applied — nothing mutated.
     expect(fixture.updates.find((u) => u.table === 'conversations')).toBeUndefined()
   })
 

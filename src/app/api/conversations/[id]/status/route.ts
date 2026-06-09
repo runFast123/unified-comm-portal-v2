@@ -22,6 +22,7 @@ import { NextResponse, after } from 'next/server'
 
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase-server'
 import { verifyAccountAccess } from '@/lib/api-helpers'
+import { userIdCan } from '@/lib/permissions/server'
 import { fireWebhook } from '@/lib/webhook-dispatcher'
 import { maybeAutoSendCSAT } from './csat-hook'
 import type { ConversationStatus } from '@/types/database'
@@ -88,6 +89,11 @@ export async function POST(
     const allowed = await verifyAccountAccess(user.id, conv.account_id)
     if (!allowed) {
       return NextResponse.json({ error: 'Forbidden: account scope mismatch' }, { status: 403 })
+    }
+
+    // RBAC: changing a conversation's status is an agent write action.
+    if (!(await userIdCan(user.id, 'action:message.send'))) {
+      return NextResponse.json({ error: 'Forbidden: missing permission' }, { status: 403 })
     }
 
     // M4 fix: validate secondary_status_color shape. Without this anyone

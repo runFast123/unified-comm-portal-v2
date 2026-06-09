@@ -21,6 +21,7 @@ import { NextResponse } from 'next/server'
 
 import { createServiceRoleClient } from '@/lib/supabase-server'
 import { requireUser, assertAccountAccess } from '@/lib/tenant-guard'
+import { userIdCan } from '@/lib/permissions/server'
 import {
   applyMacro,
   resolveConversationCompanyId,
@@ -75,6 +76,11 @@ export async function POST(
     const allowed = await assertAccountAccess(ctx, conversation.account_id)
     if (!allowed) {
       return NextResponse.json({ error: 'Forbidden: account scope mismatch' }, { status: 403 })
+    }
+
+    // RBAC: applying a macro mutates the conversation (status/tags/assignee/priority).
+    if (!(await userIdCan(ctx.userId, 'action:message.send'))) {
+      return NextResponse.json({ error: 'Forbidden: missing permission' }, { status: 403 })
     }
 
     // Load the macro.

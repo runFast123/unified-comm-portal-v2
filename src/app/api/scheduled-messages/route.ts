@@ -3,6 +3,7 @@ import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supab
 import { checkRateLimit, verifyAccountAccess } from '@/lib/api-helpers'
 import { getAllowedAccountIds, isSuperAdmin } from '@/lib/auth'
 import { isChannel, getChannel } from '@/lib/channels/registry'
+import { userIdCan } from '@/lib/permissions/server'
 
 // Reject anything scheduled more than a year out. Keeps runaway/malicious
 // payloads from squatting on the scheduled-messages table forever.
@@ -91,6 +92,13 @@ export async function POST(request: Request) {
     }
     if (conv.channel !== channel) {
       return NextResponse.json({ error: 'Channel mismatch with conversation' }, { status: 400 })
+    }
+    // RBAC: scheduling a message is a deferred send — same gate as /api/send.
+    if (!(await userIdCan(user.id, 'action:message.send'))) {
+      return NextResponse.json({ error: 'Forbidden: missing permission' }, { status: 403 })
+    }
+    if (!(await userIdCan(user.id, `channel:${channel}`))) {
+      return NextResponse.json({ error: 'Forbidden: channel not allowed' }, { status: 403 })
     }
 
     // Channel-specific recipient validation — registry-driven so EVERY channel

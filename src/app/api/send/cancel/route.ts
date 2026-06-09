@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase-server'
 import { getRequestId } from '@/lib/request-id'
 import { logError, logInfo } from '@/lib/logger'
+import { userIdCan } from '@/lib/permissions/server'
 
 interface CancelBody {
   pending_id: string
@@ -25,6 +26,11 @@ export async function DELETE(request: Request) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized', request_id: requestId }, { status: 401 })
+    }
+
+    // RBAC: cancelling a pending send is part of the messaging capability.
+    if (!(await userIdCan(user.id, 'action:message.send'))) {
+      return NextResponse.json({ error: 'Forbidden: missing permission', request_id: requestId }, { status: 403 })
     }
 
     let body: CancelBody

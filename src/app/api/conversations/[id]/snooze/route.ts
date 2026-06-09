@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase-server'
 import { verifyAccountAccess, checkRateLimit } from '@/lib/api-helpers'
+import { userIdCan } from '@/lib/permissions/server'
 
 // Hard cap: don't accept anything more than 1 year out. Same horizon used by
 // scheduled-messages for parity.
@@ -163,6 +164,11 @@ export async function POST(
       return NextResponse.json({ error: 'Forbidden: account scope mismatch' }, { status: 403 })
     }
 
+    // RBAC: snoozing is an agent write action.
+    if (!(await userIdCan(user.id, 'action:message.send'))) {
+      return NextResponse.json({ error: 'Forbidden: missing permission' }, { status: 403 })
+    }
+
     const { error: updateErr } = await admin
       .from('conversations')
       .update({
@@ -241,6 +247,11 @@ export async function DELETE(
     const allowed = await verifyAccountAccess(user.id, conv.account_id)
     if (!allowed) {
       return NextResponse.json({ error: 'Forbidden: account scope mismatch' }, { status: 403 })
+    }
+
+    // RBAC: clearing a snooze is an agent write action.
+    if (!(await userIdCan(user.id, 'action:message.send'))) {
+      return NextResponse.json({ error: 'Forbidden: missing permission' }, { status: 403 })
     }
 
     // No-op when already not snoozed — but still return success so the client
