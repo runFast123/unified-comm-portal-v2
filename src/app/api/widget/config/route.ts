@@ -2,7 +2,7 @@
 // Public — the embedded widget loads its appearance (title/color/welcome) on init.
 import { NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase-server'
-import { resolveWidget, WIDGET_CORS } from '@/lib/livechat'
+import { resolveWidget, isWidgetOnline, WIDGET_CORS } from '@/lib/livechat'
 
 export async function OPTIONS() {
   return new NextResponse(null, { status: 204, headers: WIDGET_CORS })
@@ -18,6 +18,7 @@ export async function GET(request: Request) {
   if (!widget) {
     return NextResponse.json({ error: 'Widget not found' }, { status: 404, headers: WIDGET_CORS })
   }
+  const online = isWidgetOnline(widget.business_hours_enabled, widget.business_hours)
   return NextResponse.json(
     {
       title: widget.title,
@@ -27,6 +28,9 @@ export async function GET(request: Request) {
       launcher_text: widget.launcher_text,
       position: widget.position,
       prechat_enabled: widget.prechat_enabled,
+      business_hours_enabled: widget.business_hours_enabled,
+      online,
+      offline_message: widget.offline_message,
     },
     { headers: WIDGET_CORS }
   )

@@ -3,6 +3,13 @@
 import { useEffect, useState } from 'react'
 import { Copy, Check, Code2, MessagesSquare, ExternalLink } from 'lucide-react'
 
+interface BusinessHours {
+  tz: string
+  days: string[]
+  open: string
+  close: string
+}
+
 interface Widget {
   id: string
   account_id: string
@@ -14,6 +21,9 @@ interface Widget {
   launcher_text: string
   position: string
   prechat_enabled: boolean
+  business_hours_enabled: boolean
+  business_hours: BusinessHours | null
+  offline_message: string
   is_enabled: boolean
 }
 
@@ -38,6 +48,28 @@ function readableText(hex: string): string {
   const r = parseInt(f.slice(0, 2), 16), g = parseInt(f.slice(2, 4), 16), b = parseInt(f.slice(4, 6), 16)
   if (Number.isNaN(r)) return '#fff'
   return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.62 ? '#111827' : '#fff'
+}
+
+const DAY_LIST: [string, string][] = [['mon', 'Mon'], ['tue', 'Tue'], ['wed', 'Wed'], ['thu', 'Thu'], ['fri', 'Fri'], ['sat', 'Sat'], ['sun', 'Sun']]
+const COMMON_TZ = ['UTC', 'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'America/Sao_Paulo', 'Europe/London', 'Europe/Paris', 'Europe/Berlin', 'Europe/Moscow', 'Asia/Dubai', 'Asia/Kolkata', 'Asia/Singapore', 'Asia/Shanghai', 'Asia/Tokyo', 'Australia/Sydney', 'Pacific/Auckland']
+
+/** Client mirror of the server's isWidgetOnline — drives the "Open/Closed now" badge. */
+function clientOnline(days: string[], open: string, close: string, tz: string): boolean {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', { timeZone: tz || 'UTC', weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date())
+    const wd = (parts.find((p) => p.type === 'weekday')?.value || '').toLowerCase().slice(0, 3)
+    const hh = Number(parts.find((p) => p.type === 'hour')?.value || '0') % 24
+    const mm = Number(parts.find((p) => p.type === 'minute')?.value || '0')
+    if (!days.includes(wd)) return false
+    const cur = hh * 60 + mm
+    const [oh, om] = open.split(':').map(Number)
+    const [ch, cm] = close.split(':').map(Number)
+    const o = oh * 60 + om, c = ch * 60 + cm
+    if (c <= o) return cur >= o || cur < c
+    return cur >= o && cur < c
+  } catch {
+    return true
+  }
 }
 
 function timeAgo(iso: string | null): string {
@@ -68,9 +100,16 @@ export default function LiveChatAdminPage() {
   const [launcherText, setLauncherText] = useState('')
   const [position, setPosition] = useState<'left' | 'right'>('right')
   const [prechat, setPrechat] = useState(false)
+  const [bhEnabled, setBhEnabled] = useState(false)
+  const [bhDays, setBhDays] = useState<string[]>(['mon', 'tue', 'wed', 'thu', 'fri'])
+  const [bhOpen, setBhOpen] = useState('09:00')
+  const [bhClose, setBhClose] = useState('17:00')
+  const [bhTz, setBhTz] = useState('UTC')
+  const [offlineMessage, setOfflineMessage] = useState('')
 
   useEffect(() => {
     setOrigin(window.location.origin)
+    try { setBhTz(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC') } catch { /* keep UTC */ }
     void load()
   }, [])
 
@@ -84,6 +123,15 @@ export default function LiveChatAdminPage() {
       setLauncherText(w.launcher_text || '')
       setPosition(w.position === 'left' ? 'left' : 'right')
       setPrechat(!!w.prechat_enabled)
+      setBhEnabled(!!w.business_hours_enabled)
+      setOfflineMessage(w.offline_message || '')
+      const bh = w.business_hours
+      if (bh) {
+        if (Array.isArray(bh.days)) setBhDays(bh.days)
+        if (bh.open) setBhOpen(bh.open)
+        if (bh.close) setBhClose(bh.close)
+        if (bh.tz) setBhTz(bh.tz)
+      }
     }
   }
 
@@ -129,7 +177,7 @@ export default function LiveChatAdminPage() {
     }
   }
 
-  async function save(patch: Partial<Pick<Widget, 'title' | 'color' | 'welcome_message' | 'subtitle' | 'launcher_text' | 'position' | 'prechat_enabled' | 'is_enabled'>>) {
+  async function save(patch: Partial<Pick<Widget, 'title' | 'color' | 'welcome_message' | 'subtitle' | 'launcher_text' | 'position' | 'prechat_enabled' | 'business_hours_enabled' | 'business_hours' | 'offline_message' | 'is_enabled'>>) {
     setSaving(true)
     setError(null)
     try {
@@ -161,6 +209,7 @@ export default function LiveChatAdminPage() {
 
   const volMax = stats ? Math.max(...stats.dailyVolume.map((d) => d.count), 1) : 1
   const fg = readableText(color)
+  const currentlyOnline = clientOnline(bhDays, bhOpen, bhClose, bhTz)
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
@@ -459,6 +508,101 @@ export default function LiveChatAdminPage() {
                     className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${prechat ? 'bg-green-500' : 'bg-gray-300'}`}
                   >
                     <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${prechat ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
+                  </button>
+                </div>
+              </section>
+
+              {/* Business hours / offline mode */}
+              <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <h2 className="text-sm font-semibold text-gray-900">Business hours</h2>
+                    <p className="mt-0.5 text-xs text-gray-500">
+                      Outside your hours the widget shows an away message — visitors can still leave a message you can reply to by email.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={bhEnabled}
+                    onClick={() => setBhEnabled(!bhEnabled)}
+                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${bhEnabled ? 'bg-green-500' : 'bg-gray-300'}`}
+                  >
+                    <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${bhEnabled ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
+                  </button>
+                </div>
+
+                {bhEnabled && (
+                  <div className="mt-4 space-y-4 border-t border-gray-100 pt-4">
+                    <div className="flex items-center gap-2">
+                      <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ring-1 ${currentlyOnline ? 'bg-green-50 text-green-700 ring-green-200' : 'bg-gray-100 text-gray-600 ring-gray-200'}`}>
+                        <span className={`h-1.5 w-1.5 rounded-full ${currentlyOnline ? 'bg-green-500' : 'bg-gray-400'}`} />
+                        {currentlyOnline ? 'Open now' : 'Closed now'}
+                      </span>
+                      <span className="text-xs text-gray-400">based on the schedule below</span>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Timezone</label>
+                      <select value={bhTz} onChange={(e) => setBhTz(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
+                        {(COMMON_TZ.includes(bhTz) ? COMMON_TZ : [bhTz, ...COMMON_TZ]).map((tz) => (
+                          <option key={tz} value={tz}>{tz}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Open days</label>
+                      <div className="mt-1.5 flex flex-wrap gap-1.5">
+                        {DAY_LIST.map(([k, label]) => {
+                          const on = bhDays.includes(k)
+                          return (
+                            <button
+                              key={k}
+                              type="button"
+                              onClick={() => setBhDays(on ? bhDays.filter((d) => d !== k) : [...bhDays, k])}
+                              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${on ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                            >
+                              {label}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="flex items-end gap-3">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Open</label>
+                        <input type="time" value={bhOpen} onChange={(e) => setBhOpen(e.target.value)} className="mt-1 rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+                      </div>
+                      <div className="pb-2.5 text-gray-400">—</div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Close</label>
+                        <input type="time" value={bhClose} onChange={(e) => setBhClose(e.target.value)} className="mt-1 rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Away message</label>
+                      <textarea
+                        value={offlineMessage}
+                        onChange={(e) => setOfflineMessage(e.target.value)}
+                        maxLength={500}
+                        rows={2}
+                        placeholder="Thanks for reaching out! We're away right now — leave your message and we'll reply by email."
+                        className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div className="mt-4">
+                  <button
+                    onClick={() => save({ business_hours_enabled: bhEnabled, business_hours: { tz: bhTz, days: bhDays, open: bhOpen, close: bhClose }, offline_message: offlineMessage })}
+                    disabled={saving}
+                    className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800 disabled:opacity-60"
+                  >
+                    {saving ? 'Saving…' : 'Save business hours'}
                   </button>
                 </div>
               </section>

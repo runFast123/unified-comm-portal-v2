@@ -37,7 +37,7 @@ function buildWidgetJs(key: string, origin: string): string {
   var SKEY='lcw_sid_'+KEY;
   var sid=localStorage.getItem(SKEY);
   if(!sid){sid='sess_'+((window.crypto&&crypto.randomUUID)?crypto.randomUUID():(Date.now()+'_'+Math.random().toString(36).slice(2)));localStorage.setItem(SKEY,sid);}
-  var color='#16a34a', title='Chat with us', welcome='Hi! How can we help?', subtitle='', launcher='', position='right', fg='#fff', prechat=false;
+  var color='#16a34a', title='Chat with us', welcome='Hi! How can we help?', subtitle='', launcher='', position='right', fg='#fff', prechat=false, online=true, offlineMsg='', bhEnabled=false;
   var open=false, seen={}, lastAt=null, pollTimer=null, started=false, configured=false;
   var NKEY='lcw_nm_'+KEY, EKEY='lcw_em_'+KEY;
   var visitorName=localStorage.getItem(NKEY)||'', visitorEmail=localStorage.getItem(EKEY)||'';
@@ -106,7 +106,7 @@ function buildWidgetJs(key: string, origin: string): string {
     if(dir==='inbound'){d.style.background=color;d.style.color=fg;}d.textContent=text;body.appendChild(d);body.scrollTop=body.scrollHeight;}
 
   function loadConfig(){return fetch(API+'/config?key='+encodeURIComponent(KEY)).then(function(r){return r.ok?r.json():null;}).then(function(c){
-    if(c){title=c.title||title;color=c.color||color;welcome=c.welcome_message||welcome;subtitle=c.subtitle||'';launcher=c.launcher_text||'';position=c.position==='left'?'left':'right';prechat=!!c.prechat_enabled;}
+    if(c){title=c.title||title;color=c.color||color;welcome=c.welcome_message||welcome;subtitle=c.subtitle||'';launcher=c.launcher_text||'';position=c.position==='left'?'left':'right';prechat=!!c.prechat_enabled;bhEnabled=!!c.business_hours_enabled;online=c.online!==false;offlineMsg=c.offline_message||'';}
     configured=true;
     titleEl.textContent=title;subEl.textContent=subtitle;subEl.style.display=subtitle?'block':'none';
     if(launcher)launchEl.textContent=launcher;
@@ -124,7 +124,9 @@ function buildWidgetJs(key: string, origin: string): string {
       .then(function(r){return r.ok?r.json():null;}).then(function(d){if(d&&d.message_id)addMsg(d.message_id,'inbound',t);else addMsg(null,'inbound',t);poll();})
       .catch(function(){addMsg(null,'inbound',t);});}
 
-  function begin(){foot.style.display='flex';if(welcome&&!body.children.length)addMsg(null,'outbound',welcome);startPolling();input.focus();}
+  function begin(){foot.style.display='flex';
+    if(!body.children.length){var greet=(bhEnabled&&!online)?(offlineMsg||'Thanks for reaching out! We are away right now — leave your message and we will reply by email.'):welcome;if(greet)addMsg(null,'outbound',greet);}
+    startPolling();input.focus();}
   function showPrechat(){
     foot.style.display='none'; body.innerHTML='';
     var f=document.createElement('div'); f.className='lcw-pc';

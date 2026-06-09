@@ -23,7 +23,23 @@ async function resolveTargetCompanyId(
   return target
 }
 
-const WIDGET_COLS = 'id, account_id, widget_key, title, color, welcome_message, subtitle, launcher_text, position, prechat_enabled, is_enabled'
+const WIDGET_COLS = 'id, account_id, widget_key, title, color, welcome_message, subtitle, launcher_text, position, prechat_enabled, business_hours_enabled, business_hours, offline_message, is_enabled'
+
+const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/
+
+// Validate the business_hours JSON. Returns a clean object, null (clear it), or
+// undefined (not provided / not an object → leave the column unchanged).
+function sanitizeBusinessHours(v: unknown): { tz: string; days: string[]; open: string; close: string } | null | undefined {
+  if (v === null) return null
+  if (typeof v !== 'object') return undefined
+  const o = v as Record<string, unknown>
+  const tz = typeof o.tz === 'string' && o.tz.length <= 64 ? o.tz : 'UTC'
+  const days = Array.isArray(o.days) ? (o.days.filter((d) => typeof d === 'string' && DAY_KEYS.includes(d)) as string[]) : []
+  const open = typeof o.open === 'string' && TIME_RE.test(o.open) ? o.open : '09:00'
+  const close = typeof o.close === 'string' && TIME_RE.test(o.close) ? o.close : '17:00'
+  return { tz, days, open, close }
+}
 
 async function findWidget(admin: Awaited<ReturnType<typeof createServiceRoleClient>>, companyId: string) {
   const { data: acct } = await admin
@@ -91,7 +107,7 @@ export async function PATCH(request: Request) {
   const companyId = await resolveTargetCompanyId(request, ctx)
   if (!companyId) return NextResponse.json({ error: 'No company scope' }, { status: 400 })
 
-  let body: { title?: string; color?: string; welcome_message?: string; subtitle?: string; launcher_text?: string; position?: string; prechat_enabled?: boolean; is_enabled?: boolean }
+  let body: { title?: string; color?: string; welcome_message?: string; subtitle?: string; launcher_text?: string; position?: string; prechat_enabled?: boolean; business_hours_enabled?: boolean; business_hours?: unknown; offline_message?: string; is_enabled?: boolean }
   try {
     body = (await request.json()) as typeof body
   } catch {
@@ -110,6 +126,10 @@ export async function PATCH(request: Request) {
   if (typeof body.launcher_text === 'string') patch.launcher_text = body.launcher_text.slice(0, 40)
   if (body.position === 'left' || body.position === 'right') patch.position = body.position
   if (typeof body.prechat_enabled === 'boolean') patch.prechat_enabled = body.prechat_enabled
+  if (typeof body.business_hours_enabled === 'boolean') patch.business_hours_enabled = body.business_hours_enabled
+  if (typeof body.offline_message === 'string') patch.offline_message = body.offline_message.slice(0, 500)
+  const bh = sanitizeBusinessHours(body.business_hours)
+  if (bh !== undefined) patch.business_hours = bh
   if (typeof body.is_enabled === 'boolean') patch.is_enabled = body.is_enabled
   if (Object.keys(patch).length === 0) return NextResponse.json({ widget: existing })
 
