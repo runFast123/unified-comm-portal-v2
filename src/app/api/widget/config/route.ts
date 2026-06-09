@@ -26,6 +26,7 @@ export async function GET(request: Request) {
       subtitle: widget.subtitle,
       launcher_text: widget.launcher_text,
       position: widget.position,
+      prechat_enabled: widget.prechat_enabled,
     },
     { headers: WIDGET_CORS }
   )

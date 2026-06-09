@@ -14,7 +14,7 @@ export async function OPTIONS() {
 }
 
 export async function POST(request: Request) {
-  let body: { key?: string; session_id?: string; text?: string; visitor_name?: string }
+  let body: { key?: string; session_id?: string; text?: string; visitor_name?: string; visitor_email?: string }
   try {
     body = (await request.json()) as typeof body
   } catch {
@@ -49,12 +49,15 @@ export async function POST(request: Request) {
   }
 
   const visitorName = (body.visitor_name || 'Website visitor').toString().slice(0, 80)
+  const rawEmail = (body.visitor_email || '').toString().trim().slice(0, 200)
+  const visitorEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail) ? rawEmail : null
 
   const conversationId = await findOrCreateConversation(supabase, {
     account_id: accountId,
     channel: 'livechat',
     teams_chat_id: sessionId,
     participant_name: visitorName,
+    participant_email: visitorEmail,
   })
 
   const { data: message, error: msgError } = await supabase

@@ -22,6 +22,7 @@ export interface ResolvedWidget {
   subtitle: string
   launcher_text: string
   position: string
+  prechat_enabled: boolean
 }
 
 /** Resolve an ENABLED widget by its public key. null if missing or disabled. */
@@ -31,7 +32,7 @@ export async function resolveWidget(
 ): Promise<ResolvedWidget | null> {
   const { data } = await supabase
     .from('livechat_widgets')
-    .select('account_id, title, color, welcome_message, subtitle, launcher_text, position, is_enabled')
+    .select('account_id, title, color, welcome_message, subtitle, launcher_text, position, prechat_enabled, is_enabled')
     .eq('widget_key', widgetKey)
     .maybeSingle()
   const w = data as (ResolvedWidget & { is_enabled: boolean }) | null
@@ -44,6 +45,7 @@ export async function resolveWidget(
     subtitle: w.subtitle ?? '',
     launcher_text: w.launcher_text ?? '',
     position: w.position === 'left' ? 'left' : 'right',
+    prechat_enabled: !!w.prechat_enabled,
   }
 }
 

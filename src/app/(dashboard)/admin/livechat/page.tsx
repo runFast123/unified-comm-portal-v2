@@ -13,6 +13,7 @@ interface Widget {
   subtitle: string
   launcher_text: string
   position: string
+  prechat_enabled: boolean
   is_enabled: boolean
 }
 
@@ -66,6 +67,7 @@ export default function LiveChatAdminPage() {
   const [subtitle, setSubtitle] = useState('')
   const [launcherText, setLauncherText] = useState('')
   const [position, setPosition] = useState<'left' | 'right'>('right')
+  const [prechat, setPrechat] = useState(false)
 
   useEffect(() => {
     setOrigin(window.location.origin)
@@ -81,6 +83,7 @@ export default function LiveChatAdminPage() {
       setSubtitle(w.subtitle || '')
       setLauncherText(w.launcher_text || '')
       setPosition(w.position === 'left' ? 'left' : 'right')
+      setPrechat(!!w.prechat_enabled)
     }
   }
 
@@ -126,7 +129,7 @@ export default function LiveChatAdminPage() {
     }
   }
 
-  async function save(patch: Partial<Pick<Widget, 'title' | 'color' | 'welcome_message' | 'subtitle' | 'launcher_text' | 'position' | 'is_enabled'>>) {
+  async function save(patch: Partial<Pick<Widget, 'title' | 'color' | 'welcome_message' | 'subtitle' | 'launcher_text' | 'position' | 'prechat_enabled' | 'is_enabled'>>) {
     setSaving(true)
     setError(null)
     try {
@@ -436,6 +439,29 @@ export default function LiveChatAdminPage() {
                   </button>
                 </div>
               </section>
+
+              {/* Pre-chat form (lead capture) */}
+              <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <h2 className="text-sm font-semibold text-gray-900">Pre-chat form</h2>
+                    <p className="mt-0.5 text-xs text-gray-500">
+                      Ask visitors for their name &amp; email before they start chatting — captures leads and lets you follow up by email.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={prechat}
+                    onClick={() => { setPrechat(!prechat); void save({ prechat_enabled: !prechat }) }}
+                    disabled={saving}
+                    title={prechat ? 'On — click to turn off' : 'Off — click to turn on'}
+                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${prechat ? 'bg-green-500' : 'bg-gray-300'}`}
+                  >
+                    <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${prechat ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
+                  </button>
+                </div>
+              </section>
             </div>
 
             {/* Live preview */}
@@ -453,22 +479,36 @@ export default function LiveChatAdminPage() {
                       </div>
                       <span className="shrink-0 opacity-80">×</span>
                     </div>
-                    <div className="space-y-2 bg-gray-50 px-3 py-3">
-                      <div className="max-w-[85%] rounded-2xl rounded-tl-sm border border-gray-100 bg-white px-3 py-2 text-xs text-gray-700">
-                        {welcome || 'Hi! How can we help you today?'}
+                    {prechat ? (
+                      <div className="space-y-2 bg-gray-50 px-3 py-3.5">
+                        <div className="text-xs font-semibold text-gray-700">Before we start</div>
+                        <div className="-mt-1 text-[11px] leading-snug text-gray-400">Tell us who you are so we can help.</div>
+                        <div className="mt-1 rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-[11px] text-gray-400">Your name</div>
+                        <div className="rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-[11px] text-gray-400">Email address</div>
+                        <div className="mt-0.5 rounded-lg px-2.5 py-2 text-center text-[11px] font-semibold" style={{ backgroundColor: color, color: fg }}>
+                          Start chat
+                        </div>
                       </div>
-                      <div className="ml-auto max-w-[85%] rounded-2xl rounded-tr-sm px-3 py-2 text-xs" style={{ backgroundColor: color, color: fg }}>
-                        Is this in stock?
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 border-t border-gray-100 px-3 py-2.5">
-                      <div className="flex-1 truncate rounded-full border border-gray-200 px-3 py-1.5 text-xs text-gray-400">
-                        Type a message…
-                      </div>
-                      <div className="rounded-full px-2.5 py-1.5 text-[11px] font-semibold" style={{ backgroundColor: color, color: fg }}>
-                        Send
-                      </div>
-                    </div>
+                    ) : (
+                      <>
+                        <div className="space-y-2 bg-gray-50 px-3 py-3">
+                          <div className="max-w-[85%] rounded-2xl rounded-tl-sm border border-gray-100 bg-white px-3 py-2 text-xs text-gray-700">
+                            {welcome || 'Hi! How can we help you today?'}
+                          </div>
+                          <div className="ml-auto max-w-[85%] rounded-2xl rounded-tr-sm px-3 py-2 text-xs" style={{ backgroundColor: color, color: fg }}>
+                            Is this in stock?
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 border-t border-gray-100 px-3 py-2.5">
+                          <div className="flex-1 truncate rounded-full border border-gray-200 px-3 py-1.5 text-xs text-gray-400">
+                            Type a message…
+                          </div>
+                          <div className="rounded-full px-2.5 py-1.5 text-[11px] font-semibold" style={{ backgroundColor: color, color: fg }}>
+                            Send
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </div>
                   {/* mock launcher bubble (+ optional label) — position-aware */}
                   <div className={`mt-3 flex items-center gap-2 ${position === 'left' ? 'flex-row-reverse justify-start' : 'justify-end'}`}>

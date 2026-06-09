@@ -23,7 +23,7 @@ async function resolveTargetCompanyId(
   return target
 }
 
-const WIDGET_COLS = 'id, account_id, widget_key, title, color, welcome_message, subtitle, launcher_text, position, is_enabled'
+const WIDGET_COLS = 'id, account_id, widget_key, title, color, welcome_message, subtitle, launcher_text, position, prechat_enabled, is_enabled'
 
 async function findWidget(admin: Awaited<ReturnType<typeof createServiceRoleClient>>, companyId: string) {
   const { data: acct } = await admin
@@ -91,7 +91,7 @@ export async function PATCH(request: Request) {
   const companyId = await resolveTargetCompanyId(request, ctx)
   if (!companyId) return NextResponse.json({ error: 'No company scope' }, { status: 400 })
 
-  let body: { title?: string; color?: string; welcome_message?: string; subtitle?: string; launcher_text?: string; position?: string; is_enabled?: boolean }
+  let body: { title?: string; color?: string; welcome_message?: string; subtitle?: string; launcher_text?: string; position?: string; prechat_enabled?: boolean; is_enabled?: boolean }
   try {
     body = (await request.json()) as typeof body
   } catch {
@@ -109,6 +109,7 @@ export async function PATCH(request: Request) {
   if (typeof body.subtitle === 'string') patch.subtitle = body.subtitle.slice(0, 120)
   if (typeof body.launcher_text === 'string') patch.launcher_text = body.launcher_text.slice(0, 40)
   if (body.position === 'left' || body.position === 'right') patch.position = body.position
+  if (typeof body.prechat_enabled === 'boolean') patch.prechat_enabled = body.prechat_enabled
   if (typeof body.is_enabled === 'boolean') patch.is_enabled = body.is_enabled
   if (Object.keys(patch).length === 0) return NextResponse.json({ widget: existing })
 
