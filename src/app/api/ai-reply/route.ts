@@ -553,7 +553,12 @@ export async function POST(request: Request) {
     // actually succeeds. If the send branch is skipped (missing participant) or
     // returns !ok, the row stays `pending_approval` with delivery_status set so
     // ops can see the attempt happened.
-    if (account.ai_trust_mode && aiReply && isInternalCall) {
+    // Trust-mode auto-send is additionally gated by the account's confidence
+    // threshold (the admin "Confidence Threshold" slider, default 0.85): a reply
+    // the model isn't confident enough about stays a `pending_approval` draft for an
+    // agent to review instead of auto-sending. Set the threshold to 0 to auto-send
+    // everything. (confidenceScore and ai_confidence_threshold are both on 0–1.)
+    if (account.ai_trust_mode && aiReply && isInternalCall && confidenceScore >= (account.ai_confidence_threshold ?? 0)) {
       try {
         const { data: convForReply } = await supabase
           .from('conversations')
