@@ -144,6 +144,7 @@ export function ConversationActions({
   const [showTemplates, setShowTemplates] = useState(false)
   const [draftSaved, setDraftSaved] = useState(false)
   const draftTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const typingPingRef = useRef(0)
   const sendReplyRef = useRef<(() => void) | null>(null)
 
   // Start empty so SSR output matches the first client render. The saved
@@ -500,6 +501,16 @@ export function ConversationActions({
         localStorage.removeItem(`draft-${conversationId}`)
       }
     }, 500)
+
+    // Live-chat: signal the visitor's widget that the agent is typing (throttled
+    // to once per 4s; the widget shows "Agent is typing…" until it goes stale).
+    if (channel === 'livechat' && value.trim().length > 0) {
+      const nowTs = Date.now()
+      if (nowTs - typingPingRef.current > 4000) {
+        typingPingRef.current = nowTs
+        fetch(`/api/conversations/${conversationId}/typing`, { method: 'POST' }).catch(() => {})
+      }
+    }
 
     // Detect "/" shortcut pattern
     const cursorPos = e.target.selectionStart

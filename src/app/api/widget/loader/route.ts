@@ -61,6 +61,11 @@ function buildWidgetJs(key: string, origin: string): string {
     +'.lcw-actions{display:flex;align-items:center;gap:2px}'
     +'.lcw-tx{background:none;border:none;color:inherit;opacity:.85;cursor:pointer;font-size:16px;line-height:1;padding:0 2px;display:none}'
     +'.lcw-tx:hover{opacity:1}'
+    +'@keyframes lcwblink{0%,80%,100%{opacity:.3}40%{opacity:1}}'
+    +'.lcw-typing{align-self:flex-start;display:none;align-items:center;gap:4px;padding:11px 13px;background:#fff;border:1px solid #e5e7eb;border-radius:12px;border-bottom-left-radius:4px}'
+    +'.lcw-typing i{width:6px;height:6px;border-radius:50%;background:#9ca3af;display:inline-block;animation:lcwblink 1.4s infinite both}'
+    +'.lcw-typing i:nth-child(2){animation-delay:.2s}'
+    +'.lcw-typing i:nth-child(3){animation-delay:.4s}'
     +'.lcw-body{flex:1;overflow-y:auto;padding:14px;background:#f7f8fa;display:flex;flex-direction:column;gap:8px}'
     +'.lcw-msg{max-width:80%;padding:8px 11px;border-radius:12px;font-size:14px;line-height:1.35;white-space:pre-wrap;word-wrap:break-word}'
     +'.lcw-in{align-self:flex-start;background:#fff;color:#1f2937;border:1px solid #e5e7eb;border-bottom-left-radius:4px}'
@@ -92,6 +97,8 @@ function buildWidgetJs(key: string, origin: string): string {
   var head=panel.querySelector('.lcw-head'), body=panel.querySelector('.lcw-body'), input=panel.querySelector('.lcw-input'),
       sendBtn=panel.querySelector('.lcw-send'), titleEl=panel.querySelector('.lcw-title'), subEl=panel.querySelector('.lcw-sub'),
       foot=panel.querySelector('.lcw-foot'), txBtn=panel.querySelector('.lcw-tx');
+  var typingEl=document.createElement('div');typingEl.className='lcw-typing';typingEl.innerHTML='<i></i><i></i><i></i>';body.appendChild(typingEl);
+  function setTyping(on){if(on&&open&&started){body.appendChild(typingEl);typingEl.style.display='flex';body.scrollTop=body.scrollHeight;}else{typingEl.style.display='none';}}
 
   function applyLayout(){
     var side=position==='left'?'left':'right', off=position==='left'?'right':'left';
@@ -120,9 +127,10 @@ function buildWidgetJs(key: string, origin: string): string {
     if(launcher&&!open)launchEl.style.display='block';}).catch(function(){});}
 
   function poll(){var u=API+'/poll?key='+encodeURIComponent(KEY)+'&session_id='+encodeURIComponent(sid)+(lastAt?('&after='+encodeURIComponent(lastAt)):'');
-    return fetch(u).then(function(r){return r.ok?r.json():{messages:[]};}).then(function(d){
-      var ms=(d&&d.messages)||[];for(var i=0;i<ms.length;i++){var added=addMsg(ms[i].id,ms[i].direction,ms[i].text);lastAt=ms[i].at||lastAt;if(added&&ms[i].direction!=='inbound'&&!open)unread++;}
-      if(ms.length)lastActivity=Date.now();renderBadge();}).catch(function(){});}
+    return fetch(u).then(function(r){return r.ok?r.json():{messages:[],agent_typing:false};}).then(function(d){
+      var ms=(d&&d.messages)||[],gotAgent=false;for(var i=0;i<ms.length;i++){var added=addMsg(ms[i].id,ms[i].direction,ms[i].text);lastAt=ms[i].at||lastAt;if(added&&ms[i].direction!=='inbound'){gotAgent=true;if(!open)unread++;}}
+      if(ms.length)lastActivity=Date.now();renderBadge();
+      setTyping(d&&d.agent_typing===true&&!gotAgent);if(d&&d.agent_typing===true)lastActivity=Date.now();}).catch(function(){});}
 
   // Adaptive polling: ~1.2s while a chat is active, backing off when idle/closed.
   function nextDelay(){var idle=Date.now()-lastActivity;if(open)return idle<20000?1200:(idle<90000?3000:6000);return 10000;}
@@ -159,7 +167,7 @@ function buildWidgetJs(key: string, origin: string): string {
   function openPanel(){open=true;panel.classList.add('lcw-open');launchEl.style.display='none';unread=0;renderBadge();
     if(!started){started=true;if(configured)startFlow();else loadConfig().then(startFlow);}
     else if(foot&&foot.style.display!=='none'){input.focus();}}
-  function closePanel(){open=false;panel.classList.remove('lcw-open');if(launcher)launchEl.style.display='block';}
+  function closePanel(){open=false;panel.classList.remove('lcw-open');if(launcher)launchEl.style.display='block';setTyping(false);}
 
   function emailTranscript(){if(!visitorEmail)return;txBtn.disabled=true;
     fetch(API+'/transcript',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:KEY,session_id:sid})})

@@ -29,19 +29,21 @@ export async function GET(request: Request) {
   // reads are impossible because session_id is an unguessable client token).
   const { data: conv } = await supabase
     .from('conversations')
-    .select('id')
+    .select('id, agent_typing_at')
     .eq('account_id', widget.account_id)
     .eq('channel', 'livechat')
     .eq('teams_chat_id', sessionId)
     .maybeSingle()
   if (!conv) {
-    return NextResponse.json({ messages: [] }, { headers: WIDGET_CORS })
+    return NextResponse.json({ messages: [], agent_typing: false }, { headers: WIDGET_CORS })
   }
+  const cv = conv as { id: string; agent_typing_at: string | null }
+  const agentTyping = !!cv.agent_typing_at && Date.now() - new Date(cv.agent_typing_at).getTime() < 8000
 
   let q = supabase
     .from('messages')
     .select('id, direction, message_text, sender_name, timestamp')
-    .eq('conversation_id', (conv as { id: string }).id)
+    .eq('conversation_id', cv.id)
     .order('timestamp', { ascending: true })
     .limit(200)
   if (after) q = q.gt('timestamp', after)
@@ -51,5 +53,5 @@ export async function GET(request: Request) {
     const r = m as { id: string; direction: string; message_text: string | null; sender_name: string | null; timestamp: string }
     return { id: r.id, direction: r.direction, text: r.message_text ?? '', sender_name: r.sender_name, at: r.timestamp }
   })
-  return NextResponse.json({ messages }, { headers: WIDGET_CORS })
+  return NextResponse.json({ messages, agent_typing: agentTyping }, { headers: WIDGET_CORS })
 }
