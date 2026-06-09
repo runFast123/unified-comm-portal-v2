@@ -19,7 +19,9 @@ export async function GET(request: Request) {
     } catch { ok = false }
   }
 
-  const js = ok ? buildWidgetJs(key, origin) : '/* live-chat: unknown or disabled widget key */'
+  const rtUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+  const rtKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+  const js = ok ? buildWidgetJs(key, origin, rtUrl, rtKey) : '/* live-chat: unknown or disabled widget key */'
   return new Response(js, {
     headers: {
       'Content-Type': 'application/javascript; charset=utf-8',
@@ -29,16 +31,19 @@ export async function GET(request: Request) {
   })
 }
 
-function buildWidgetJs(key: string, origin: string): string {
-  // Vanilla, self-contained, no deps. Polls every 3s; de-dupes by message id.
+function buildWidgetJs(key: string, origin: string, rtUrl: string, rtKey: string): string {
+  // Vanilla, self-contained, no deps. Realtime via Supabase WS broadcast with an
+  // adaptive-polling fallback; de-dupes by message id.
   return `(function(){
   var KEY=${JSON.stringify(key)}, API=${JSON.stringify(origin + '/api/widget')};
+  var RT_URL=${JSON.stringify(rtUrl)}, RT_KEY=${JSON.stringify(rtKey)};
   if (window.__lcwLoaded) return; window.__lcwLoaded = true;
   var SKEY='lcw_sid_'+KEY;
   var sid=localStorage.getItem(SKEY);
   if(!sid){sid='sess_'+((window.crypto&&crypto.randomUUID)?crypto.randomUUID():(Date.now()+'_'+Math.random().toString(36).slice(2)));localStorage.setItem(SKEY,sid);}
   var color='#16a34a', title='Chat with us', welcome='Hi! How can we help?', subtitle='', launcher='', position='right', fg='#fff', prechat=false, online=true, offlineMsg='', bhEnabled=false, proactiveDelay=0;
   var open=false, seen={}, lastAt=null, pollTimer=null, started=false, configured=false, polling=false, unread=0, lastActivity=Date.now();
+  var rtWs=null, rtOn=false, rtRef=0, rtHb=null, rtRetry=null, rtTypingTimer=null;
   var NKEY='lcw_nm_'+KEY, EKEY='lcw_em_'+KEY;
   var visitorName=localStorage.getItem(NKEY)||'', visitorEmail=localStorage.getItem(EKEY)||'';
 
@@ -133,9 +138,36 @@ function buildWidgetJs(key: string, origin: string): string {
       setTyping(d&&d.agent_typing===true&&!gotAgent);if(d&&d.agent_typing===true)lastActivity=Date.now();}).catch(function(){});}
 
   // Adaptive polling: ~1.2s while a chat is active, backing off when idle/closed.
-  function nextDelay(){var idle=Date.now()-lastActivity;if(open)return idle<20000?1200:(idle<90000?3000:6000);return 10000;}
+  function nextDelay(){if(rtOn)return 20000;var idle=Date.now()-lastActivity;if(open)return idle<20000?1200:(idle<90000?3000:6000);return 10000;}
   function loopPoll(){poll().then(function(){pollTimer=setTimeout(loopPoll,nextDelay());});}
   function startPolling(){if(polling)return;polling=true;lastActivity=Date.now();loopPoll();}
+
+  // True realtime via Supabase WS broadcast (channel lcw:<session>). The poll loop
+  // above stays as a safety-net fallback (slowed to 20s while the socket is healthy);
+  // if the socket drops, rtOn flips false and adaptive polling resumes instantly.
+  function rtSend(o){try{rtWs.send(JSON.stringify(o));}catch(e){}}
+  function connectRealtime(){
+    if(!RT_URL||!RT_KEY||!started)return;
+    if(rtWs&&(rtWs.readyState===0||rtWs.readyState===1))return;
+    var u=RT_URL.replace(/^http/,'ws')+'/realtime/v1/websocket?apikey='+encodeURIComponent(RT_KEY)+'&vsn=1.0.0';
+    try{rtWs=new WebSocket(u);}catch(e){return;}
+    rtWs.onopen=function(){
+      rtSend({topic:'realtime:lcw:'+sid,event:'phx_join',payload:{config:{broadcast:{self:false},presence:{key:''},private:false}},ref:String(++rtRef),join_ref:'1'});
+      if(rtHb)clearInterval(rtHb);
+      rtHb=setInterval(function(){rtSend({topic:'phoenix',event:'heartbeat',payload:{},ref:String(++rtRef)});},20000);
+    };
+    rtWs.onmessage=function(ev){
+      var m;try{m=JSON.parse(ev.data);}catch(e){return;}
+      if(m.event==='phx_reply'){if(m.payload&&m.payload.status==='ok'&&m.topic==='realtime:lcw:'+sid)rtOn=true;return;}
+      if(m.event==='broadcast'&&m.payload){
+        var b=m.payload;
+        if(b.event==='message'&&b.payload){var p=b.payload;var added=addMsg(p.id,p.direction,p.text);if(p.at)lastAt=p.at;if(added&&p.direction!=='inbound'){setTyping(false);if(!open)unread++;renderBadge();}}
+        else if(b.event==='typing'){if(open){setTyping(true);if(rtTypingTimer)clearTimeout(rtTypingTimer);rtTypingTimer=setTimeout(function(){setTyping(false);},6000);}}
+      }
+    };
+    rtWs.onclose=function(){rtOn=false;if(rtHb){clearInterval(rtHb);rtHb=null;}if(rtRetry)clearTimeout(rtRetry);rtRetry=setTimeout(connectRealtime,4000);};
+    rtWs.onerror=function(){try{rtWs.close();}catch(e){}};
+  }
 
   function send(){var t=(input.value||'').trim();if(!t)return;input.value='';
     fetch(API+'/message',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:KEY,session_id:sid,text:t,visitor_name:visitorName,visitor_email:visitorEmail})})
@@ -144,7 +176,7 @@ function buildWidgetJs(key: string, origin: string): string {
 
   function begin(){foot.style.display='flex';if(visitorEmail)txBtn.style.display='block';
     if(!body.querySelector('.lcw-msg')){var greet=(bhEnabled&&!online)?(offlineMsg||'Thanks for reaching out! We are away right now — leave your message and we will reply by email.'):welcome;if(greet)addMsg(null,'outbound',greet);}
-    startPolling();input.focus();}
+    startPolling();connectRealtime();input.focus();}
   function showPrechat(){
     foot.style.display='none'; body.innerHTML='';
     var f=document.createElement('div'); f.className='lcw-pc';
