@@ -20,6 +20,7 @@ import {
   type FacetFilterKey,
 } from '@/components/dashboard/inbox-facets-sidebar'
 import type { InboxFacets } from '@/app/api/inbox/facets/route'
+import { InboxRealtime } from '@/components/dashboard/inbox-realtime'
 import { createClient } from '@/lib/supabase-client'
 import { CHANNEL_KEYS, isChannel } from '@/lib/channels/registry'
 import { decodeHtmlEntities } from '@/lib/utils'
@@ -1108,6 +1109,7 @@ export default function InboxPage() {
 
   return (
     <div className="flex flex-col md:flex-row md:gap-6 animate-fade-in">
+      <InboxRealtime onRefresh={fetchInboxItems} />
       {/* Smart inbox facets sidebar — only on the main inbox view (not
           spam/newsletter). On mobile it lives off-canvas with a "Filters"
           button to toggle it in. */}
