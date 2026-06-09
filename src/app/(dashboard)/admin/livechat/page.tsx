@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { Copy, Check, Code2 } from 'lucide-react'
 
 interface Widget {
   id: string
@@ -134,28 +135,74 @@ export default function LiveChatAdminPage() {
       ) : (
         <div className="space-y-6">
           {/* Embed snippet */}
-          <section className="animate-slide-up rounded-xl border bg-white p-5">
-            <div className="flex items-center justify-between">
-              <h2 className="font-semibold text-gray-900">Embed snippet</h2>
-              <label className="flex items-center gap-2 text-sm text-gray-600">
-                <input
-                  type="checkbox"
-                  checked={widget.is_enabled}
-                  onChange={(e) => save({ is_enabled: e.target.checked })}
-                  disabled={saving}
-                />
-                {widget.is_enabled ? 'Live' : 'Disabled'}
-              </label>
-            </div>
-            <p className="mt-1 text-sm text-gray-500">Paste this just before <code>&lt;/body&gt;</code> on every page.</p>
-            <div className="mt-3 flex items-stretch gap-2">
-              <code className="flex-1 overflow-x-auto rounded-lg bg-gray-900 px-3 py-2.5 text-xs text-gray-100">{snippet}</code>
+          <section className="animate-slide-up overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+            <div className="flex items-center justify-between gap-4 border-b border-gray-100 px-5 py-4">
+              <div className="flex items-center gap-3">
+                <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-green-50 text-green-600 ring-1 ring-green-100">
+                  <Code2 className="h-[18px] w-[18px]" />
+                </span>
+                <div>
+                  <h2 className="text-sm font-semibold text-gray-900">Embed code</h2>
+                  <p className="text-xs text-gray-500">
+                    Paste once, just before{' '}
+                    <code className="rounded bg-gray-100 px-1 py-0.5 font-mono text-[11px] text-gray-700">&lt;/body&gt;</code>
+                  </p>
+                </div>
+              </div>
+              {/* live toggle */}
               <button
-                onClick={copySnippet}
-                className="shrink-0 rounded-lg border border-gray-300 px-3 text-sm font-medium hover:bg-gray-50"
+                type="button"
+                role="switch"
+                aria-checked={widget.is_enabled}
+                onClick={() => save({ is_enabled: !widget.is_enabled })}
+                disabled={saving}
+                title={widget.is_enabled ? 'Live — click to disable' : 'Disabled — click to go live'}
+                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${widget.is_enabled ? 'bg-green-500' : 'bg-gray-300'}`}
               >
-                {copied ? 'Copied!' : 'Copy'}
+                <span
+                  className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${widget.is_enabled ? 'translate-x-[22px]' : 'translate-x-0.5'}`}
+                />
               </button>
+            </div>
+
+            {/* terminal-style code block with syntax highlighting */}
+            <div className="bg-[#0d1117]">
+              <div className="flex items-center justify-between px-4 pb-2 pt-3.5">
+                <div className="flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-full bg-[#ff5f57]" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-[#febc2e]" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-[#28c840]" />
+                  <span className="ml-2 font-mono text-[11px] text-gray-500">index.html</span>
+                </div>
+                <button
+                  onClick={copySnippet}
+                  className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-all ${
+                    copied ? 'bg-green-500/20 text-green-300' : 'bg-white/10 text-gray-200 hover:bg-white/20'
+                  }`}
+                >
+                  {copied ? <><Check className="h-3.5 w-3.5" /> Copied!</> : <><Copy className="h-3.5 w-3.5" /> Copy</>}
+                </button>
+              </div>
+              <pre className="overflow-x-auto px-4 pb-4 text-[13px] leading-relaxed">
+                <code className="font-mono">
+                  <span className="text-[#ff7b72]">&lt;script</span>{' '}
+                  <span className="text-[#79c0ff]">src</span>
+                  <span className="text-gray-500">=</span>
+                  <span className="text-[#a5d6ff]">&quot;{origin}/api/widget/loader?key={widget.widget_key}&quot;</span>{' '}
+                  <span className="text-[#79c0ff]">async</span>
+                  <span className="text-[#ff7b72]">&gt;&lt;/script&gt;</span>
+                </code>
+              </pre>
+            </div>
+
+            {/* status footer */}
+            <div className="flex items-center gap-2 px-5 py-3 text-xs">
+              <span className={`inline-flex h-2 w-2 rounded-full ${widget.is_enabled ? 'bg-green-500' : 'bg-gray-300'}`} />
+              <span className="text-gray-500">
+                {widget.is_enabled
+                  ? 'Your widget is live and accepting chats.'
+                  : 'Your widget is disabled — toggle it on to go live.'}
+              </span>
             </div>
           </section>
 

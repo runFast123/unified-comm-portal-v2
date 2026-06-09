@@ -259,7 +259,10 @@ export default function ReportsPage() {
       // unscoped under the old `length > 0` gate.
       const accountIdFilter = activeCompanyId ? companyAccountIds : null
 
-      // 1. Fetch messages for the date range
+      // Build the four independent queries first, then run them IN PARALLEL.
+      // (Previously each was awaited sequentially — four large round-trips stacked
+      // on the critical path, the main cause of slow report loads.)
+      // 1. Messages for the date range
       let messagesQuery = supabase
         .from('messages')
         .select('id, channel, direction, received_at, replied, timestamp')
@@ -269,9 +272,8 @@ export default function ReportsPage() {
         .limit(10000)
       if (endDate) messagesQuery = messagesQuery.lte('received_at', endDate)
       if (accountIdFilter) messagesQuery = messagesQuery.in('account_id', accountIdFilter)
-      const { data: messages } = await messagesQuery
 
-      // 2. Fetch classifications (join through messages for account scoping)
+      // 2. Classifications (join through messages for account scoping)
       let classQuery = supabase
         .from('message_classifications')
         .select(accountIdFilter ? 'category, sentiment, urgency, confidence, classified_at, messages!inner(account_id)' : 'category, sentiment, urgency, confidence, classified_at')
@@ -279,10 +281,8 @@ export default function ReportsPage() {
         .limit(10000)
       if (endDate) classQuery = classQuery.lte('classified_at', endDate)
       if (accountIdFilter) classQuery = (classQuery as any).in('messages.account_id', accountIdFilter)
-      const { data: rawClassifications } = await classQuery
-      const classifications = (rawClassifications ?? []) as any[]
 
-      // 3. Fetch AI replies with linked message received_at for response time calc
+      // 3. AI replies with linked message received_at for response time calc
       let aiQuery = supabase
         .from('ai_replies')
         .select('status, confidence_score, created_at, sent_at, channel, account_id, messages!ai_replies_message_id_fkey(received_at)')
@@ -290,14 +290,21 @@ export default function ReportsPage() {
         .limit(10000)
       if (endDate) aiQuery = aiQuery.lte('created_at', endDate)
       if (accountIdFilter) aiQuery = aiQuery.in('account_id', accountIdFilter)
-      const { data: aiReplies } = await aiQuery
 
-      // 4. Fetch sheets sync
+      // 4. Sheets sync
       let sheetsQuery = supabase
         .from('google_sheets_sync')
         .select('*')
       if (accountIdFilter) sheetsQuery = sheetsQuery.or(accountIdFilter.map(id => `account_id.eq.${id}`).concat('account_id.is.null').join(','))
-      const { data: sheets } = await sheetsQuery
+
+      const [messagesRes, classRes, aiRes, sheetsRes] = await Promise.all([
+        messagesQuery, classQuery, aiQuery, sheetsQuery,
+      ])
+      const messages = messagesRes.data
+      const rawClassifications = classRes.data
+      const classifications = (rawClassifications ?? []) as any[]
+      const aiReplies = aiRes.data
+      const sheets = sheetsRes.data
 
       // 5. Build message volume by day — all registered channels (not just 3).
       const volumeByDay: Record<string, Record<string, number>> = {}
