@@ -24,6 +24,7 @@ interface Widget {
   business_hours_enabled: boolean
   business_hours: BusinessHours | null
   offline_message: string
+  proactive_delay: number
   is_enabled: boolean
 }
 
@@ -106,6 +107,7 @@ export default function LiveChatAdminPage() {
   const [bhClose, setBhClose] = useState('17:00')
   const [bhTz, setBhTz] = useState('UTC')
   const [offlineMessage, setOfflineMessage] = useState('')
+  const [proactiveDelay, setProactiveDelay] = useState(0)
 
   useEffect(() => {
     setOrigin(window.location.origin)
@@ -125,6 +127,7 @@ export default function LiveChatAdminPage() {
       setPrechat(!!w.prechat_enabled)
       setBhEnabled(!!w.business_hours_enabled)
       setOfflineMessage(w.offline_message || '')
+      setProactiveDelay(Number(w.proactive_delay) || 0)
       const bh = w.business_hours
       if (bh) {
         if (Array.isArray(bh.days)) setBhDays(bh.days)
@@ -177,7 +180,7 @@ export default function LiveChatAdminPage() {
     }
   }
 
-  async function save(patch: Partial<Pick<Widget, 'title' | 'color' | 'welcome_message' | 'subtitle' | 'launcher_text' | 'position' | 'prechat_enabled' | 'business_hours_enabled' | 'business_hours' | 'offline_message' | 'is_enabled'>>) {
+  async function save(patch: Partial<Pick<Widget, 'title' | 'color' | 'welcome_message' | 'subtitle' | 'launcher_text' | 'position' | 'prechat_enabled' | 'business_hours_enabled' | 'business_hours' | 'offline_message' | 'proactive_delay' | 'is_enabled'>>) {
     setSaving(true)
     setError(null)
     try {
@@ -509,6 +512,29 @@ export default function LiveChatAdminPage() {
                   >
                     <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${prechat ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
                   </button>
+                </div>
+              </section>
+
+              {/* Proactive chat */}
+              <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <h2 className="text-sm font-semibold text-gray-900">Proactive chat</h2>
+                    <p className="mt-0.5 text-xs text-gray-500">Auto-open the chat after a delay to invite visitors. Fires once per visit.</p>
+                  </div>
+                  <select
+                    value={proactiveDelay}
+                    onChange={(e) => { const v = Number(e.target.value); setProactiveDelay(v); void save({ proactive_delay: v }) }}
+                    disabled={saving}
+                    className="shrink-0 rounded-lg border border-gray-300 px-3 py-2 text-sm disabled:opacity-50"
+                  >
+                    <option value={0}>Off</option>
+                    <option value={5}>After 5s</option>
+                    <option value={10}>After 10s</option>
+                    <option value={20}>After 20s</option>
+                    <option value={30}>After 30s</option>
+                    <option value={60}>After 60s</option>
+                  </select>
                 </div>
               </section>
 

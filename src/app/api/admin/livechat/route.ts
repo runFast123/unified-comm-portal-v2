@@ -23,7 +23,7 @@ async function resolveTargetCompanyId(
   return target
 }
 
-const WIDGET_COLS = 'id, account_id, widget_key, title, color, welcome_message, subtitle, launcher_text, position, prechat_enabled, business_hours_enabled, business_hours, offline_message, is_enabled'
+const WIDGET_COLS = 'id, account_id, widget_key, title, color, welcome_message, subtitle, launcher_text, position, prechat_enabled, business_hours_enabled, business_hours, offline_message, proactive_delay, is_enabled'
 
 const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/
@@ -107,7 +107,7 @@ export async function PATCH(request: Request) {
   const companyId = await resolveTargetCompanyId(request, ctx)
   if (!companyId) return NextResponse.json({ error: 'No company scope' }, { status: 400 })
 
-  let body: { title?: string; color?: string; welcome_message?: string; subtitle?: string; launcher_text?: string; position?: string; prechat_enabled?: boolean; business_hours_enabled?: boolean; business_hours?: unknown; offline_message?: string; is_enabled?: boolean }
+  let body: { title?: string; color?: string; welcome_message?: string; subtitle?: string; launcher_text?: string; position?: string; prechat_enabled?: boolean; business_hours_enabled?: boolean; business_hours?: unknown; offline_message?: string; proactive_delay?: number; is_enabled?: boolean }
   try {
     body = (await request.json()) as typeof body
   } catch {
@@ -130,6 +130,7 @@ export async function PATCH(request: Request) {
   if (typeof body.offline_message === 'string') patch.offline_message = body.offline_message.slice(0, 500)
   const bh = sanitizeBusinessHours(body.business_hours)
   if (bh !== undefined) patch.business_hours = bh
+  if (typeof body.proactive_delay === 'number' && Number.isFinite(body.proactive_delay)) patch.proactive_delay = Math.min(600, Math.max(0, Math.round(body.proactive_delay)))
   if (typeof body.is_enabled === 'boolean') patch.is_enabled = body.is_enabled
   if (Object.keys(patch).length === 0) return NextResponse.json({ widget: existing })
 

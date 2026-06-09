@@ -65,6 +65,7 @@ export interface ResolvedWidget {
   business_hours_enabled: boolean
   business_hours: BusinessHours | null
   offline_message: string
+  proactive_delay: number
 }
 
 /** Resolve an ENABLED widget by its public key. null if missing or disabled. */
@@ -74,7 +75,7 @@ export async function resolveWidget(
 ): Promise<ResolvedWidget | null> {
   const { data } = await supabase
     .from('livechat_widgets')
-    .select('account_id, title, color, welcome_message, subtitle, launcher_text, position, prechat_enabled, business_hours_enabled, business_hours, offline_message, is_enabled')
+    .select('account_id, title, color, welcome_message, subtitle, launcher_text, position, prechat_enabled, business_hours_enabled, business_hours, offline_message, proactive_delay, is_enabled')
     .eq('widget_key', widgetKey)
     .maybeSingle()
   const w = data as (ResolvedWidget & { is_enabled: boolean }) | null
@@ -91,6 +92,7 @@ export async function resolveWidget(
     business_hours_enabled: !!w.business_hours_enabled,
     business_hours: (w.business_hours as BusinessHours | null) ?? null,
     offline_message: w.offline_message ?? '',
+    proactive_delay: Number(w.proactive_delay) || 0,
   }
 }
 

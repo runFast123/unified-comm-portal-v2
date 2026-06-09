@@ -31,6 +31,7 @@ export async function GET(request: Request) {
       business_hours_enabled: widget.business_hours_enabled,
       online,
       offline_message: widget.offline_message,
+      proactive_delay: widget.proactive_delay,
     },
     { headers: WIDGET_CORS }
   )

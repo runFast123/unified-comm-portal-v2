@@ -74,6 +74,7 @@ const ALLOWLIST: Record<string, string> = {
   'widget/loader/route.ts': 'public live-chat widget loader — widget_key is the auth; serves the embed JS for its account',
   'widget/message/route.ts': 'public live-chat widget — widget_key is the auth; writes are pinned to the key\'s account',
   'widget/poll/route.ts': 'public live-chat widget — widget_key + unguessable session_id are the auth; reads scoped to the account + session',
+  'widget/transcript/route.ts': 'public live-chat widget — widget_key + session_id are the auth; emails ONLY the conversation\'s stored participant_email (never a request-supplied address), rate-limited',
 }
 
 function listRouteFiles(dir: string): string[] {

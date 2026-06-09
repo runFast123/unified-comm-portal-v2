@@ -37,8 +37,8 @@ function buildWidgetJs(key: string, origin: string): string {
   var SKEY='lcw_sid_'+KEY;
   var sid=localStorage.getItem(SKEY);
   if(!sid){sid='sess_'+((window.crypto&&crypto.randomUUID)?crypto.randomUUID():(Date.now()+'_'+Math.random().toString(36).slice(2)));localStorage.setItem(SKEY,sid);}
-  var color='#16a34a', title='Chat with us', welcome='Hi! How can we help?', subtitle='', launcher='', position='right', fg='#fff', prechat=false, online=true, offlineMsg='', bhEnabled=false;
-  var open=false, seen={}, lastAt=null, pollTimer=null, started=false, configured=false;
+  var color='#16a34a', title='Chat with us', welcome='Hi! How can we help?', subtitle='', launcher='', position='right', fg='#fff', prechat=false, online=true, offlineMsg='', bhEnabled=false, proactiveDelay=0;
+  var open=false, seen={}, lastAt=null, pollTimer=null, started=false, configured=false, polling=false, unread=0, lastActivity=Date.now();
   var NKEY='lcw_nm_'+KEY, EKEY='lcw_em_'+KEY;
   var visitorName=localStorage.getItem(NKEY)||'', visitorEmail=localStorage.getItem(EKEY)||'';
 
@@ -58,6 +58,9 @@ function buildWidgetJs(key: string, origin: string): string {
     +'.lcw-title{line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
     +'.lcw-sub{font-weight:400;font-size:12px;opacity:.85;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
     +'.lcw-x{background:none;border:none;color:inherit;opacity:.85;cursor:pointer;font-size:20px;line-height:1}'
+    +'.lcw-actions{display:flex;align-items:center;gap:2px}'
+    +'.lcw-tx{background:none;border:none;color:inherit;opacity:.85;cursor:pointer;font-size:16px;line-height:1;padding:0 2px;display:none}'
+    +'.lcw-tx:hover{opacity:1}'
     +'.lcw-body{flex:1;overflow-y:auto;padding:14px;background:#f7f8fa;display:flex;flex-direction:column;gap:8px}'
     +'.lcw-msg{max-width:80%;padding:8px 11px;border-radius:12px;font-size:14px;line-height:1.35;white-space:pre-wrap;word-wrap:break-word}'
     +'.lcw-in{align-self:flex-start;background:#fff;color:#1f2937;border:1px solid #e5e7eb;border-bottom-left-radius:4px}'
@@ -71,22 +74,24 @@ function buildWidgetJs(key: string, origin: string): string {
     +'.lcw-pc-f{border:1px solid #d1d5db;border-radius:10px;padding:10px 12px;font-size:14px;outline:none;width:100%;box-sizing:border-box}'
     +'.lcw-pc-f:focus{border-color:#9ca3af}'
     +'.lcw-pc-err{font-size:12px;color:#dc2626}'
-    +'.lcw-pc-go{border:none;border-radius:10px;padding:10px;cursor:pointer;font-size:14px;font-weight:600}';
+    +'.lcw-pc-go{border:none;border-radius:10px;padding:10px;cursor:pointer;font-size:14px;font-weight:600}'
+    +'.lcw-badge{position:absolute;top:-3px;right:-3px;min-width:18px;height:18px;padding:0 4px;border-radius:9px;background:#ef4444;color:#fff;font-size:11px;font-weight:700;align-items:center;justify-content:center;box-shadow:0 0 0 2px #fff;box-sizing:border-box}';
   document.head.appendChild(css);
 
   var fab=document.createElement('button');
   fab.className='lcw-fab'; fab.setAttribute('aria-label','Open chat');
   fab.innerHTML='<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3C6.5 3 2 6.6 2 11c0 2.1 1 4 2.7 5.4-.1 1.2-.6 2.4-1.5 3.3 1.6-.2 3.1-.8 4.3-1.7 1.4.5 2.9.8 4.5.8 5.5 0 10-3.6 10-8s-4.5-8-10-8z"/></svg>';
+  var badge=document.createElement('span'); badge.className='lcw-badge'; badge.style.display='none'; fab.appendChild(badge);
   var launchEl=document.createElement('button'); launchEl.className='lcw-launch'; launchEl.style.display='none';
   var panel=document.createElement('div'); panel.className='lcw-panel';
-  panel.innerHTML='<div class="lcw-head"><div class="lcw-htext"><span class="lcw-title"></span><span class="lcw-sub"></span></div><button class="lcw-x" aria-label="Close">&times;</button></div>'
+  panel.innerHTML='<div class="lcw-head"><div class="lcw-htext"><span class="lcw-title"></span><span class="lcw-sub"></span></div><div class="lcw-actions"><button class="lcw-tx" aria-label="Email transcript" title="Email me this chat">&#9993;</button><button class="lcw-x" aria-label="Close">&times;</button></div></div>'
     +'<div class="lcw-body"></div>'
     +'<div class="lcw-foot"><input class="lcw-input" placeholder="Type a message..." /><button class="lcw-send">Send</button></div>';
   document.body.appendChild(fab); document.body.appendChild(launchEl); document.body.appendChild(panel);
 
   var head=panel.querySelector('.lcw-head'), body=panel.querySelector('.lcw-body'), input=panel.querySelector('.lcw-input'),
       sendBtn=panel.querySelector('.lcw-send'), titleEl=panel.querySelector('.lcw-title'), subEl=panel.querySelector('.lcw-sub'),
-      foot=panel.querySelector('.lcw-foot');
+      foot=panel.querySelector('.lcw-foot'), txBtn=panel.querySelector('.lcw-tx');
 
   function applyLayout(){
     var side=position==='left'?'left':'right', off=position==='left'?'right':'left';
@@ -101,12 +106,13 @@ function buildWidgetJs(key: string, origin: string): string {
     sendBtn.style.background=color; sendBtn.style.color=fg;
     var outs=body.querySelectorAll('.lcw-out');for(var i=0;i<outs.length;i++){outs[i].style.background=color;outs[i].style.color=fg;}
   }
-  function addMsg(id,dir,text){if(id&&seen[id])return;if(id)seen[id]=1;
+  function renderBadge(){if(unread>0&&!open){badge.textContent=unread>9?'9+':String(unread);badge.style.display='flex';}else{badge.style.display='none';}}
+  function addMsg(id,dir,text){if(id&&seen[id])return false;if(id)seen[id]=1;
     var d=document.createElement('div');d.className='lcw-msg '+(dir==='inbound'?'lcw-out':'lcw-in');
-    if(dir==='inbound'){d.style.background=color;d.style.color=fg;}d.textContent=text;body.appendChild(d);body.scrollTop=body.scrollHeight;}
+    if(dir==='inbound'){d.style.background=color;d.style.color=fg;}d.textContent=text;body.appendChild(d);body.scrollTop=body.scrollHeight;return true;}
 
   function loadConfig(){return fetch(API+'/config?key='+encodeURIComponent(KEY)).then(function(r){return r.ok?r.json():null;}).then(function(c){
-    if(c){title=c.title||title;color=c.color||color;welcome=c.welcome_message||welcome;subtitle=c.subtitle||'';launcher=c.launcher_text||'';position=c.position==='left'?'left':'right';prechat=!!c.prechat_enabled;bhEnabled=!!c.business_hours_enabled;online=c.online!==false;offlineMsg=c.offline_message||'';}
+    if(c){title=c.title||title;color=c.color||color;welcome=c.welcome_message||welcome;subtitle=c.subtitle||'';launcher=c.launcher_text||'';position=c.position==='left'?'left':'right';prechat=!!c.prechat_enabled;bhEnabled=!!c.business_hours_enabled;online=c.online!==false;offlineMsg=c.offline_message||'';proactiveDelay=Number(c.proactive_delay)||0;}
     configured=true;
     titleEl.textContent=title;subEl.textContent=subtitle;subEl.style.display=subtitle?'block':'none';
     if(launcher)launchEl.textContent=launcher;
@@ -115,16 +121,20 @@ function buildWidgetJs(key: string, origin: string): string {
 
   function poll(){var u=API+'/poll?key='+encodeURIComponent(KEY)+'&session_id='+encodeURIComponent(sid)+(lastAt?('&after='+encodeURIComponent(lastAt)):'');
     return fetch(u).then(function(r){return r.ok?r.json():{messages:[]};}).then(function(d){
-      var ms=(d&&d.messages)||[];for(var i=0;i<ms.length;i++){addMsg(ms[i].id,ms[i].direction,ms[i].text);lastAt=ms[i].at||lastAt;}}).catch(function(){});}
+      var ms=(d&&d.messages)||[];for(var i=0;i<ms.length;i++){var added=addMsg(ms[i].id,ms[i].direction,ms[i].text);lastAt=ms[i].at||lastAt;if(added&&ms[i].direction!=='inbound'&&!open)unread++;}
+      if(ms.length)lastActivity=Date.now();renderBadge();}).catch(function(){});}
 
-  function startPolling(){if(pollTimer)return;poll();pollTimer=setInterval(poll,3000);}
+  // Adaptive polling: ~1.2s while a chat is active, backing off when idle/closed.
+  function nextDelay(){var idle=Date.now()-lastActivity;if(open)return idle<20000?1200:(idle<90000?3000:6000);return 10000;}
+  function loopPoll(){poll().then(function(){pollTimer=setTimeout(loopPoll,nextDelay());});}
+  function startPolling(){if(polling)return;polling=true;lastActivity=Date.now();loopPoll();}
 
   function send(){var t=(input.value||'').trim();if(!t)return;input.value='';
     fetch(API+'/message',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:KEY,session_id:sid,text:t,visitor_name:visitorName,visitor_email:visitorEmail})})
       .then(function(r){return r.ok?r.json():null;}).then(function(d){if(d&&d.message_id)addMsg(d.message_id,'inbound',t);else addMsg(null,'inbound',t);poll();})
       .catch(function(){addMsg(null,'inbound',t);});}
 
-  function begin(){foot.style.display='flex';
+  function begin(){foot.style.display='flex';if(visitorEmail)txBtn.style.display='block';
     if(!body.children.length){var greet=(bhEnabled&&!online)?(offlineMsg||'Thanks for reaching out! We are away right now — leave your message and we will reply by email.'):welcome;if(greet)addMsg(null,'outbound',greet);}
     startPolling();input.focus();}
   function showPrechat(){
@@ -146,19 +156,28 @@ function buildWidgetJs(key: string, origin: string): string {
     nm.focus();
   }
   function startFlow(){if(prechat&&!visitorEmail)showPrechat();else begin();}
-  function openPanel(){open=true;panel.classList.add('lcw-open');launchEl.style.display='none';
+  function openPanel(){open=true;panel.classList.add('lcw-open');launchEl.style.display='none';unread=0;renderBadge();
     if(!started){started=true;if(configured)startFlow();else loadConfig().then(startFlow);}
     else if(foot&&foot.style.display!=='none'){input.focus();}}
   function closePanel(){open=false;panel.classList.remove('lcw-open');if(launcher)launchEl.style.display='block';}
 
+  function emailTranscript(){if(!visitorEmail)return;txBtn.disabled=true;
+    fetch(API+'/transcript',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:KEY,session_id:sid})})
+      .then(function(r){return r.ok;},function(){return false;})
+      .then(function(okk){txBtn.disabled=false;addMsg(null,'outbound',okk?('📧 Transcript sent to '+visitorEmail):'Sorry, we could not send the transcript right now.');})
+      .catch(function(){txBtn.disabled=false;addMsg(null,'outbound','Sorry, we could not send the transcript right now.');});}
+
   fab.addEventListener('click',function(){open?closePanel():openPanel();});
   launchEl.addEventListener('click',openPanel);
+  txBtn.addEventListener('click',emailTranscript);
   panel.querySelector('.lcw-x').addEventListener('click',closePanel);
   sendBtn.addEventListener('click',send);
   input.addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}});
 
-  // Load config on init so the bubble is themed, positioned + shows its launcher
-  // label immediately (not only after the first open).
-  applyLayout(); applyTheme(); loadConfig();
+  function maybeProactive(){if(proactiveDelay>0&&!sessionStorage.getItem('lcw_po_'+KEY)){setTimeout(function(){if(!open&&!started){try{sessionStorage.setItem('lcw_po_'+KEY,'1')}catch(e){}openPanel();}},proactiveDelay*1000);}}
+
+  // Load config on init so the bubble is themed/positioned + shows its launcher
+  // label immediately, then maybe auto-open (proactive trigger).
+  applyLayout(); applyTheme(); loadConfig().then(maybeProactive);
 })();`
 }
