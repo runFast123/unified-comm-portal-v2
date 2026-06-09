@@ -263,6 +263,16 @@ export async function POST(request: Request) {
       }
     }
 
+    // For company-wide DATA (imported Google-Sheets records below), scope to ALL of
+    // the company's accounts — not just the same-base-name KB siblings — so e.g. a
+    // live-chat account can use sheet data synced under the company's email account.
+    // GUARDED by company_id: with no company we fall back to this account only
+    // (siblingAccounts would be unscoped → cross-tenant). This list is built from
+    // `company_id = account.company_id`, so it never crosses tenants.
+    const companyAccountIds: string[] = account.company_id && siblingAccounts
+      ? Array.from(new Set([account_id, ...siblingAccounts.map((s: { id: string }) => s.id)]))
+      : [account_id]
+
     const kbFilter = kbAccountIds.map(id => `account_id.eq.${id}`).join(',')
     // Company-scoped retrieval. We ALWAYS constrain to the conversation's own
     // company, then include company-wide articles (account_id IS NULL) plus any
@@ -345,16 +355,18 @@ export async function POST(request: Request) {
     // Fetch company-specific imported data from Google Sheets
     let sheetContext = ''
     try {
-      // Scope strictly to THIS account. imported_records has no company_id, so
-      // the previous `account_id.is.null` branch pulled null-account rows from
-      // EVERY tenant into this company's AI context — a cross-tenant leak (the
-      // same class fixed for KB articles above). Only this account's rows.
+      // Scope to the COMPANY's accounts (companyAccountIds, built from
+      // company_id = account.company_id). imported_records has no company_id, so we
+      // must scope via the account list — never `account_id.is.null` (that pulled
+      // every tenant's null-account rows: a cross-tenant leak). Company-wide so a
+      // live-chat (or Teams/WhatsApp) account can use sheets synced under the email
+      // account; still tenant-isolated because the list is company-scoped.
       const { data: importedRecords } = await supabase
         .from('imported_records')
         .select('entity_name, category, data_json')
-        .eq('account_id', account_id)
+        .in('account_id', companyAccountIds)
         .order('imported_at', { ascending: false })
-        .limit(20)
+        .limit(50)
 
       if (importedRecords && importedRecords.length > 0) {
         // Simple keyword matching — find records relevant to the message

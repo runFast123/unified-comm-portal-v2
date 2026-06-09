@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Copy, Check, Code2 } from 'lucide-react'
+import { Copy, Check, Code2, MessagesSquare, ExternalLink } from 'lucide-react'
 
 interface Widget {
   id: string
@@ -13,8 +13,32 @@ interface Widget {
   is_enabled: boolean
 }
 
+interface Stats {
+  totalConversations: number
+  conversationsThisWeek: number
+  openConversations: number
+  inboundMessages: number
+  outboundMessages: number
+  recent: { id: string; name: string; status: string; at: string | null }[]
+  dailyVolume: { date: string; count: number }[]
+}
+
+const OPEN_STATUSES = new Set(['active', 'in_progress', 'waiting_on_customer', 'escalated'])
+
+function timeAgo(iso: string | null): string {
+  if (!iso) return ''
+  const diff = Date.now() - new Date(iso).getTime()
+  const m = Math.floor(diff / 60000)
+  if (m < 1) return 'just now'
+  if (m < 60) return `${m}m ago`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `${h}h ago`
+  return `${Math.floor(h / 24)}d ago`
+}
+
 export default function LiveChatAdminPage() {
   const [widget, setWidget] = useState<Widget | null>(null)
+  const [stats, setStats] = useState<Stats | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -40,6 +64,16 @@ export default function LiveChatAdminPage() {
     }
   }
 
+  async function loadStats() {
+    try {
+      const r = await fetch('/api/admin/livechat/stats')
+      const d = await r.json()
+      if (r.ok) setStats(d.stats)
+    } catch {
+      /* non-critical */
+    }
+  }
+
   async function load() {
     setLoading(true)
     setError(null)
@@ -48,6 +82,7 @@ export default function LiveChatAdminPage() {
       const d = await r.json()
       if (!r.ok) throw new Error(d.error || 'Failed to load')
       sync(d.widget)
+      if (d.widget) void loadStats()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load')
     } finally {
@@ -63,6 +98,7 @@ export default function LiveChatAdminPage() {
       const d = await r.json()
       if (!r.ok) throw new Error(d.error || 'Failed to enable')
       sync(d.widget)
+      void loadStats()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to enable')
     } finally {
@@ -100,8 +136,10 @@ export default function LiveChatAdminPage() {
     })
   }
 
+  const volMax = stats ? Math.max(...stats.dailyVolume.map((d) => d.count), 1) : 1
+
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8">
+    <div className="mx-auto max-w-5xl px-4 py-8">
       <div className="mb-6">
         <h1 className="text-2xl font-semibold text-gray-900">Live Chat</h1>
         <p className="mt-1 text-sm text-gray-500">
@@ -118,7 +156,7 @@ export default function LiveChatAdminPage() {
       ) : !widget ? (
         <div className="animate-slide-up rounded-xl border bg-white p-8 text-center">
           <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
-            <span className="text-2xl">💬</span>
+            <MessagesSquare className="h-6 w-6 text-green-600" />
           </div>
           <h2 className="text-lg font-semibold text-gray-900">Enable live chat</h2>
           <p className="mx-auto mt-1 max-w-md text-sm text-gray-500">
@@ -134,123 +172,249 @@ export default function LiveChatAdminPage() {
         </div>
       ) : (
         <div className="space-y-6">
-          {/* Embed snippet */}
-          <section className="animate-slide-up overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-            <div className="flex items-center justify-between gap-4 border-b border-gray-100 px-5 py-4">
-              <div className="flex items-center gap-3">
-                <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-green-50 text-green-600 ring-1 ring-green-100">
-                  <Code2 className="h-[18px] w-[18px]" />
-                </span>
+          {/* ── Report / chat activity ── */}
+          {stats && (
+            <section className="animate-slide-up overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+              <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
                 <div>
-                  <h2 className="text-sm font-semibold text-gray-900">Embed code</h2>
-                  <p className="text-xs text-gray-500">
-                    Paste once, just before{' '}
-                    <code className="rounded bg-gray-100 px-1 py-0.5 font-mono text-[11px] text-gray-700">&lt;/body&gt;</code>
-                  </p>
+                  <h2 className="text-sm font-semibold text-gray-900">Chat activity</h2>
+                  <p className="text-xs text-gray-500">Your live-chat performance at a glance.</p>
                 </div>
-              </div>
-              {/* live toggle */}
-              <button
-                type="button"
-                role="switch"
-                aria-checked={widget.is_enabled}
-                onClick={() => save({ is_enabled: !widget.is_enabled })}
-                disabled={saving}
-                title={widget.is_enabled ? 'Live — click to disable' : 'Disabled — click to go live'}
-                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${widget.is_enabled ? 'bg-green-500' : 'bg-gray-300'}`}
-              >
-                <span
-                  className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${widget.is_enabled ? 'translate-x-[22px]' : 'translate-x-0.5'}`}
-                />
-              </button>
-            </div>
-
-            {/* terminal-style code block with syntax highlighting */}
-            <div className="bg-[#0d1117]">
-              <div className="flex items-center justify-between px-4 pb-2 pt-3.5">
-                <div className="flex items-center gap-1.5">
-                  <span className="h-2.5 w-2.5 rounded-full bg-[#ff5f57]" />
-                  <span className="h-2.5 w-2.5 rounded-full bg-[#febc2e]" />
-                  <span className="h-2.5 w-2.5 rounded-full bg-[#28c840]" />
-                  <span className="ml-2 font-mono text-[11px] text-gray-500">index.html</span>
-                </div>
-                <button
-                  onClick={copySnippet}
-                  className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-all ${
-                    copied ? 'bg-green-500/20 text-green-300' : 'bg-white/10 text-gray-200 hover:bg-white/20'
-                  }`}
+                <a
+                  href="/inbox"
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-green-600 hover:underline"
                 >
-                  {copied ? <><Check className="h-3.5 w-3.5" /> Copied!</> : <><Copy className="h-3.5 w-3.5" /> Copy</>}
-                </button>
+                  Open inbox <ExternalLink className="h-3.5 w-3.5" />
+                </a>
               </div>
-              <pre className="overflow-x-auto px-4 pb-4 text-[13px] leading-relaxed">
-                <code className="font-mono">
-                  <span className="text-[#ff7b72]">&lt;script</span>{' '}
-                  <span className="text-[#79c0ff]">src</span>
-                  <span className="text-gray-500">=</span>
-                  <span className="text-[#a5d6ff]">&quot;{origin}/api/widget/loader?key={widget.widget_key}&quot;</span>{' '}
-                  <span className="text-[#79c0ff]">async</span>
-                  <span className="text-[#ff7b72]">&gt;&lt;/script&gt;</span>
-                </code>
-              </pre>
-            </div>
 
-            {/* status footer */}
-            <div className="flex items-center gap-2 px-5 py-3 text-xs">
-              <span className={`inline-flex h-2 w-2 rounded-full ${widget.is_enabled ? 'bg-green-500' : 'bg-gray-300'}`} />
-              <span className="text-gray-500">
-                {widget.is_enabled
-                  ? 'Your widget is live and accepting chats.'
-                  : 'Your widget is disabled — toggle it on to go live.'}
-              </span>
-            </div>
-          </section>
-
-          {/* Appearance */}
-          <section className="rounded-xl border bg-white p-5">
-            <h2 className="font-semibold text-gray-900">Appearance</h2>
-            <div className="mt-4 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Header title</label>
-                <input
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  maxLength={80}
-                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                />
+              {/* stat cells */}
+              <div className="grid grid-cols-2 sm:grid-cols-4">
+                <Stat label="Total chats" value={stats.totalConversations} />
+                <Stat label="This week" value={stats.conversationsThisWeek} />
+                <Stat label="Open now" value={stats.openConversations} accent="amber" />
+                <Stat label="Messages" value={stats.inboundMessages + stats.outboundMessages} />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Accent color</label>
-                <div className="mt-1 flex items-center gap-3">
-                  <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="h-9 w-12 rounded border" />
-                  <input
-                    value={color}
-                    onChange={(e) => setColor(e.target.value)}
-                    className="w-32 rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm"
-                  />
+
+              {/* 14-day sparkline */}
+              <div className="border-t border-gray-100 px-5 py-4">
+                <div className="mb-2 flex items-center justify-between text-xs text-gray-500">
+                  <span>New chats · last 14 days</span>
+                  <span className="tabular-nums">{stats.dailyVolume.reduce((s, d) => s + d.count, 0)} total</span>
+                </div>
+                <div className="flex items-end gap-1" style={{ height: 44 }}>
+                  {stats.dailyVolume.map((d) => (
+                    <div
+                      key={d.date}
+                      title={`${d.date}: ${d.count} chat${d.count === 1 ? '' : 's'}`}
+                      className="flex-1 rounded-t bg-green-400/80 transition-all hover:bg-green-500"
+                      style={{ height: `${Math.max((d.count / volMax) * 100, 4)}%` }}
+                    />
+                  ))}
                 </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Welcome message</label>
-                <textarea
-                  value={welcome}
-                  onChange={(e) => setWelcome(e.target.value)}
-                  maxLength={500}
-                  rows={2}
-                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                />
-              </div>
-              <button
-                onClick={() => save({ title, color, welcome_message: welcome })}
-                disabled={saving}
-                className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800 disabled:opacity-60"
-              >
-                {saving ? 'Saving…' : 'Save appearance'}
-              </button>
+
+              {/* recent chats */}
+              {stats.recent.length > 0 && (
+                <div className="border-t border-gray-100 px-5 py-4">
+                  <p className="mb-2 text-xs font-medium text-gray-500">Recent chats</p>
+                  <ul className="space-y-1">
+                    {stats.recent.map((c) => (
+                      <li key={c.id}>
+                        <a
+                          href={`/conversations/${c.id}`}
+                          className="-mx-2 flex items-center justify-between gap-3 rounded-lg px-2 py-1.5 hover:bg-gray-50"
+                        >
+                          <span className="flex min-w-0 items-center gap-2">
+                            <span
+                              className={`h-1.5 w-1.5 shrink-0 rounded-full ${OPEN_STATUSES.has(c.status) ? 'bg-green-500' : 'bg-gray-300'}`}
+                            />
+                            <span className="truncate text-sm text-gray-700">{c.name}</span>
+                          </span>
+                          <span className="shrink-0 text-xs tabular-nums text-gray-400">{timeAgo(c.at)}</span>
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* ── Settings (left) + Live preview (right) ── */}
+          <div className="grid gap-6 lg:grid-cols-5">
+            <div className="space-y-6 lg:col-span-3">
+              {/* Embed snippet */}
+              <section className="animate-slide-up overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+                <div className="flex items-center justify-between gap-4 border-b border-gray-100 px-5 py-4">
+                  <div className="flex items-center gap-3">
+                    <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-green-50 text-green-600 ring-1 ring-green-100">
+                      <Code2 className="h-[18px] w-[18px]" />
+                    </span>
+                    <div>
+                      <h2 className="text-sm font-semibold text-gray-900">Embed code</h2>
+                      <p className="text-xs text-gray-500">
+                        Paste once, just before{' '}
+                        <code className="rounded bg-gray-100 px-1 py-0.5 font-mono text-[11px] text-gray-700">&lt;/body&gt;</code>
+                      </p>
+                    </div>
+                  </div>
+                  {/* live toggle */}
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={widget.is_enabled}
+                    onClick={() => save({ is_enabled: !widget.is_enabled })}
+                    disabled={saving}
+                    title={widget.is_enabled ? 'Live — click to disable' : 'Disabled — click to go live'}
+                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${widget.is_enabled ? 'bg-green-500' : 'bg-gray-300'}`}
+                  >
+                    <span
+                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${widget.is_enabled ? 'translate-x-[22px]' : 'translate-x-0.5'}`}
+                    />
+                  </button>
+                </div>
+
+                {/* terminal-style code block with syntax highlighting */}
+                <div className="bg-[#0d1117]">
+                  <div className="flex items-center justify-between px-4 pb-2 pt-3.5">
+                    <div className="flex items-center gap-1.5">
+                      <span className="h-2.5 w-2.5 rounded-full bg-[#ff5f57]" />
+                      <span className="h-2.5 w-2.5 rounded-full bg-[#febc2e]" />
+                      <span className="h-2.5 w-2.5 rounded-full bg-[#28c840]" />
+                      <span className="ml-2 font-mono text-[11px] text-gray-500">index.html</span>
+                    </div>
+                    <button
+                      onClick={copySnippet}
+                      className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-all ${
+                        copied ? 'bg-green-500/20 text-green-300' : 'bg-white/10 text-gray-200 hover:bg-white/20'
+                      }`}
+                    >
+                      {copied ? <><Check className="h-3.5 w-3.5" /> Copied!</> : <><Copy className="h-3.5 w-3.5" /> Copy</>}
+                    </button>
+                  </div>
+                  <pre className="overflow-x-auto px-4 pb-4 text-[13px] leading-relaxed">
+                    <code className="font-mono">
+                      <span className="text-[#ff7b72]">&lt;script</span>{' '}
+                      <span className="text-[#79c0ff]">src</span>
+                      <span className="text-gray-500">=</span>
+                      <span className="text-[#a5d6ff]">&quot;{origin}/api/widget/loader?key={widget.widget_key}&quot;</span>{' '}
+                      <span className="text-[#79c0ff]">async</span>
+                      <span className="text-[#ff7b72]">&gt;&lt;/script&gt;</span>
+                    </code>
+                  </pre>
+                </div>
+
+                {/* status footer */}
+                <div className="flex items-center gap-2 px-5 py-3 text-xs">
+                  <span className={`inline-flex h-2 w-2 rounded-full ${widget.is_enabled ? 'bg-green-500' : 'bg-gray-300'}`} />
+                  <span className="text-gray-500">
+                    {widget.is_enabled
+                      ? 'Your widget is live and accepting chats.'
+                      : 'Your widget is disabled — toggle it on to go live.'}
+                  </span>
+                </div>
+              </section>
+
+              {/* Appearance */}
+              <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+                <h2 className="text-sm font-semibold text-gray-900">Appearance</h2>
+                <div className="mt-4 space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Header title</label>
+                    <input
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      maxLength={80}
+                      className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Accent color</label>
+                    <div className="mt-1 flex items-center gap-3">
+                      <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="h-9 w-12 rounded border" />
+                      <input
+                        value={color}
+                        onChange={(e) => setColor(e.target.value)}
+                        className="w-32 rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Welcome message</label>
+                    <textarea
+                      value={welcome}
+                      onChange={(e) => setWelcome(e.target.value)}
+                      maxLength={500}
+                      rows={2}
+                      className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    />
+                  </div>
+                  <button
+                    onClick={() => save({ title, color, welcome_message: welcome })}
+                    disabled={saving}
+                    className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800 disabled:opacity-60"
+                  >
+                    {saving ? 'Saving…' : 'Save appearance'}
+                  </button>
+                </div>
+              </section>
             </div>
-          </section>
+
+            {/* Live preview */}
+            <div className="lg:col-span-2">
+              <section className="lg:sticky lg:top-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+                <h2 className="text-sm font-semibold text-gray-900">Live preview</h2>
+                <p className="text-xs text-gray-500">Updates as you edit — this is what visitors see.</p>
+                <div className="mt-4 rounded-xl border border-gray-200 bg-gradient-to-b from-gray-50 to-gray-100 p-4">
+                  {/* mock chat window */}
+                  <div className="mx-auto max-w-[260px] overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-lg">
+                    <div className="flex items-center justify-between px-4 py-3 text-sm font-semibold text-white" style={{ backgroundColor: color }}>
+                      <span className="truncate">{title || 'Chat with us'}</span>
+                      <span className="opacity-80">×</span>
+                    </div>
+                    <div className="space-y-2 bg-gray-50 px-3 py-3">
+                      <div className="max-w-[85%] rounded-2xl rounded-tl-sm border border-gray-100 bg-white px-3 py-2 text-xs text-gray-700">
+                        {welcome || 'Hi! How can we help you today?'}
+                      </div>
+                      <div className="ml-auto max-w-[85%] rounded-2xl rounded-tr-sm px-3 py-2 text-xs text-white" style={{ backgroundColor: color }}>
+                        Is this in stock?
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 border-t border-gray-100 px-3 py-2.5">
+                      <div className="flex-1 truncate rounded-full border border-gray-200 px-3 py-1.5 text-xs text-gray-400">
+                        Type a message…
+                      </div>
+                      <div className="rounded-full px-2.5 py-1.5 text-[11px] font-semibold text-white" style={{ backgroundColor: color }}>
+                        Send
+                      </div>
+                    </div>
+                  </div>
+                  {/* mock launcher bubble */}
+                  <div className="mt-3 flex justify-end">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full shadow-lg" style={{ backgroundColor: color }}>
+                      <svg viewBox="0 0 24 24" fill="white" className="h-5 w-5">
+                        <path d="M12 3C6.5 3 2 6.6 2 11c0 2.1 1 4 2.7 5.4-.1 1.2-.6 2.4-1.5 3.3 1.6-.2 3.1-.8 4.3-1.7 1.4.5 2.9.8 4.5.8 5.5 0 10-3.6 10-8s-4.5-8-10-8z" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </div>
+          </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function Stat({ label, value, accent }: { label: string; value: number; accent?: 'amber' }) {
+  return (
+    <div className="border-b border-r border-gray-100 px-5 py-4 last:border-r-0">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">{label}</p>
+      <p className={`mt-1 text-2xl font-semibold tabular-nums tracking-tight ${accent === 'amber' && value > 0 ? 'text-amber-600' : 'text-gray-900'}`}>
+        {value.toLocaleString()}
+      </p>
     </div>
   )
 }
