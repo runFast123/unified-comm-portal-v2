@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Copy, Check, Code2, MessagesSquare, ExternalLink } from 'lucide-react'
+import { Copy, Check, Code2, MessagesSquare, ExternalLink, Plus, Trash2 } from 'lucide-react'
 
 interface BusinessHours {
   tz: string
@@ -14,6 +14,7 @@ interface Widget {
   id: string
   account_id: string
   widget_key: string
+  name: string
   title: string
   color: string
   welcome_message: string
@@ -85,7 +86,9 @@ function timeAgo(iso: string | null): string {
 }
 
 export default function LiveChatAdminPage() {
-  const [widget, setWidget] = useState<Widget | null>(null)
+  const [widgets, setWidgets] = useState<Widget[]>([])
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const widget = widgets.find((w) => w.id === selectedId) ?? null
   const [stats, setStats] = useState<Stats | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -94,6 +97,7 @@ export default function LiveChatAdminPage() {
   const [origin, setOrigin] = useState('')
 
   // editable form state
+  const [name, setName] = useState('')
   const [title, setTitle] = useState('')
   const [color, setColor] = useState('#16a34a')
   const [welcome, setWelcome] = useState('')
@@ -116,8 +120,8 @@ export default function LiveChatAdminPage() {
   }, [])
 
   function sync(w: Widget | null) {
-    setWidget(w)
     if (w) {
+      setName(w.name)
       setTitle(w.title)
       setColor(w.color)
       setWelcome(w.welcome_message)
@@ -138,9 +142,9 @@ export default function LiveChatAdminPage() {
     }
   }
 
-  async function loadStats() {
+  async function loadStats(accountId?: string) {
     try {
-      const r = await fetch('/api/admin/livechat/stats')
+      const r = await fetch('/api/admin/livechat/stats' + (accountId ? `?account_id=${encodeURIComponent(accountId)}` : ''))
       const d = await r.json()
       if (r.ok) setStats(d.stats)
     } catch {
@@ -155,8 +159,12 @@ export default function LiveChatAdminPage() {
       const r = await fetch('/api/admin/livechat')
       const d = await r.json()
       if (!r.ok) throw new Error(d.error || 'Failed to load')
-      sync(d.widget)
-      if (d.widget) void loadStats()
+      const list = (d.widgets ?? []) as Widget[]
+      setWidgets(list)
+      const first = list[0] ?? null
+      setSelectedId(first?.id ?? null)
+      sync(first)
+      if (first) void loadStats(first.account_id)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load')
     } finally {
@@ -164,34 +172,73 @@ export default function LiveChatAdminPage() {
     }
   }
 
-  async function enable() {
+  function selectWidget(w: Widget) {
+    setSelectedId(w.id)
+    sync(w)
+    setStats(null)
+    void loadStats(w.account_id)
+  }
+
+  function applyUpdated(w: Widget) {
+    setWidgets((prev) => prev.map((x) => (x.id === w.id ? w : x)))
+    sync(w)
+  }
+
+  async function createWidget() {
     setSaving(true)
     setError(null)
     try {
-      const r = await fetch('/api/admin/livechat', { method: 'POST' })
+      const r = await fetch('/api/admin/livechat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: widgets.length === 0 ? 'Live Chat' : `Widget ${widgets.length + 1}` }),
+      })
       const d = await r.json()
-      if (!r.ok) throw new Error(d.error || 'Failed to enable')
-      sync(d.widget)
-      void loadStats()
+      if (!r.ok) throw new Error(d.error || 'Failed to create')
+      setWidgets((prev) => [...prev, d.widget as Widget])
+      selectWidget(d.widget as Widget)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to enable')
+      setError(e instanceof Error ? e.message : 'Failed to create')
     } finally {
       setSaving(false)
     }
   }
 
-  async function save(patch: Partial<Pick<Widget, 'title' | 'color' | 'welcome_message' | 'subtitle' | 'launcher_text' | 'position' | 'prechat_enabled' | 'business_hours_enabled' | 'business_hours' | 'offline_message' | 'proactive_delay' | 'is_enabled'>>) {
+  async function del(w: Widget) {
+    if (typeof window !== 'undefined' && !window.confirm(`Delete “${w.name}” and its chat history? This can't be undone.`)) return
+    setSaving(true)
+    setError(null)
+    try {
+      const r = await fetch(`/api/admin/livechat?id=${encodeURIComponent(w.id)}`, { method: 'DELETE' })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(d.error || 'Failed to delete')
+      const remaining = widgets.filter((x) => x.id !== w.id)
+      setWidgets(remaining)
+      const next = remaining[0] ?? null
+      setSelectedId(next?.id ?? null)
+      sync(next)
+      setStats(null)
+      if (next) void loadStats(next.account_id)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to delete')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function save(patch: Partial<Pick<Widget, 'name' | 'title' | 'color' | 'welcome_message' | 'subtitle' | 'launcher_text' | 'position' | 'prechat_enabled' | 'business_hours_enabled' | 'business_hours' | 'offline_message' | 'proactive_delay' | 'is_enabled'>>) {
+    if (!widget) return
     setSaving(true)
     setError(null)
     try {
       const r = await fetch('/api/admin/livechat', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(patch),
+        body: JSON.stringify({ id: widget.id, ...patch }),
       })
       const d = await r.json()
       if (!r.ok) throw new Error(d.error || 'Failed to save')
-      sync(d.widget)
+      applyUpdated(d.widget as Widget)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to save')
     } finally {
@@ -229,25 +276,66 @@ export default function LiveChatAdminPage() {
 
       {loading ? (
         <div className="text-sm text-gray-500">Loading…</div>
-      ) : !widget ? (
+      ) : widgets.length === 0 ? (
         <div className="animate-slide-up rounded-xl border bg-white p-8 text-center">
           <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
             <MessagesSquare className="h-6 w-6 text-green-600" />
           </div>
-          <h2 className="text-lg font-semibold text-gray-900">Enable live chat</h2>
+          <h2 className="text-lg font-semibold text-gray-900">Add your first chat widget</h2>
           <p className="mx-auto mt-1 max-w-md text-sm text-gray-500">
-            Create your widget and get a one-line snippet to paste on your site.
+            Create a widget and get a one-line snippet to paste on your site. You can add more later — one per site or page.
           </p>
           <button
-            onClick={enable}
+            onClick={createWidget}
             disabled={saving}
             className="mt-4 rounded-lg bg-green-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-60"
           >
-            {saving ? 'Enabling…' : 'Enable Live Chat'}
+            {saving ? 'Creating…' : 'Create widget'}
           </button>
         </div>
       ) : (
         <div className="space-y-6">
+          {/* widget switcher */}
+          <div className="flex flex-wrap items-center gap-2">
+            {widgets.map((w) => (
+              <button
+                key={w.id}
+                onClick={() => selectWidget(w)}
+                className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium transition ${w.id === selectedId ? 'border-green-300 bg-green-50 text-green-800' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'}`}
+              >
+                <span className={`h-1.5 w-1.5 rounded-full ${w.is_enabled ? 'bg-green-500' : 'bg-gray-300'}`} />
+                <span className="max-w-[180px] truncate">{w.name}</span>
+              </button>
+            ))}
+            <button
+              onClick={createWidget}
+              disabled={saving}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-500 hover:border-green-400 hover:text-green-600 disabled:opacity-50"
+            >
+              <Plus className="h-4 w-4" /> New widget
+            </button>
+          </div>
+
+          {widget && (
+            <div className="space-y-6">
+              {/* widget name + delete */}
+              <div className="flex items-center gap-3">
+                <input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  onBlur={() => { const n = name.trim(); if (n && widget && n !== widget.name) void save({ name: n }) }}
+                  placeholder="Widget name"
+                  className="min-w-0 flex-1 rounded-lg border border-transparent px-2 py-1 text-lg font-semibold text-gray-900 hover:border-gray-200 focus:border-gray-300 focus:bg-white focus:outline-none"
+                />
+                <button
+                  onClick={() => widget && del(widget)}
+                  disabled={saving}
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-500 hover:border-red-300 hover:text-red-600 disabled:opacity-50"
+                >
+                  <Trash2 className="h-3.5 w-3.5" /> Delete
+                </button>
+              </div>
+
           {/* ── Report / chat activity ── */}
           {stats && (
             <section className="animate-slide-up overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
@@ -697,6 +785,8 @@ export default function LiveChatAdminPage() {
               </section>
             </div>
           </div>
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -28,15 +28,30 @@ export async function GET(request: Request) {
   if (!companyId) return NextResponse.json({ stats: null })
 
   const admin = await createServiceRoleClient()
-  const { data: acct } = await admin
-    .from('accounts')
-    .select('id')
-    .eq('channel_type', 'livechat')
-    .eq('company_id', companyId)
-    .limit(1)
-    .maybeSingle()
-  if (!acct) return NextResponse.json({ stats: null })
-  const accountId = (acct as { id: string }).id
+  // Stats are per-widget: an explicit ?account_id= (verified to belong to this
+  // company) or, if omitted, the company's first livechat account.
+  const reqAccountId = new URL(request.url).searchParams.get('account_id')
+  let accountId: string | null = null
+  if (reqAccountId) {
+    const { data: acct } = await admin
+      .from('accounts')
+      .select('id')
+      .eq('id', reqAccountId)
+      .eq('company_id', companyId)
+      .eq('channel_type', 'livechat')
+      .maybeSingle()
+    accountId = acct ? reqAccountId : null
+  } else {
+    const { data: acct } = await admin
+      .from('accounts')
+      .select('id')
+      .eq('channel_type', 'livechat')
+      .eq('company_id', companyId)
+      .limit(1)
+      .maybeSingle()
+    accountId = (acct as { id: string } | null)?.id ?? null
+  }
+  if (!accountId) return NextResponse.json({ stats: null })
 
   const now = Date.now()
   const sevenDaysAgo = new Date(now - 7 * 86400000).toISOString()

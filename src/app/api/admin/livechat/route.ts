@@ -1,7 +1,9 @@
-// Admin management of the live-chat widget.
-//   GET   → the company's widget (+ account), or null
-//   POST  → enable: create a livechat account + widget (idempotent)
-//   PATCH → update title/color/welcome/is_enabled
+// Admin management of live-chat widgets — MULTIPLE per company. Each widget is its
+// own livechat account (own key, appearance, and conversation stream in the inbox).
+//   GET    → list the company's widgets
+//   POST   → create a new widget  { name? }
+//   PATCH  → update one widget     { id, ...fields }
+//   DELETE → remove a widget + its account/chats   ?id= or { id }
 // requireCompanyAdmin + service-role with TS company scoping (super_admin may
 // target another company via the switcher cookie / ?company_id=).
 import { NextResponse } from 'next/server'
@@ -23,7 +25,7 @@ async function resolveTargetCompanyId(
   return target
 }
 
-const WIDGET_COLS = 'id, account_id, widget_key, title, color, welcome_message, subtitle, launcher_text, position, prechat_enabled, business_hours_enabled, business_hours, offline_message, proactive_delay, is_enabled'
+const WIDGET_COLS = 'id, account_id, widget_key, name, title, color, welcome_message, subtitle, launcher_text, position, prechat_enabled, business_hours_enabled, business_hours, offline_message, proactive_delay, is_enabled'
 
 const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/
@@ -41,31 +43,48 @@ function sanitizeBusinessHours(v: unknown): { tz: string; days: string[]; open: 
   return { tz, days, open, close }
 }
 
-async function findWidget(admin: Awaited<ReturnType<typeof createServiceRoleClient>>, companyId: string) {
-  const { data: acct } = await admin
+type Admin = Awaited<ReturnType<typeof createServiceRoleClient>>
+
+/** All livechat account ids owned by the company. */
+async function companyLivechatAccountIds(admin: Admin, companyId: string): Promise<string[]> {
+  const { data } = await admin
     .from('accounts')
     .select('id')
     .eq('channel_type', 'livechat')
     .eq('company_id', companyId)
-    .limit(1)
+  return ((data ?? []) as { id: string }[]).map((a) => a.id)
+}
+
+/** A widget by id, but ONLY if its account belongs to this company (tenant guard). */
+async function findWidgetById(admin: Admin, companyId: string, widgetId: string) {
+  const { data: w } = await admin.from('livechat_widgets').select(WIDGET_COLS).eq('id', widgetId).maybeSingle()
+  if (!w) return null
+  const accountId = (w as { account_id: string }).account_id
+  const { data: acct } = await admin
+    .from('accounts')
+    .select('id')
+    .eq('id', accountId)
+    .eq('company_id', companyId)
+    .eq('channel_type', 'livechat')
     .maybeSingle()
-  if (!acct) return null
-  const accountId = (acct as { id: string }).id
-  const { data: widget } = await admin
-    .from('livechat_widgets')
-    .select(WIDGET_COLS)
-    .eq('account_id', accountId)
-    .maybeSingle()
-  return widget ?? null
+  return acct ? w : null
 }
 
 export async function GET(request: Request) {
   const gate = await requireCompanyAdmin()
   if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: gate.status })
   const companyId = await resolveTargetCompanyId(request, gate.ctx)
-  if (!companyId) return NextResponse.json({ widget: null })
+  if (!companyId) return NextResponse.json({ widgets: [] })
+
   const admin = await createServiceRoleClient()
-  return NextResponse.json({ widget: await findWidget(admin, companyId) })
+  const ids = await companyLivechatAccountIds(admin, companyId)
+  if (!ids.length) return NextResponse.json({ widgets: [] })
+  const { data } = await admin
+    .from('livechat_widgets')
+    .select(WIDGET_COLS)
+    .in('account_id', ids)
+    .order('created_at', { ascending: true })
+  return NextResponse.json({ widgets: data ?? [] })
 }
 
 export async function POST(request: Request) {
@@ -75,14 +94,19 @@ export async function POST(request: Request) {
   const companyId = await resolveTargetCompanyId(request, ctx)
   if (!companyId) return NextResponse.json({ error: 'No company scope' }, { status: 400 })
 
-  const admin = await createServiceRoleClient()
-  const existing = await findWidget(admin, companyId)
-  if (existing) return NextResponse.json({ widget: existing })
+  let body: { name?: string } = {}
+  try {
+    body = (await request.json()) as { name?: string }
+  } catch {
+    /* no body is fine — name defaults */
+  }
+  const name = (typeof body.name === 'string' && body.name.trim() ? body.name.trim() : 'Live Chat').slice(0, 60)
 
-  // Create the livechat account (rest of accounts columns default).
+  const admin = await createServiceRoleClient()
+  // The account name mirrors the widget name so it's recognizable in the inbox.
   const { data: acct, error: acctErr } = await admin
     .from('accounts')
-    .insert({ name: 'Live Chat', channel_type: 'livechat', company_id: companyId, is_active: true })
+    .insert({ name, channel_type: 'livechat', company_id: companyId, is_active: true })
     .select('id')
     .single()
   if (acctErr || !acct) {
@@ -91,7 +115,7 @@ export async function POST(request: Request) {
 
   const { data: widget, error: wErr } = await admin
     .from('livechat_widgets')
-    .insert({ account_id: (acct as { id: string }).id, widget_key: generateWidgetKey(), created_by: ctx.userId })
+    .insert({ account_id: (acct as { id: string }).id, widget_key: generateWidgetKey(), name, created_by: ctx.userId })
     .select(WIDGET_COLS)
     .single()
   if (wErr || !widget) {
@@ -103,22 +127,23 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   const gate = await requireCompanyAdmin()
   if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: gate.status })
-  const { ctx } = gate
-  const companyId = await resolveTargetCompanyId(request, ctx)
+  const companyId = await resolveTargetCompanyId(request, gate.ctx)
   if (!companyId) return NextResponse.json({ error: 'No company scope' }, { status: 400 })
 
-  let body: { title?: string; color?: string; welcome_message?: string; subtitle?: string; launcher_text?: string; position?: string; prechat_enabled?: boolean; business_hours_enabled?: boolean; business_hours?: unknown; offline_message?: string; proactive_delay?: number; is_enabled?: boolean }
+  let body: { id?: string; name?: string; title?: string; color?: string; welcome_message?: string; subtitle?: string; launcher_text?: string; position?: string; prechat_enabled?: boolean; business_hours_enabled?: boolean; business_hours?: unknown; offline_message?: string; proactive_delay?: number; is_enabled?: boolean }
   try {
     body = (await request.json()) as typeof body
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
+  if (!body.id) return NextResponse.json({ error: 'widget id required' }, { status: 400 })
 
   const admin = await createServiceRoleClient()
-  const existing = await findWidget(admin, companyId)
+  const existing = await findWidgetById(admin, companyId, body.id)
   if (!existing) return NextResponse.json({ error: 'Widget not found' }, { status: 404 })
 
   const patch: Record<string, unknown> = {}
+  if (typeof body.name === 'string' && body.name.trim()) patch.name = body.name.trim().slice(0, 60)
   if (typeof body.title === 'string') patch.title = body.title.slice(0, 80)
   if (typeof body.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(body.color)) patch.color = body.color
   if (typeof body.welcome_message === 'string') patch.welcome_message = body.welcome_message.slice(0, 500)
@@ -141,5 +166,37 @@ export async function PATCH(request: Request) {
     .select(WIDGET_COLS)
     .single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  // Keep the account name (inbox label) in sync with the widget name.
+  if (typeof patch.name === 'string') {
+    await admin.from('accounts').update({ name: patch.name }).eq('id', (existing as { account_id: string }).account_id)
+  }
   return NextResponse.json({ widget })
+}
+
+export async function DELETE(request: Request) {
+  const gate = await requireCompanyAdmin()
+  if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: gate.status })
+  const companyId = await resolveTargetCompanyId(request, gate.ctx)
+  if (!companyId) return NextResponse.json({ error: 'No company scope' }, { status: 400 })
+
+  let id = new URL(request.url).searchParams.get('id') || ''
+  if (!id) {
+    try {
+      id = ((await request.json()) as { id?: string }).id || ''
+    } catch {
+      /* fall through */
+    }
+  }
+  if (!id) return NextResponse.json({ error: 'widget id required' }, { status: 400 })
+
+  const admin = await createServiceRoleClient()
+  const existing = await findWidgetById(admin, companyId, id)
+  if (!existing) return NextResponse.json({ error: 'Widget not found' }, { status: 404 })
+  const accountId = (existing as { account_id: string }).account_id
+
+  // Hard delete: remove the chats then the account (which cascades the widget row).
+  await admin.from('messages').delete().eq('account_id', accountId)
+  await admin.from('conversations').delete().eq('account_id', accountId)
+  await admin.from('accounts').delete().eq('id', accountId)
+  return NextResponse.json({ ok: true })
 }
