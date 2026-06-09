@@ -143,7 +143,7 @@ function buildWidgetJs(key: string, origin: string): string {
       .catch(function(){addMsg(null,'inbound',t);});}
 
   function begin(){foot.style.display='flex';if(visitorEmail)txBtn.style.display='block';
-    if(!body.children.length){var greet=(bhEnabled&&!online)?(offlineMsg||'Thanks for reaching out! We are away right now — leave your message and we will reply by email.'):welcome;if(greet)addMsg(null,'outbound',greet);}
+    if(!body.querySelector('.lcw-msg')){var greet=(bhEnabled&&!online)?(offlineMsg||'Thanks for reaching out! We are away right now — leave your message and we will reply by email.'):welcome;if(greet)addMsg(null,'outbound',greet);}
     startPolling();input.focus();}
   function showPrechat(){
     foot.style.display='none'; body.innerHTML='';

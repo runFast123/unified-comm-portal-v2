@@ -31,8 +31,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Widget not found' }, { status: 404, headers: WIDGET_CORS })
   }
 
-  // Email is an abuse vector — cap hard (3 per 10 min per session).
-  if (!(await checkRateLimit(`widget_tx_${key}_${sessionId}`, 3, 600))) {
+  // Email is an abuse vector — cap hard. Per-session (3/10min) AND per-widget
+  // (20/10min) so rotating the client session_id can't multiply sends.
+  if (
+    !(await checkRateLimit(`widget_tx_acct_${key}`, 20, 600)) ||
+    !(await checkRateLimit(`widget_tx_${key}_${sessionId}`, 3, 600))
+  ) {
     return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: WIDGET_CORS })
   }
 
