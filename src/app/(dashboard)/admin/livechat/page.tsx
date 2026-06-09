@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Copy, Check, Code2, MessagesSquare, ExternalLink, Plus, Trash2 } from 'lucide-react'
+import { Copy, Check, Code2, MessagesSquare, ExternalLink, Plus, Trash2, Pencil } from 'lucide-react'
 
 interface BusinessHours {
   tz: string
@@ -326,22 +326,32 @@ export default function LiveChatAdminPage() {
 
           {widget && (
             <div className="space-y-6">
-              {/* widget name + delete */}
-              <div className="flex items-center gap-3">
-                <input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  onBlur={() => { const n = name.trim(); if (n && widget && n !== widget.name) void save({ name: n }) }}
-                  placeholder="Widget name"
-                  className="min-w-0 flex-1 rounded-lg border border-transparent px-2 py-1 text-lg font-semibold text-gray-900 hover:border-gray-200 focus:border-gray-300 focus:bg-white focus:outline-none"
-                />
-                <button
-                  onClick={() => widget && del(widget)}
-                  disabled={saving}
-                  className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-500 hover:border-red-300 hover:text-red-600 disabled:opacity-50"
-                >
-                  <Trash2 className="h-3.5 w-3.5" /> Delete
-                </button>
+              {/* widget name (rename) + delete */}
+              <div>
+                <label htmlFor="widget-name" className="mb-1 block text-xs font-medium text-gray-500">Widget name</label>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="relative w-full max-w-lg">
+                    <input
+                      id="widget-name"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      onBlur={() => { const n = name.trim(); if (n && widget && n !== widget.name) void save({ name: n }) }}
+                      onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
+                      maxLength={60}
+                      placeholder="e.g. Main site, Pricing page"
+                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 pr-9 text-lg font-semibold text-gray-900 transition focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-100"
+                    />
+                    <Pencil className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                  </div>
+                  <button
+                    onClick={() => widget && del(widget)}
+                    disabled={saving}
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-500 hover:border-red-300 hover:text-red-600 disabled:opacity-50"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" /> Delete
+                  </button>
+                </div>
+                <p className="mt-1.5 text-xs text-gray-400">Rename this widget — shown in the switcher above and labels its chats in your inbox · saves automatically.</p>
               </div>
 
           {/* ── Report / chat activity ── */}
