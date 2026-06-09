@@ -9,6 +9,7 @@ import { logInfo, logError } from '@/lib/logger'
 import { getRequestId } from '@/lib/request-id'
 import type { ChannelType, AIReplyStatus } from '@/types/database'
 import { checkAiQuota, checkCompanyRateLimit } from '@/lib/tenant-quota'
+import { retrieveKbContext } from '@/lib/kb-retrieval'
 
 const CHANNEL_SYSTEM_PROMPTS: Record<ChannelType, string> = {
   email: `You are a professional customer service agent replying to a customer email for a telecommunications company.
@@ -296,43 +297,22 @@ export async function POST(request: Request) {
     let kbContext = ''
     const matchedKbIds: string[] = []
     if (kbArticles && kbArticles.length > 0) {
-      // Include ALL company KB articles — they are the company's sales playbook
-      // Prioritize: first include the Sales Chatbot Identity (most important),
-      // then find best matching articles based on message content
+      const byId = new Map(kbArticles.map((kb) => [kb.id, kb]))
       const msgLower = (message_text || '').toLowerCase()
 
-      // Always include the chatbot identity/rules article first (it has response rules)
+      // Always include the chatbot identity/rules article first (it has response rules).
       const identityArticle = kbArticles.find((kb: any) =>
         kb.title?.toLowerCase().includes('chatbot identity') || kb.title?.toLowerCase().includes('sales chatbot')
       )
 
-      // Score remaining articles by keyword relevance
-      const scoredArticles = kbArticles
-        .filter((kb: any) => kb.id !== identityArticle?.id)
-        .map((kb: any) => {
-          let score = 0
-          const content = (kb.content || '').toLowerCase()
-          // Check for key terms from the customer message
-          const msgWords = msgLower.split(/\s+/).filter((w: string) => w.length > 4)
-          for (const word of msgWords) {
-            if (content.includes(word)) score += 1
-          }
-          // Boost articles whose category/title matches message keywords
-          const titleLower = (kb.title || '').toLowerCase()
-          if (msgLower.includes('route') || msgLower.includes('rate') || msgLower.includes('pricing')) {
-            if (titleLower.includes('route') || titleLower.includes('pricing')) score += 10
-          }
-          if (msgLower.includes('ucaas') || msgLower.includes('phone') || msgLower.includes('dialer') || msgLower.includes('sms')) {
-            if (titleLower.includes('ucaas') || titleLower.includes('sms') || titleLower.includes('dialer')) score += 10
-          }
-          if (msgLower.includes('compliance') || msgLower.includes('billing') || msgLower.includes('refund') || msgLower.includes('support')) {
-            if (titleLower.includes('compliance') || titleLower.includes('billing') || titleLower.includes('support')) score += 10
-          }
-          return { ...kb, score }
-        })
-        .sort((a: any, b: any) => b.score - a.score)
+      // PRIMARY retrieval: semantic RAG over kb_embeddings (pgvector, company-scoped
+      // at the SQL level). Returns the most relevant CHUNKS — works for ANY tenant's
+      // KB (no hand-tuned per-domain keyword boosts). retrieveKbContext NEVER throws
+      // and reports `enabled:false` when embeddings aren't configured, so the keyword
+      // path below stays as a transparent fallback.
+      const rag = await retrieveKbContext(message_text || '', account.company_id!, 5)
+      const ragChunks = rag.enabled ? rag.chunks.filter((c) => c.kb_article_id !== identityArticle?.id) : []
 
-      // Build KB context: identity article (full) + top 2 scored articles (more content)
       kbContext = '\n\n--- Company Knowledge Base ---\nYou MUST use ONLY the following knowledge base to answer. Do NOT use any external knowledge. If the answer is not in the KB, say you will connect them with the commercial team.\n\n'
 
       if (identityArticle) {
@@ -340,12 +320,45 @@ export async function POST(request: Request) {
         matchedKbIds.push(identityArticle.id)
       }
 
-      // Include top scored articles with more content (up to 6000 chars each)
-      const topArticles = scoredArticles.slice(0, 3)
-      topArticles.forEach((kb: any, i: number) => {
-        kbContext += `[${kb.title}]\n${(kb.content || '').substring(0, 6000)}\n\n`
-        matchedKbIds.push(kb.id)
-      })
+      if (ragChunks.length > 0) {
+        // Semantic chunks, most-relevant first; label each with its source article.
+        for (const c of ragChunks) {
+          const title = byId.get(c.kb_article_id)?.title || 'Knowledge'
+          kbContext += `[${title}]\n${(c.content || '').substring(0, 2000)}\n\n`
+          if (!matchedKbIds.includes(c.kb_article_id)) matchedKbIds.push(c.kb_article_id)
+        }
+      } else {
+        // FALLBACK (no embeddings configured / no semantic match): keyword scoring
+        // over full articles — the original behaviour, unchanged.
+        const scoredArticles = kbArticles
+          .filter((kb: any) => kb.id !== identityArticle?.id)
+          .map((kb: any) => {
+            let score = 0
+            const content = (kb.content || '').toLowerCase()
+            const msgWords = msgLower.split(/\s+/).filter((w: string) => w.length > 4)
+            for (const word of msgWords) {
+              if (content.includes(word)) score += 1
+            }
+            const titleLower = (kb.title || '').toLowerCase()
+            if (msgLower.includes('route') || msgLower.includes('rate') || msgLower.includes('pricing')) {
+              if (titleLower.includes('route') || titleLower.includes('pricing')) score += 10
+            }
+            if (msgLower.includes('ucaas') || msgLower.includes('phone') || msgLower.includes('dialer') || msgLower.includes('sms')) {
+              if (titleLower.includes('ucaas') || titleLower.includes('sms') || titleLower.includes('dialer')) score += 10
+            }
+            if (msgLower.includes('compliance') || msgLower.includes('billing') || msgLower.includes('refund') || msgLower.includes('support')) {
+              if (titleLower.includes('compliance') || titleLower.includes('billing') || titleLower.includes('support')) score += 10
+            }
+            return { ...kb, score }
+          })
+          .sort((a: any, b: any) => b.score - a.score)
+
+        const topArticles = scoredArticles.slice(0, 3)
+        topArticles.forEach((kb: any) => {
+          kbContext += `[${kb.title}]\n${(kb.content || '').substring(0, 6000)}\n\n`
+          matchedKbIds.push(kb.id)
+        })
+      }
 
       kbContext += '--- End Knowledge Base ---\n'
     }
