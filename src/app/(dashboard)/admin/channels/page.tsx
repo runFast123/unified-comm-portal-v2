@@ -103,6 +103,7 @@ const CRED_FIELDS: Record<
     { key: 'phone_number_id', label: 'Phone Number ID (Meta internal numeric ID, not the phone)', placeholder: '123456789012345', required: true },
     { key: 'access_token', label: 'Access Token (System User token from Meta Business)', type: 'password', required: true },
     { key: 'verify_token', label: 'Webhook Verify Token (you choose this — must match Meta webhook config)', type: 'password' },
+    { key: 'app_secret', label: 'Meta App Secret (enables inbound — verifies the webhook signature)', type: 'password' },
     { key: 'graph_version', label: 'Graph API Version', placeholder: 'v21.0' },
   ],
   sms: [
@@ -116,11 +117,15 @@ const CRED_FIELDS: Record<
   messenger: [
     { key: 'page_id', label: 'Facebook Page ID', required: true },
     { key: 'page_access_token', label: 'Page Access Token (Meta app, pages_messaging)', type: 'password', required: true },
+    { key: 'verify_token', label: 'Webhook Verify Token (you choose this — must match Meta webhook config)', type: 'password' },
+    { key: 'app_secret', label: 'Meta App Secret (enables inbound — verifies the webhook signature)', type: 'password' },
     { key: 'graph_version', label: 'Graph API Version', placeholder: 'v21.0' },
   ],
   instagram: [
     { key: 'page_id', label: 'Linked Facebook Page ID', required: true },
     { key: 'page_access_token', label: 'Page Access Token (Meta app, instagram_manage_messages)', type: 'password', required: true },
+    { key: 'verify_token', label: 'Webhook Verify Token (you choose this — must match Meta webhook config)', type: 'password' },
+    { key: 'app_secret', label: 'Meta App Secret (enables inbound — verifies the webhook signature)', type: 'password' },
     { key: 'graph_version', label: 'Graph API Version', placeholder: 'v21.0' },
   ],
   // Live Chat has no provider credentials — it's managed on the dedicated Live
@@ -361,6 +366,16 @@ export default function ChannelsPage() {
     } finally {
       setTgRegistering(null)
     }
+  }
+
+  // Copy a Meta channel's per-account inbound webhook URL — paste into Meta's
+  // webhook config so inbound flows directly to the app (no relay).
+  const copyInboundUrl = (account: Account, ch: Channel) => {
+    const u = `${origin}/api/webhooks/${ch}?account=${account.id}`
+    navigator.clipboard.writeText(u).then(
+      () => toast.success("Inbound webhook URL copied — paste it into your provider's webhook settings"),
+      () => toast.error('Could not copy to clipboard'),
+    )
   }
 
   // Secret fields we never pre-fill (the API returns them as •••• masks)
@@ -1021,6 +1036,17 @@ export default function ChannelsPage() {
                               <LinkIcon className="h-3.5 w-3.5" />
                             )}
                             Enable inbound
+                          </button>
+                        )}
+                        {(channel === 'whatsapp' || channel === 'messenger' || channel === 'instagram') && state?.source === 'db' && (
+                          <button
+                            type="button"
+                            onClick={() => copyInboundUrl(account, channel)}
+                            title="Copy this account's inbound webhook URL — paste it into Meta's webhook settings to receive messages"
+                            className="inline-flex h-9 items-center gap-2 whitespace-nowrap rounded-lg bg-gray-100 px-3 text-sm font-medium text-gray-700 hover:bg-gray-200"
+                          >
+                            <Copy className="h-3.5 w-3.5" />
+                            Inbound URL
                           </button>
                         )}
                         <button

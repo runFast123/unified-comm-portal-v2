@@ -11,6 +11,8 @@ import { evaluateRouting, applyRoutingResult } from '@/lib/routing-engine'
 import { z } from 'zod'
 import { parseJsonBody } from '@/lib/validation'
 import { parseWhatsAppInbound } from '@/lib/channels/inbound'
+import { verifyMetaSignature, whatsappEnvelopeToRelay } from '@/lib/channels/meta-native'
+import { getChannelConfig } from '@/lib/channel-config'
 
 // Inbound relay payload (custom shape — NOT Meta's envelope; see POST below).
 // Every field is a string; we type-validate them here and keep the business
@@ -33,8 +35,15 @@ export async function GET(request: Request) {
   const mode = searchParams.get('hub.mode')
   const token = searchParams.get('hub.verify_token')
   const challenge = searchParams.get('hub.challenge')
+  const account = searchParams.get('account')
 
-  const verifyToken = process.env.WHATSAPP_VERIFY_TOKEN
+  // Per-account verify token (set in the WhatsApp config) so each Meta number can
+  // use its own; falls back to the platform env for the legacy single-app setup.
+  let verifyToken = process.env.WHATSAPP_VERIFY_TOKEN
+  if (account) {
+    const cfg = await getChannelConfig(account, 'whatsapp')
+    if (cfg?.verify_token) verifyToken = cfg.verify_token
+  }
 
   // Timing-safe token comparison to prevent timing attacks
   let tokenValid = false
@@ -59,24 +68,50 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    // Authenticate the caller. This endpoint ingests a CUSTOM relay payload
-    // ({ sender_phone, text, account_id, … }), NOT Meta's raw webhook envelope,
-    // so the shared X-Webhook-Secret is the correct trust boundary here. Meta's
-    // X-Hub-Signature-256 would only apply if Meta posted its envelope directly
-    // — in that case it pairs with the GET hub.challenge handler above and would
-    // be HMAC-verified against WHATSAPP_APP_SECRET before parsing.
-    if (!validateWebhookSecret(request)) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const url = new URL(request.url)
+    const nativeAccount = url.searchParams.get('account')
+    const metaSig = request.headers.get('x-hub-signature-256')
 
-    const parsed = await parseJsonBody(request, WhatsAppInboundSchema)
-    if (!parsed.ok) return parsed.response
-    const { sender_phone, account_id } = parsed.data
-    // Normalize the raw relay payload into the canonical InboundMessage shape
-    // (media-fallback text, truncation, message_type, channel columns). The
-    // per-channel parse lives in src/lib/channels/inbound.ts so a new channel
-    // defines ONE parser instead of re-deriving these rules inline here.
-    const inbound = parseWhatsAppInbound(parsed.data)
+    let account_id: string | undefined
+    let sender_phone: string | undefined
+    let inbound: ReturnType<typeof parseWhatsAppInbound>
+
+    if (nativeAccount && metaSig) {
+      // ── NATIVE Meta WhatsApp webhook (no relay) ─────────────────────────
+      // Meta POSTs its envelope directly here. Auth = HMAC-SHA256 of the RAW body
+      // against the account's Meta App Secret (X-Hub-Signature-256). The account
+      // is the ?account= we surface for the user to paste into Meta's webhook.
+      const cfg = await getChannelConfig(nativeAccount, 'whatsapp')
+      const appSecret = cfg?.app_secret || process.env.WHATSAPP_APP_SECRET || ''
+      const rawBody = await request.text()
+      if (!verifyMetaSignature(rawBody, metaSig, appSecret)) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+      let envelope: unknown
+      try {
+        envelope = JSON.parse(rawBody)
+      } catch {
+        return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
+      }
+      const relay = whatsappEnvelopeToRelay(envelope, nativeAccount)
+      // Status/read receipts + non-message events → ack + ignore.
+      if (!relay) return NextResponse.json({ ok: true, ignored: true })
+      inbound = parseWhatsAppInbound(relay)
+      account_id = nativeAccount
+      sender_phone = relay.sender_phone
+    } else {
+      // ── Relay payload (existing path) ───────────────────────────────────
+      // CUSTOM relay payload ({ sender_phone, text, account_id, … }), trusted via
+      // the shared X-Webhook-Secret.
+      if (!validateWebhookSecret(request)) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+      const parsed = await parseJsonBody(request, WhatsAppInboundSchema)
+      if (!parsed.ok) return parsed.response
+      account_id = parsed.data.account_id
+      sender_phone = parsed.data.sender_phone
+      inbound = parseWhatsAppInbound(parsed.data)
+    }
 
     if (!account_id) {
       return NextResponse.json(

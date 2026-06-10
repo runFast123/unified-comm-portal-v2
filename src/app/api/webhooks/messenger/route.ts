@@ -10,6 +10,9 @@ import { evaluateRouting, applyRoutingResult } from '@/lib/routing-engine'
 import { z } from 'zod'
 import { parseJsonBody } from '@/lib/validation'
 import { parseMessengerInbound } from '@/lib/channels/inbound'
+import { verifyMetaSignature, metaMessagingEnvelopeToRelay } from '@/lib/channels/meta-native'
+import { getChannelConfig } from '@/lib/channel-config'
+import crypto from 'crypto'
 
 // Inbound Messenger relay payload — a relay normalizes Meta's page webhook
 // (entry[].messaging[]) into this shape and posts it here (mirrors the
@@ -24,17 +27,72 @@ const MessengerInboundSchema = z.object({
   timestamp: z.string().optional(),
 })
 
+// Meta webhook verification (GET hub.challenge) for NATIVE inbound. Per-account
+// verify token from the config (set when the user enables inbound); env fallback.
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url)
+  const mode = searchParams.get('hub.mode')
+  const token = searchParams.get('hub.verify_token')
+  const challenge = searchParams.get('hub.challenge')
+  const account = searchParams.get('account')
+
+  let verifyToken = process.env.MESSENGER_VERIFY_TOKEN || process.env.META_VERIFY_TOKEN || ''
+  if (account) {
+    const cfg = await getChannelConfig(account, 'messenger')
+    if (cfg?.verify_token) verifyToken = cfg.verify_token
+  }
+  let ok = false
+  if (token && verifyToken) {
+    const a = Buffer.from(token, 'utf8')
+    const b = Buffer.from(verifyToken, 'utf8')
+    if (a.length === b.length) {
+      try { ok = crypto.timingSafeEqual(a, b) } catch { ok = false }
+    }
+  }
+  if (mode === 'subscribe' && ok) return new Response(challenge || '', { status: 200 })
+  return NextResponse.json({ error: 'Verification failed' }, { status: 403 })
+}
+
 export async function POST(request: Request) {
   try {
-    if (!validateWebhookSecret(request)) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const url = new URL(request.url)
+    const nativeAccount = url.searchParams.get('account')
+    const metaSig = request.headers.get('x-hub-signature-256')
 
-    const parsed = await parseJsonBody(request, MessengerInboundSchema)
-    if (!parsed.ok) return parsed.response
-    const { sender_id, account_id } = parsed.data
+    let account_id: string | undefined
+    let sender_id: string | undefined
+    let inbound: ReturnType<typeof parseMessengerInbound>
+
+    if (nativeAccount && metaSig) {
+      // ── NATIVE Meta Messenger webhook (no relay) ────────────────────────
+      const cfg = await getChannelConfig(nativeAccount, 'messenger')
+      const appSecret = cfg?.app_secret || process.env.MESSENGER_APP_SECRET || ''
+      const rawBody = await request.text()
+      if (!verifyMetaSignature(rawBody, metaSig, appSecret)) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+      let envelope: unknown
+      try {
+        envelope = JSON.parse(rawBody)
+      } catch {
+        return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
+      }
+      const relay = metaMessagingEnvelopeToRelay(envelope, nativeAccount)
+      if (!relay) return NextResponse.json({ ok: true, ignored: true })
+      inbound = parseMessengerInbound(relay)
+      account_id = nativeAccount
+      sender_id = relay.sender_id
+    } else {
+      if (!validateWebhookSecret(request)) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+      const parsed = await parseJsonBody(request, MessengerInboundSchema)
+      if (!parsed.ok) return parsed.response
+      account_id = parsed.data.account_id
+      sender_id = parsed.data.sender_id
+      inbound = parseMessengerInbound(parsed.data)
+    }
     // Normalize the relay payload; the sender PSID lands in teams_chat_id.
-    const inbound = parseMessengerInbound(parsed.data)
     const messageText = inbound.message_text
     const psid = inbound.teams_chat_id
 

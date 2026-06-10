@@ -54,6 +54,12 @@ export interface WhatsAppConfig {
   access_token: string
   verify_token: string
   graph_version: string
+  /**
+   * Meta App Secret — HMAC-verifies native webhook deliveries
+   * (X-Hub-Signature-256). When present the route accepts Meta's native envelope
+   * directly (no relay needed). Falls back to the WHATSAPP_APP_SECRET env.
+   */
+  app_secret?: string
 }
 
 export interface SmsConfig {
@@ -81,6 +87,10 @@ export interface MessengerConfig {
   /** Page Access Token from the Meta app (needs pages_messaging). */
   page_access_token: string
   graph_version?: string
+  /** Webhook Verify Token (you choose) for Meta's GET challenge — enables native inbound. */
+  verify_token?: string
+  /** Meta App Secret — HMAC-verifies native webhook deliveries (X-Hub-Signature-256). */
+  app_secret?: string
 }
 
 export interface InstagramConfig {
@@ -89,6 +99,10 @@ export interface InstagramConfig {
   /** Page Access Token (needs instagram_manage_messages). */
   page_access_token: string
   graph_version?: string
+  /** Webhook Verify Token (you choose) for Meta's GET challenge — enables native inbound. */
+  verify_token?: string
+  /** Meta App Secret — HMAC-verifies native webhook deliveries (X-Hub-Signature-256). */
+  app_secret?: string
 }
 
 export interface LivechatConfig {
