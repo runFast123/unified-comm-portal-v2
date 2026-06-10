@@ -36,6 +36,8 @@ import {
   ShieldCheck,
   KeyRound,
   AlertTriangle,
+  ArrowRight,
+  BookOpen,
 } from 'lucide-react'
 import { CopyField } from '@/components/ui/copy-field'
 import { timeAgo } from '@/lib/utils'
@@ -43,7 +45,10 @@ import { timeAgo } from '@/lib/utils'
 type Channel = 'email' | 'teams' | 'whatsapp' | 'sms' | 'telegram' | 'messenger' | 'instagram' | 'livechat'
 
 interface ConfigState {
-  source: 'db' | 'env' | 'none' | 'db_broken'
+  // 'error' is client-side only: the status fetch itself failed, so we know
+  // nothing about this account. It settles the page-level health gate
+  // (instead of leaving it stuck on "loading") without claiming anything.
+  source: 'db' | 'env' | 'none' | 'db_broken' | 'error'
   config: Record<string, unknown> | null
   // Persisted Test-Connection result for the account's own (db) credentials.
   lastTestedAt?: string | null
@@ -137,6 +142,18 @@ const CRED_FIELDS: Record<
 // Webhook channels: inbound arrives via /api/webhooks/<channel> (native, no
 // relay). Email/Teams poll instead (OAuth/IMAP/Graph) — no webhook to set up.
 const WEBHOOK_CHANNELS: ReadonlySet<Channel> = new Set(['telegram', 'whatsapp', 'sms', 'messenger', 'instagram'])
+
+// One-line plain-English purpose per channel, shown in the section header so a
+// first-time admin knows what each channel IS before deciding to connect it.
+const CHANNEL_DESCRIPTIONS: Partial<Record<Channel, string>> = {
+  email: 'Send and receive email through your own mailbox — SMTP/IMAP or one-click Gmail.',
+  teams: 'Read and reply to Microsoft Teams chats via Microsoft Graph.',
+  whatsapp: 'Chat with customers on WhatsApp through Meta’s Cloud API.',
+  sms: 'Text messages through your Twilio phone number.',
+  telegram: 'Talk to customers through your own Telegram bot.',
+  messenger: 'Reply to your Facebook Page’s Messenger conversations.',
+  instagram: 'Reply to Instagram DMs sent to your professional account.',
+}
 
 // Step-by-step connect guides for the channels that lack a dedicated help
 // panel (Email/Teams have their own OAuth panels with redirect-URI copy
@@ -334,12 +351,20 @@ export default function ChannelsPage() {
   }, [supabase, toast, activeCompanyId, companyAccountIds])
 
   const loadConfigStatus = useCallback(async (accountId: string, channel: Channel) => {
+    const key = `${accountId}:${channel}`
     try {
       const res = await fetch(`/api/channels/config?account_id=${accountId}&channel=${channel}`)
-      if (!res.ok) return
+      if (!res.ok) {
+        // Settle the state as "fetch failed" — otherwise the page-level health
+        // summary waits forever for this account and never renders its chip.
+        setConfigs((prev) => ({ ...prev, [key]: { source: 'error', config: null } }))
+        return
+      }
       const data = await res.json() as ConfigState
-      setConfigs((prev) => ({ ...prev, [`${accountId}:${channel}`]: data }))
-    } catch { /* ignore */ }
+      setConfigs((prev) => ({ ...prev, [key]: data }))
+    } catch {
+      setConfigs((prev) => ({ ...prev, [key]: { source: 'error', config: null } }))
+    }
   }, [])
 
   useEffect(() => { loadAccounts() }, [loadAccounts])
@@ -808,15 +833,71 @@ export default function ChannelsPage() {
     }
   }
 
+  // Page-level health summary — derived entirely from already-loaded state.
+  // "Needs attention" = the hard signals only (no creds / broken creds /
+  // failed test / repeated poll failures); softer to-dos surface per-row as
+  // "Next:" hints instead.
+  const visibleChannels = CHANNEL_KEYS.filter((c) => c !== 'livechat') as Channel[]
+  let totalAccounts = 0
+  let channelsInUse = 0
+  let needsAttention = 0
+  let configsReady = true
+  for (const ch of visibleChannels) {
+    const l = grouped[ch]
+    if (l.length > 0) channelsInUse++
+    totalAccounts += l.length
+    for (const a of l) {
+      const st = configs[`${a.id}:${ch}`]
+      if (st === undefined) configsReady = false
+      // Mirror the ROW's gating: OAuth-connected rows suppress the Test chip
+      // (their "Connected as …" chip is the verification), so a stale failed
+      // SMTP test on a Gmail-OAuth row must not be counted here either —
+      // otherwise the header flags an account no row visibly explains.
+      const cfgObj = st?.config as { auth_mode?: string; google_user_email?: string; delegated_user_email?: string } | null
+      const oauthConnected =
+        (cfgObj?.auth_mode === 'gmail_oauth' && !!cfgObj?.google_user_email) ||
+        (cfgObj?.auth_mode === 'delegated' && !!cfgObj?.delegated_user_email)
+      if (
+        st?.source === 'none' ||
+        st?.source === 'db_broken' ||
+        (st?.lastTestOk === false && !oauthConnected) ||
+        (a.consecutive_poll_failures ?? 0) >= 3
+      ) {
+        needsAttention++
+      }
+    }
+  }
+
   return (
     <div className="space-y-6 p-6">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">Channel Configuration</h1>
           <p className="mt-1 text-sm text-slate-600">
-            Add accounts per channel and attach their credentials. Secrets are encrypted at rest.
-            Accounts without saved credentials fall back to the environment variables from <code className="rounded bg-slate-100 px-1 text-xs">.env.local</code>.
+            Connect the channels your team uses: add an account, save its credentials, and messages
+            start flowing into your inbox. Secrets are encrypted at rest. Accounts without saved
+            credentials fall back to the platform defaults from <code className="rounded bg-slate-100 px-1 text-xs">.env.local</code>.
           </p>
+          {!loading && totalAccounts > 0 && (
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+              <span className="text-slate-500">
+                {totalAccounts} account{totalAccounts === 1 ? '' : 's'} across {channelsInUse} channel{channelsInUse === 1 ? '' : 's'}
+              </span>
+              {configsReady && (
+                needsAttention > 0 ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 font-medium text-amber-700 ring-1 ring-amber-200">
+                    <AlertTriangle className="h-3 w-3" />
+                    {needsAttention} need{needsAttention === 1 ? 's' : ''} attention
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700 ring-1 ring-emerald-200">
+                    <CheckCircle className="h-3 w-3" />
+                    No errors
+                  </span>
+                )
+              )}
+            </div>
+          )}
         </div>
         <Button
           onClick={() => setPickerOpen(true)}
@@ -834,12 +915,19 @@ export default function ChannelsPage() {
         return (
           <Card key={channel} className="overflow-hidden">
             <div className="flex items-center gap-3 border-b bg-slate-50 px-4 py-3">
-              <meta.Icon className={`h-5 w-5 ${meta.color}`} />
-              <h2 className="font-semibold">{meta.label}</h2>
-              <span className="text-xs text-slate-500">
-                {list.length} account{list.length === 1 ? '' : 's'}
-              </span>
-              <div className="ml-auto">
+              <meta.Icon className={`h-5 w-5 flex-shrink-0 ${meta.color}`} />
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <h2 className="font-semibold">{meta.label}</h2>
+                  <span className="text-xs text-slate-500">
+                    {list.length} account{list.length === 1 ? '' : 's'}
+                  </span>
+                </div>
+                {CHANNEL_DESCRIPTIONS[channel] && (
+                  <p className="truncate text-xs text-slate-500">{CHANNEL_DESCRIPTIONS[channel]}</p>
+                )}
+              </div>
+              <div className="ml-auto flex-shrink-0">
                 <Button
                   variant="secondary"
                   size="sm"
@@ -964,12 +1052,28 @@ export default function ChannelsPage() {
               <EmptyState
                 icon={meta.Icon}
                 title={`No ${meta.label.split(' ')[0]} accounts yet`}
-                description={`Add a ${meta.label.split(' ')[0].toLowerCase()} account to start ingesting messages from this channel.`}
+                description={
+                  SETUP_GUIDES[channel]
+                    ? `Add a ${meta.label.split(' ')[0].toLowerCase()} account to start receiving messages — the setup guide walks you through every step.`
+                    : `Add a ${meta.label.split(' ')[0].toLowerCase()} account to start ingesting messages from this channel.`
+                }
                 action={
-                  <Button variant="primary" size="sm" onClick={() => openCreate(channel)}>
-                    <Plus className="h-4 w-4" />
-                    Add {meta.label.split(' ')[0]} Account
-                  </Button>
+                  <div className="flex flex-wrap items-center justify-center gap-2">
+                    <Button variant="primary" size="sm" onClick={() => openCreate(channel)}>
+                      <Plus className="h-4 w-4" />
+                      Add {meta.label.split(' ')[0]} Account
+                    </Button>
+                    {SETUP_GUIDES[channel] && !guideOpenFor[channel] && (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setGuideOpenFor((v) => ({ ...v, [channel]: true }))}
+                      >
+                        <BookOpen className="h-4 w-4" />
+                        Setup guide
+                      </Button>
+                    )}
+                  </div>
                 }
                 className="py-10"
               />
@@ -1024,7 +1128,7 @@ export default function ChannelsPage() {
                   const showTeamsOAuthButton =
                     channel === 'teams' && state?.source === 'db' && !isDelegated
                   const primaryLabel =
-                    state?.source === 'db'
+                    state?.source === 'db' || state?.source === 'db_broken'
                       ? 'Update credentials'
                       : state?.source === 'env'
                         ? 'Use your own credentials'
@@ -1057,11 +1161,38 @@ export default function ChannelsPage() {
                   // "Last inbound 2m ago" would be worse than saying nothing.
                   const inboundChip: 'on' | 'off' | null =
                     inboundReady === null ? null : inboundReady ? 'on' : lastSeen ? null : 'off'
+                  // The single next action for this account, in setup order:
+                  // credentials → test → inbound → first message. One hint at a
+                  // time keeps it followable; null = nothing to do (chips
+                  // already say Verified / Inbound on / Last inbound).
+                  const nextStep: string | null = (() => {
+                    if (!state) return null // config state still loading
+                    if (state.source === 'none') return 'Add your credentials to connect this account.'
+                    if (state.source === 'db_broken') return 'Credentials can’t be read — open Update credentials and re-enter them.'
+                    if (state.source === 'db' && !isDelegated && !isGmailOAuth) {
+                      if (state.lastTestOk === false) return 'The last connection test failed — fix the credentials, then ⋮ → Test connection.'
+                      if (state.lastTestOk == null) return 'Prove the credentials work: ⋮ → Test connection.'
+                    }
+                    if (inboundChip === 'off') {
+                      return channel === 'telegram'
+                        ? 'Turn on receiving: click “Enable inbound”.'
+                        : 'Turn on receiving: add the App Secret + Verify Token, then paste the Inbound URL into Meta → Webhooks.'
+                    }
+                    if (isWebhookCh && state.source === 'db' && !lastSeen) {
+                      if (channel === 'sms') return 'Paste the Inbound URL into Twilio, then text your number — it should appear in your inbox.'
+                      if (channel === 'telegram') return 'Message your bot on Telegram — it should appear in your inbox.'
+                      if (channel === 'whatsapp') return 'Send a WhatsApp message to your number — it should appear in your inbox.'
+                      return 'Message your page — it should appear in your inbox.'
+                    }
+                    return null
+                  })()
 
                   return (
                     <div key={account.id} className="flex items-center justify-between gap-4 px-4 py-3">
-                      {/* Left: name + compact chips */}
-                      <div className="flex min-w-0 flex-1 items-center gap-2">
+                      {/* Left: line 1 = name + compact chips; line 2 = the single
+                          "Next:" action hint (only while there is one). */}
+                      <div className="flex min-w-0 flex-1 flex-col gap-1">
+                      <div className="flex min-w-0 items-center gap-2">
                         <span className="truncate font-medium text-gray-900">{account.name}</span>
                         {statusLabel && (
                           <span
@@ -1199,6 +1330,15 @@ export default function ChannelsPage() {
                               : `${account.consecutive_poll_failures} poll failures`}
                           </span>
                         )}
+                      </div>
+                      {nextStep && (
+                        <p className="flex items-start gap-1 text-xs text-slate-500">
+                          <ArrowRight className="mt-0.5 h-3 w-3 flex-shrink-0 text-teal-600" />
+                          <span>
+                            <span className="font-medium text-slate-600">Next:</span> {nextStep}
+                          </span>
+                        </p>
+                      )}
                       </div>
 
                       {/* Right: at most 3 visible controls (OAuth connect, Update creds, ⋮).

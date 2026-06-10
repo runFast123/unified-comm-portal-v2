@@ -332,29 +332,38 @@ export async function getChannelConfig<C extends Channel>(
   return envConfig(channel)
 }
 
-/** Upsert encrypted credentials for an account+channel. */
+/**
+ * Upsert encrypted credentials for an account+channel.
+ *
+ * `opts.preserveTestStatus`: by default a save clears the Test-Connection
+ * result (new credentials are unverified until re-tested). Pass true when the
+ * save does NOT change any user-entered credential — e.g. the Telegram
+ * register route stamping its server-generated webhook_secret onto an
+ * otherwise-identical config — so a Verified badge isn't wiped for nothing.
+ */
 export async function saveChannelConfig<C extends Channel>(
   accountId: string,
   channel: C,
-  config: ChannelConfigMap[C]
+  config: ChannelConfigMap[C],
+  opts?: { preserveTestStatus?: boolean }
 ): Promise<void> {
   const supabase = await createServiceRoleClient()
   const ciphertext = encrypt(JSON.stringify(config))
+  const row: Record<string, unknown> = {
+    account_id: accountId,
+    channel,
+    config_encrypted: ciphertext,
+  }
+  if (!opts?.preserveTestStatus) {
+    // New/updated credentials are unverified until re-tested — clear any
+    // prior Test-Connection result so the gate badge reflects the new secret.
+    row.last_tested_at = null
+    row.last_test_ok = null
+    row.last_test_error = null
+  }
   const { error } = await supabase
     .from('channel_configs')
-    .upsert(
-      {
-        account_id: accountId,
-        channel,
-        config_encrypted: ciphertext,
-        // New/updated credentials are unverified until re-tested — clear any
-        // prior Test-Connection result so the gate badge reflects the new secret.
-        last_tested_at: null,
-        last_test_ok: null,
-        last_test_error: null,
-      },
-      { onConflict: 'account_id,channel' }
-    )
+    .upsert(row, { onConflict: 'account_id,channel' })
   if (error) throw new Error(`Failed to save channel config: ${error.message}`)
 }
 

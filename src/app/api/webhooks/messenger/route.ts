@@ -10,7 +10,7 @@ import { evaluateRouting, applyRoutingResult } from '@/lib/routing-engine'
 import { z } from 'zod'
 import { parseJsonBody } from '@/lib/validation'
 import { parseMessengerInbound } from '@/lib/channels/inbound'
-import { verifyMetaSignature, metaMessagingEnvelopeToRelay } from '@/lib/channels/meta-native'
+import { verifyMetaSignature, metaMessagingEnvelopeToRelays } from '@/lib/channels/meta-native'
 import { getChannelConfig } from '@/lib/channel-config'
 import crypto from 'crypto'
 
@@ -60,11 +60,14 @@ export async function POST(request: Request) {
     const metaSig = request.headers.get('x-hub-signature-256')
 
     let account_id: string | undefined
-    let sender_id: string | undefined
-    let inbound: ReturnType<typeof parseMessengerInbound>
+    let nativeMode = false
+    // One delivery can carry several messages (Meta batches under load and on
+    // retry) — collect them all; the relay path always yields exactly one.
+    let items: Array<{ inbound: ReturnType<typeof parseMessengerInbound>; senderId?: string }> = []
 
     if (nativeAccount && metaSig) {
       // ── NATIVE Meta Messenger webhook (no relay) ────────────────────────
+      nativeMode = true
       const cfg = await getChannelConfig(nativeAccount, 'messenger')
       const appSecret = cfg?.app_secret || process.env.MESSENGER_APP_SECRET || ''
       const rawBody = await request.text()
@@ -77,11 +80,16 @@ export async function POST(request: Request) {
       } catch {
         return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
       }
-      const relay = metaMessagingEnvelopeToRelay(envelope, nativeAccount)
-      if (!relay) return NextResponse.json({ ok: true, ignored: true })
-      inbound = parseMessengerInbound(relay)
+      // expectedPageId scopes the shared app callback to THIS page's entries.
+      const relays = metaMessagingEnvelopeToRelays(
+        envelope,
+        nativeAccount,
+        cfg?.page_id ? String(cfg.page_id) : undefined
+      )
+      // Echoes / delivery receipts / other pages' entries → ack + ignore.
+      if (relays.length === 0) return NextResponse.json({ ok: true, ignored: true })
+      items = relays.map((r) => ({ inbound: parseMessengerInbound(r), senderId: r.sender_id }))
       account_id = nativeAccount
-      sender_id = relay.sender_id
     } else {
       if (!validateWebhookSecret(request)) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -89,12 +97,8 @@ export async function POST(request: Request) {
       const parsed = await parseJsonBody(request, MessengerInboundSchema)
       if (!parsed.ok) return parsed.response
       account_id = parsed.data.account_id
-      sender_id = parsed.data.sender_id
-      inbound = parseMessengerInbound(parsed.data)
+      items = [{ inbound: parseMessengerInbound(parsed.data), senderId: parsed.data.sender_id }]
     }
-    // Normalize the relay payload; the sender PSID lands in teams_chat_id.
-    const messageText = inbound.message_text
-    const psid = inbound.teams_chat_id
 
     if (!account_id) {
       return NextResponse.json({ error: 'Missing required field: account_id' }, { status: 400 })
@@ -117,142 +121,179 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Account is not active' }, { status: 403 })
     }
 
-    if (!sender_id || !psid) {
-      return NextResponse.json({ error: 'Missing required field: sender_id' }, { status: 400 })
-    }
-    if (!messageText || messageText.trim().length === 0) {
-      return NextResponse.json({ error: 'Empty message — nothing to process' }, { status: 400 })
-    }
-
-    // Dedup on the Messenger message id (mid) when present.
-    if (inbound.teams_message_id) {
-      const { data: existingMsg } = await supabase
-        .from('messages')
-        .select('id')
-        .eq('account_id', account_id)
-        .eq('channel', 'messenger')
-        .eq('teams_message_id', inbound.teams_message_id)
-        .limit(1)
-        .maybeSingle()
-      if (existingMsg) {
-        return NextResponse.json(
-          { message: 'Duplicate - already processed', message_id: existingMsg.id },
-          { status: 200 }
-        )
-      }
-    }
-
-    const conversationId = await findOrCreateConversation(supabase, {
-      account_id,
-      channel: 'messenger',
-      teams_chat_id: psid,
-      participant_name: inbound.sender_name,
-    })
-
-    const { data: message, error: msgError } = await supabase
-      .from('messages')
-      .insert({
-        conversation_id: conversationId,
-        account_id,
-        channel: inbound.channel,
-        teams_message_id: inbound.teams_message_id,
-        sender_name: inbound.sender_name,
-        sender_type: inbound.sender_type,
-        message_text: inbound.message_text,
-        message_type: inbound.message_type,
-        direction: inbound.direction,
-        replied: inbound.replied,
-        reply_required: inbound.reply_required,
-        timestamp: inbound.timestamp || new Date().toISOString(),
-        received_at: new Date().toISOString(),
-      })
-      .select('id')
-      .single()
-    if (msgError || !message) {
-      console.error('Failed to store Messenger message:', msgError)
-      return NextResponse.json({ error: 'Failed to store message' }, { status: 500 })
-    }
-
-    // Stamp the account so /admin/channels shows a current "Last synced".
-    void supabase
-      .from('accounts')
-      .update({
-        last_polled_at: new Date().toISOString(),
-        consecutive_poll_failures: 0,
-        last_poll_error: null,
-        last_poll_error_at: null,
-      })
-      .eq('id', account_id)
-      .then(() => undefined, () => undefined)
-
-    // Routing rules — fail-soft.
-    try {
-      const routingResult = await evaluateRouting({
-        channel: 'messenger',
-        account_id,
-        sender_email: null,
-        sender_phone: null,
-        subject: null,
-        message_text: messageText,
-      })
-      if (routingResult.matched_rule_ids.length > 0) {
-        await applyRoutingResult(supabase, conversationId, routingResult)
-      }
-    } catch (routingErr) {
-      console.error('Routing evaluation failed:', routingErr instanceof Error ? routingErr.message : routingErr)
-    }
-
-    // Notifications (async, non-blocking).
-    try {
-      const { triggerNotifications } = await import('@/lib/notification-service')
-      triggerNotifications(supabase, {
-        id: message.id,
-        conversation_id: conversationId,
-        account_id,
-        account_name: accountRow.name || 'Unknown',
-        channel: 'messenger',
-        sender_name: inbound.sender_name,
-        email_subject: null,
-        message_text: messageText?.substring(0, 200) || null,
-        is_spam: false,
-      }).catch((err) => console.error('Notification trigger failed:', err))
-    } catch (notifErr) {
-      console.error('Failed to load notification service:', notifErr)
-    }
-
-    // AI dispatch — fire-and-forget via after() so the relay gets a fast 200.
-    const account = await getAccountSettings(supabase, account_id)
+    const accountSettings = await getAccountSettings(supabase, account_id)
     const origin = new URL(request.url).origin
-    const headers = {
+    const aiHeaders = {
       'Content-Type': 'application/json',
       'X-Webhook-Secret': process.env.WEBHOOK_SECRET || '',
     }
-    if (account.phase1_enabled) {
-      after(() =>
-        fetch(`${origin}/api/classify`, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({ message_id: message.id, message_text: messageText, channel: 'messenger', account_id }),
-        }).then(() => undefined, () => undefined)
-      )
-    }
-    if (account.phase2_enabled) {
-      after(() =>
-        fetch(`${origin}/api/ai-reply`, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            message_id: message.id,
-            message_text: messageText,
-            channel: 'messenger',
-            account_id,
-            conversation_id: conversationId,
-          }),
-        }).then(() => undefined, () => undefined)
-      )
+    const accountIdFixed = account_id
+
+    // Per-message pipeline: dedup → conversation → store → routing →
+    // notifications → AI dispatch. Returns the same response shapes the
+    // single-message code used, so the relay path stays byte-compatible.
+    const processOne = async (
+      inbound: ReturnType<typeof parseMessengerInbound>,
+      senderId: string | undefined
+    ): Promise<{ status: number; body: Record<string, unknown> }> => {
+      // The sender PSID lands in teams_chat_id.
+      const messageText = inbound.message_text
+      const psid = inbound.teams_chat_id
+
+      if (!senderId || !psid) {
+        return { status: 400, body: { error: 'Missing required field: sender_id' } }
+      }
+      if (!messageText || messageText.trim().length === 0) {
+        return { status: 400, body: { error: 'Empty message — nothing to process' } }
+      }
+
+      // Dedup on the Messenger message id (mid) when present.
+      if (inbound.teams_message_id) {
+        const { data: existingMsg } = await supabase
+          .from('messages')
+          .select('id')
+          .eq('account_id', accountIdFixed)
+          .eq('channel', 'messenger')
+          .eq('teams_message_id', inbound.teams_message_id)
+          .limit(1)
+          .maybeSingle()
+        if (existingMsg) {
+          return { status: 200, body: { message: 'Duplicate - already processed', message_id: existingMsg.id } }
+        }
+      }
+
+      const conversationId = await findOrCreateConversation(supabase, {
+        account_id: accountIdFixed,
+        channel: 'messenger',
+        teams_chat_id: psid,
+        participant_name: inbound.sender_name,
+      })
+
+      const { data: message, error: msgError } = await supabase
+        .from('messages')
+        .insert({
+          conversation_id: conversationId,
+          account_id: accountIdFixed,
+          channel: inbound.channel,
+          teams_message_id: inbound.teams_message_id,
+          sender_name: inbound.sender_name,
+          sender_type: inbound.sender_type,
+          message_text: inbound.message_text,
+          message_type: inbound.message_type,
+          direction: inbound.direction,
+          replied: inbound.replied,
+          reply_required: inbound.reply_required,
+          timestamp: inbound.timestamp || new Date().toISOString(),
+          received_at: new Date().toISOString(),
+        })
+        .select('id')
+        .single()
+      if (msgError || !message) {
+        console.error('Failed to store Messenger message:', msgError)
+        return { status: 500, body: { error: 'Failed to store message' } }
+      }
+
+      // Stamp the account so /admin/channels shows a current "Last synced".
+      void supabase
+        .from('accounts')
+        .update({
+          last_polled_at: new Date().toISOString(),
+          consecutive_poll_failures: 0,
+          last_poll_error: null,
+          last_poll_error_at: null,
+        })
+        .eq('id', accountIdFixed)
+        .then(() => undefined, () => undefined)
+
+      // Routing rules — fail-soft.
+      try {
+        const routingResult = await evaluateRouting({
+          channel: 'messenger',
+          account_id: accountIdFixed,
+          sender_email: null,
+          sender_phone: null,
+          subject: null,
+          message_text: messageText,
+        })
+        if (routingResult.matched_rule_ids.length > 0) {
+          await applyRoutingResult(supabase, conversationId, routingResult)
+        }
+      } catch (routingErr) {
+        console.error('Routing evaluation failed:', routingErr instanceof Error ? routingErr.message : routingErr)
+      }
+
+      // Notifications (async, non-blocking).
+      try {
+        const { triggerNotifications } = await import('@/lib/notification-service')
+        triggerNotifications(supabase, {
+          id: message.id,
+          conversation_id: conversationId,
+          account_id: accountIdFixed,
+          account_name: accountRow.name || 'Unknown',
+          channel: 'messenger',
+          sender_name: inbound.sender_name,
+          email_subject: null,
+          message_text: messageText?.substring(0, 200) || null,
+          is_spam: false,
+        }).catch((err) => console.error('Notification trigger failed:', err))
+      } catch (notifErr) {
+        console.error('Failed to load notification service:', notifErr)
+      }
+
+      // AI dispatch — fire-and-forget via after() so Meta/the relay gets a fast 200.
+      if (accountSettings.phase1_enabled) {
+        after(() =>
+          fetch(`${origin}/api/classify`, {
+            method: 'POST',
+            headers: aiHeaders,
+            body: JSON.stringify({ message_id: message.id, message_text: messageText, channel: 'messenger', account_id: accountIdFixed }),
+          }).then(() => undefined, () => undefined)
+        )
+      }
+      if (accountSettings.phase2_enabled) {
+        after(() =>
+          fetch(`${origin}/api/ai-reply`, {
+            method: 'POST',
+            headers: aiHeaders,
+            body: JSON.stringify({
+              message_id: message.id,
+              message_text: messageText,
+              channel: 'messenger',
+              account_id: accountIdFixed,
+              conversation_id: conversationId,
+            }),
+          }).then(() => undefined, () => undefined)
+        )
+      }
+
+      return { status: 201, body: { message_id: message.id, conversation_id: conversationId } }
     }
 
-    return NextResponse.json({ message_id: message.id, conversation_id: conversationId }, { status: 201 })
+    if (!nativeMode) {
+      const r = await processOne(items[0].inbound, items[0].senderId)
+      return NextResponse.json(r.body, { status: r.status })
+    }
+
+    // Native batch: process every message. A hard store failure returns 500 so
+    // Meta redelivers (dedup by mid absorbs the replayed successes); anything
+    // else acks so webhook health stays green.
+    const results: Array<{ status: number; body: Record<string, unknown> }> = []
+    for (const item of items) {
+      results.push(await processOne(item.inbound, item.senderId))
+    }
+    if (results.some((r) => r.status === 500)) {
+      return NextResponse.json({ error: 'Failed to store message' }, { status: 500 })
+    }
+    const stored = results.filter((r) => r.status === 201)
+    return NextResponse.json(
+      {
+        ok: true,
+        processed: results.length,
+        stored: stored.length,
+        message_id: (stored[0]?.body as { message_id?: string } | undefined)?.message_id,
+      },
+      { status: stored.length > 0 ? 201 : 200 }
+    )
   } catch (error) {
     console.error('Messenger webhook error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

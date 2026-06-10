@@ -11,7 +11,7 @@ import crypto from 'crypto'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { verifyAccountAccess } from '@/lib/api-helpers'
 import { userIdCan } from '@/lib/permissions/server'
-import { getChannelConfig, saveChannelConfig } from '@/lib/channel-config'
+import { getChannelConfig, getMaskedChannelConfig, saveChannelConfig } from '@/lib/channel-config'
 
 export async function POST(request: Request) {
   const supabase = await createServerSupabaseClient()
@@ -34,6 +34,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Forbidden: missing permission' }, { status: 403 })
   }
 
+  // Require the account's OWN saved bot token. getChannelConfig falls back to
+  // the platform-wide TELEGRAM_BOT_TOKEN env var, and registering against that
+  // shared bot would (a) re-point ALL of its inbound to this one tenant and
+  // (b) materialize the platform secret into this tenant's encrypted row.
+  const { source } = await getMaskedChannelConfig(accountId, 'telegram')
+  if (source !== 'db') {
+    return NextResponse.json({ error: 'Save your own bot token first, then enable inbound.' }, { status: 400 })
+  }
   const cfg = await getChannelConfig(accountId, 'telegram')
   if (!cfg?.bot_token) {
     return NextResponse.json({ error: 'Save the bot token first, then enable inbound.' }, { status: 400 })
@@ -64,7 +72,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Failed to reach Telegram' }, { status: 502 })
   }
 
-  // Persist the secret ONLY after Telegram accepted the webhook.
-  await saveChannelConfig(accountId, 'telegram', { ...cfg, webhook_secret: secret })
+  // Persist the secret ONLY after Telegram accepted the webhook. The bot token
+  // is unchanged (and was just re-validated by setWebhook itself), so keep the
+  // Test-Connection status instead of regressing Verified → Not tested.
+  await saveChannelConfig(accountId, 'telegram', { ...cfg, webhook_secret: secret }, { preserveTestStatus: true })
   return NextResponse.json({ ok: true, webhook_url: webhookUrl })
 }
