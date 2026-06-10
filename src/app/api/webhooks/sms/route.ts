@@ -10,6 +10,8 @@ import { evaluateRouting, applyRoutingResult } from '@/lib/routing-engine'
 import { z } from 'zod'
 import { parseJsonBody } from '@/lib/validation'
 import { parseSmsInbound } from '@/lib/channels/inbound'
+import { verifyTwilioSignature, twilioFormToRelay } from '@/lib/channels/twilio-native'
+import { getChannelConfig } from '@/lib/channel-config'
 
 // Inbound SMS relay payload — a relay in front of Twilio normalizes Twilio's
 // form-encoded webhook into this JSON shape and posts it here, mirroring the
@@ -25,15 +27,51 @@ const SmsInboundSchema = z.object({
 
 export async function POST(request: Request) {
   try {
-    if (!validateWebhookSecret(request)) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const url = new URL(request.url)
+    const nativeAccount = url.searchParams.get('account')
+    const twilioSig = request.headers.get('x-twilio-signature')
+
+    let account_id: string | undefined
+    let sender_phone: string | undefined
+    let inbound: ReturnType<typeof parseSmsInbound>
+
+    if (nativeAccount && twilioSig) {
+      // ── NATIVE Twilio webhook (no relay) ────────────────────────────────
+      // Twilio POSTs form-encoded params with X-Twilio-Signature = base64 HMAC-SHA1
+      // over the webhook URL + sorted params, keyed by the account's Twilio auth
+      // token. Account is the ?account= we surface for the user to paste into Twilio.
+      const cfg = await getChannelConfig(nativeAccount, 'sms')
+      const authToken = cfg?.auth_token || process.env.TWILIO_AUTH_TOKEN || ''
+      const rawBody = await request.text()
+      const params: Record<string, string> = {}
+      for (const [k, v] of new URLSearchParams(rawBody)) params[k] = v
+      // Twilio signs over the EXACT configured URL — reconstruct proxy-safe from
+      // the public host, and also try the raw request URL as a fallback.
+      const proto = request.headers.get('x-forwarded-proto') || 'https'
+      const host = request.headers.get('host') || url.host
+      const candidates = [`${proto}://${host}${url.pathname}${url.search}`, request.url]
+      const okSig = candidates.some((u) => verifyTwilioSignature(u, params, twilioSig, authToken))
+      if (!okSig) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+      const relay = twilioFormToRelay(params, nativeAccount)
+      // Status/delivery callbacks (no Body) → ack + ignore.
+      if (!relay) return NextResponse.json({ ok: true, ignored: true })
+      inbound = parseSmsInbound(relay)
+      account_id = nativeAccount
+      sender_phone = relay.sender_phone
+    } else {
+      // ── Relay payload (existing path) ───────────────────────────────────
+      if (!validateWebhookSecret(request)) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+      const parsed = await parseJsonBody(request, SmsInboundSchema)
+      if (!parsed.ok) return parsed.response
+      account_id = parsed.data.account_id
+      sender_phone = parsed.data.sender_phone
+      inbound = parseSmsInbound(parsed.data)
     }
 
-    const parsed = await parseJsonBody(request, SmsInboundSchema)
-    if (!parsed.ok) return parsed.response
-    const { sender_phone, account_id } = parsed.data
-    // Normalize the relay payload into the canonical InboundMessage shape.
-    const inbound = parseSmsInbound(parsed.data)
     const messageText = inbound.message_text
 
     if (!account_id) {

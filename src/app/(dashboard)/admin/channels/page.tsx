@@ -1038,11 +1038,11 @@ export default function ChannelsPage() {
                             Enable inbound
                           </button>
                         )}
-                        {(channel === 'whatsapp' || channel === 'messenger' || channel === 'instagram') && state?.source === 'db' && (
+                        {(channel === 'whatsapp' || channel === 'messenger' || channel === 'instagram' || channel === 'sms') && state?.source === 'db' && (
                           <button
                             type="button"
                             onClick={() => copyInboundUrl(account, channel)}
-                            title="Copy this account's inbound webhook URL — paste it into Meta's webhook settings to receive messages"
+                            title="Copy this account's inbound webhook URL — paste it into your provider's webhook settings (Meta / Twilio) to receive messages"
                             className="inline-flex h-9 items-center gap-2 whitespace-nowrap rounded-lg bg-gray-100 px-3 text-sm font-medium text-gray-700 hover:bg-gray-200"
                           >
                             <Copy className="h-3.5 w-3.5" />
