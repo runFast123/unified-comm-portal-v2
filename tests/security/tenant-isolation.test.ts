@@ -262,6 +262,8 @@ vi.mock('@/lib/channel-config', () => ({
   saveChannelConfig: vi.fn(async () => {}),
   deleteChannelConfig: vi.fn(async () => {}),
   getChannelConfig: vi.fn(async () => null),
+  // Pass-through: with nothing stored there are no secrets to merge back in.
+  mergeWithStoredSecrets: vi.fn(async (_accountId: string, _channel: string, c: Record<string, unknown>) => c),
   // Field-presence validation is exercised in channel-config-validation.test.ts;
   // here every posted config is complete, so treat all as valid.
   firstMissingConfigField: vi.fn(() => null),

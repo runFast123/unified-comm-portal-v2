@@ -38,6 +38,7 @@ import {
   AlertTriangle,
 } from 'lucide-react'
 import { CopyField } from '@/components/ui/copy-field'
+import { timeAgo } from '@/lib/utils'
 
 type Channel = 'email' | 'teams' | 'whatsapp' | 'sms' | 'telegram' | 'messenger' | 'instagram' | 'livechat'
 
@@ -133,6 +134,63 @@ const CRED_FIELDS: Record<
   livechat: [],
 }
 
+// Webhook channels: inbound arrives via /api/webhooks/<channel> (native, no
+// relay). Email/Teams poll instead (OAuth/IMAP/Graph) — no webhook to set up.
+const WEBHOOK_CHANNELS: ReadonlySet<Channel> = new Set(['telegram', 'whatsapp', 'sms', 'messenger', 'instagram'])
+
+// Step-by-step connect guides for the channels that lack a dedicated help
+// panel (Email/Teams have their own OAuth panels with redirect-URI copy
+// fields). Rendered as a collapsible per channel section, mirroring those.
+const SETUP_GUIDES: Partial<Record<Channel, { intro?: string; steps: string[] }>> = {
+  telegram: {
+    steps: [
+      'In Telegram, message @BotFather → send /newbot → follow the prompts → copy the bot token.',
+      'Add an account here and paste the token, then save.',
+      'Click "Enable inbound" on the account row — the app registers the webhook with Telegram for you.',
+      'Message your bot on Telegram: it lands in your Inbox and the row shows "Last inbound" proof.',
+    ],
+  },
+  whatsapp: {
+    intro: 'Needs a Meta for Developers app with the WhatsApp product (developers.facebook.com).',
+    steps: [
+      'In your Meta app → WhatsApp → API Setup: copy the Phone Number ID and a System User access token.',
+      'App Settings → Basic: copy the App Secret. Also invent a Verify Token (any secret string you choose).',
+      'Save all of them here, then click "Inbound URL" on the account row to copy this account’s webhook address.',
+      'In Meta → WhatsApp → Configuration → Webhooks: paste the URL and your Verify Token, then subscribe to "messages".',
+      'Send a WhatsApp message to your number: it lands in your Inbox ("Last inbound" updates).',
+    ],
+  },
+  sms: {
+    intro: 'Needs a Twilio account with an SMS-capable phone number.',
+    steps: [
+      'In the Twilio Console: copy the Account SID and Auth Token, and note your sending number.',
+      'Save them here, then click "Inbound URL" on the account row to copy this account’s webhook address.',
+      'In Twilio → Phone Numbers → your number → Messaging → "A message comes in": paste the URL (HTTP POST) and save.',
+      'Text your Twilio number — it lands in your Inbox. Use ⋮ → "Send test message" to prove outbound too.',
+    ],
+  },
+  messenger: {
+    intro: 'Needs a Meta for Developers app with the Messenger product, connected to your Facebook Page.',
+    steps: [
+      'In your Meta app → Messenger → Settings: connect your Page and generate a Page Access Token (pages_messaging). Copy the Page ID too.',
+      'App Settings → Basic: copy the App Secret. Also invent a Verify Token (any secret string you choose).',
+      'Save them here, then click "Inbound URL" on the account row to copy this account’s webhook address.',
+      'In Meta → Messenger → Webhooks: paste the URL and your Verify Token, then subscribe your Page to "messages".',
+      'Message your Page from a personal profile: it lands in your Inbox ("Last inbound" updates).',
+    ],
+  },
+  instagram: {
+    intro: 'Needs an Instagram professional account linked to a Facebook Page, plus a Meta for Developers app.',
+    steps: [
+      'In your Meta app, add the Instagram product; generate a Page token with instagram_manage_messages and copy the linked Page ID.',
+      'App Settings → Basic: copy the App Secret. Also invent a Verify Token (any secret string you choose).',
+      'Save them here, then click "Inbound URL" on the account row to copy this account’s webhook address.',
+      'In Meta → Instagram → Webhooks: paste the URL and your Verify Token, then subscribe to "messages".',
+      'DM your Instagram account: it lands in your Inbox ("Last inbound" updates).',
+    ],
+  },
+}
+
 function defaultCreds(channel: Channel): Record<string, unknown> {
   if (channel === 'email') {
     return {
@@ -188,6 +246,9 @@ export default function ChannelsPage() {
   const [origin, setOrigin] = useState('')
   const [teamsHelpOpen, setTeamsHelpOpen] = useState(false)
   const [emailHelpOpen, setEmailHelpOpen] = useState(false)
+  // Collapsible setup guides for the webhook channels (telegram/whatsapp/sms/
+  // messenger/instagram) — keyed by channel; Email/Teams keep their own panels.
+  const [guideOpenFor, setGuideOpenFor] = useState<Record<string, boolean>>({})
   // Row-level overflow menu: tracks which `${account.id}:${channel}` is open, if any.
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   // Trigger button ref for the currently-open menu — used to compute the
@@ -207,6 +268,10 @@ export default function ChannelsPage() {
   })
   const [oauthStarting, setOauthStarting] = useState(false)
   const [tgRegistering, setTgRegistering] = useState<string | null>(null)
+  // Edit mode: which secret fields have a saved (db) value. Those may be left
+  // blank — the server keeps the stored value — so they aren't required and
+  // the form says so. (The masked GET marks set secrets with a truthy ••••.)
+  const [editSavedSecrets, setEditSavedSecrets] = useState<string[]>([])
 
   useEffect(() => {
     fetch('/api/auth/availability')
@@ -368,6 +433,40 @@ export default function ChannelsPage() {
     }
   }
 
+  // End-to-end outbound proof: send a REAL message through the channel.
+  // Email self-sends to its own mailbox; SMS asks for a destination number.
+  const handleSendTestMessage = async (account: Account, channel: Channel) => {
+    let to: string | undefined
+    if (channel === 'sms') {
+      const input = window.prompt('Send a test SMS to which number? (E.164 format, e.g. +14155552671)')
+      if (!input) return
+      to = input.trim()
+    } else {
+      const addr = account.gmail_address || ''
+      if (!addr) {
+        toast.error('This account has no mailbox address set')
+        return
+      }
+      if (!confirm(`Send a test email from "${account.name}" to its own mailbox (${addr})?`)) return
+    }
+    try {
+      const res = await fetch('/api/channels/test-message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ account_id: account.id, to }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(j.error || 'Test message failed')
+      toast.success(
+        channel === 'sms'
+          ? `Test SMS sent to ${j.to} — check the phone`
+          : `Test email sent to ${j.to} — check the mailbox inbox`
+      )
+    } catch (err) {
+      toast.error((err as Error).message)
+    }
+  }
+
   // Copy a Meta channel's per-account inbound webhook URL — paste into Meta's
   // webhook config so inbound flows directly to the app (no relay).
   const copyInboundUrl = (account: Account, ch: Channel) => {
@@ -378,15 +477,19 @@ export default function ChannelsPage() {
     )
   }
 
-  // Secret fields we never pre-fill (the API returns them as •••• masks)
+  // Secret fields we never pre-fill (the API returns them as •••• masks).
+  // MUST stay a superset of the server's SECRET_FIELDS (channel-config.ts) for
+  // the fields shown in this form — otherwise a mask placeholder round-trips
+  // into the save and corrupts the stored secret. webhook_secret is not a form
+  // field (server-managed) so it needs no entry here.
   const SECRET_FIELDS: Record<Channel, string[]> = {
     email: ['smtp_password', 'imap_password'],
     teams: ['azure_client_secret'],
-    whatsapp: ['access_token', 'verify_token'],
+    whatsapp: ['access_token', 'verify_token', 'app_secret'],
     sms: ['auth_token'],
     telegram: ['bot_token'],
-    messenger: ['page_access_token'],
-    instagram: ['page_access_token'],
+    messenger: ['page_access_token', 'verify_token', 'app_secret'],
+    instagram: ['page_access_token', 'verify_token', 'app_secret'],
     livechat: [],
   }
 
@@ -424,6 +527,10 @@ export default function ChannelsPage() {
           if (SECRET_FIELDS[channel].includes(k)) continue
           prefill[k] = v
         }
+        // Never carry webhook_secret into a duplicate: it's proof that
+        // setWebhook succeeded for the SOURCE account's URL, not this one.
+        // (The config API drops client-sent values too — belt and braces.)
+        delete prefill.webhook_secret
       }
       setModal({ kind: 'create', channel })
       setFormName(`${account.name} (copy)`)
@@ -449,16 +556,19 @@ export default function ChannelsPage() {
     setModal({ kind: 'edit', account, channel })
     // Edit mode is always "manual" — we're directly editing saved creds.
     setSetupMode('manual')
+    setEditSavedSecrets([])
     // Start with defaults
     let prefill = defaultCreds(channel)
     // Fetch saved config (secrets come back masked); keep non-secret values,
-    // blank out secrets so the user re-enters them intentionally.
+    // blank out secrets — on save, a blank secret keeps the stored value
+    // (the config API merges it back in), a new value replaces it.
     try {
       const res = await fetch(`/api/channels/config?account_id=${account.id}&channel=${channel}`)
       if (res.ok) {
         const data = await res.json()
         if (data?.source === 'db' && data.config) {
           const cleaned: Record<string, unknown> = { ...data.config }
+          setEditSavedSecrets(SECRET_FIELDS[channel].filter((f) => Boolean(cleaned[f])))
           for (const f of SECRET_FIELDS[channel]) {
             cleaned[f] = ''
           }
@@ -506,8 +616,11 @@ export default function ChannelsPage() {
     // When reusing a tenant for Teams, the azure_* fields aren't required from the UI —
     // the server copies them from the source account.
     const skipRequired = channel === 'teams' && modal?.kind === 'create' && !!reuseSourceId
+    // Editing saved creds: a blank secret with a stored value means "keep it"
+    // (the config API merges it back in), so it isn't required here.
     for (const f of CRED_FIELDS[channel]) {
       if (skipRequired) continue
+      if (modal?.kind === 'edit' && editSavedSecrets.includes(f.key)) continue
       if (f.required && !formCreds[f.key]) return `${f.label} is required`
     }
     return null
@@ -811,6 +924,42 @@ export default function ChannelsPage() {
                 )}
               </div>
             )}
+            {SETUP_GUIDES[channel] && (
+              <div className="border-b bg-slate-50/60 text-xs text-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setGuideOpenFor((v) => ({ ...v, [channel]: !v[channel] }))}
+                  className="flex w-full items-center gap-1 px-4 py-2 text-left font-medium hover:bg-slate-100/60"
+                >
+                  {guideOpenFor[channel] ? (
+                    <ChevronDown className="h-3 w-3" />
+                  ) : (
+                    <ChevronRight className="h-3 w-3" />
+                  )}
+                  How to set up {meta.label}
+                </button>
+                {guideOpenFor[channel] && (
+                  <div className="space-y-2 px-4 pb-3">
+                    {SETUP_GUIDES[channel]!.intro && (
+                      <p className="text-slate-500">{SETUP_GUIDES[channel]!.intro}</p>
+                    )}
+                    <ol className="list-decimal space-y-1 pl-5">
+                      {SETUP_GUIDES[channel]!.steps.map((step, i) => (
+                        <li key={i}>{step}</li>
+                      ))}
+                    </ol>
+                    <p className="text-slate-500">
+                      {channel === 'telegram' ? (
+                        <>No webhook address to copy — <span className="font-medium">Enable inbound</span> on the account row registers it with Telegram for you.</>
+                      ) : (
+                        <>Each account&apos;s exact webhook address is under its <span className="font-medium">Inbound URL</span> button
+                        and inside <span className="font-medium">Update credentials</span>.</>
+                      )}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
             {list.length === 0 ? (
               <EmptyState
                 icon={meta.Icon}
@@ -881,6 +1030,33 @@ export default function ChannelsPage() {
                         ? 'Use your own credentials'
                         : 'Configure'
                   const menuOpen = openMenuId === key
+                  // Inbound readiness for webhook channels (db creds only).
+                  // Presence checks work on the masked config: set secrets come
+                  // back as truthy •••• placeholders, unset ones are absent.
+                  // Meta needs BOTH the app secret (POST signature) and a verify
+                  // token (the GET subscribe handshake 403s without one).
+                  // Telegram's webhook_secret is server-managed: written only
+                  // after a successful setWebhook, dropped on bot-token change.
+                  const rowCfg = state?.config as Record<string, unknown> | null
+                  const isWebhookCh = WEBHOOK_CHANNELS.has(channel)
+                  const inboundReady =
+                    isWebhookCh && state?.source === 'db'
+                      ? channel === 'telegram'
+                        ? Boolean(rowCfg?.webhook_secret)
+                        : channel === 'sms'
+                          ? true
+                          : Boolean(rowCfg?.app_secret) && Boolean(rowCfg?.verify_token)
+                      : null
+                  // Proof-of-life: webhook routes stamp last_polled_at on every
+                  // inbound message; the email/teams pollers stamp it per sync.
+                  const lastSeen = account.last_polled_at
+                  const lastSeenLabel = isWebhookCh ? 'Last inbound' : 'Last synced'
+                  // Amber "Inbound off" only when nothing has EVER arrived —
+                  // messages can flow without per-account secrets (relay path,
+                  // platform env fallback), and contradicting a fresh
+                  // "Last inbound 2m ago" would be worse than saying nothing.
+                  const inboundChip: 'on' | 'off' | null =
+                    inboundReady === null ? null : inboundReady ? 'on' : lastSeen ? null : 'off'
 
                   return (
                     <div key={account.id} className="flex items-center justify-between gap-4 px-4 py-3">
@@ -951,6 +1127,56 @@ export default function ChannelsPage() {
                           >
                             <LinkIcon className="h-3 w-3 flex-shrink-0" />
                             <span className="truncate">Connected as {oauthEmail}</span>
+                          </span>
+                        )}
+                        {/* Inbound readiness — is this account set up to RECEIVE?
+                            (Test-connection only proves outbound creds.) */}
+                        {inboundChip && (
+                          <span
+                            title={
+                              inboundChip === 'on'
+                                ? channel === 'telegram'
+                                  ? 'Webhook registered with Telegram — inbound messages flow straight to your inbox'
+                                  : channel === 'sms'
+                                    ? 'Ready to receive — paste the Inbound URL into Twilio (your number → Messaging → "A message comes in")'
+                                    : 'Ready to receive — paste the Inbound URL + your Verify Token into Meta → Webhooks'
+                                : channel === 'telegram'
+                                  ? 'Not receiving yet — click "Enable inbound" to register the webhook with Telegram'
+                                  : 'Not receiving yet — add the Meta App Secret and a Verify Token (Update credentials) so inbound deliveries can be verified'
+                            }
+                            className={
+                              'inline-flex flex-shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ' +
+                              (inboundChip === 'on'
+                                ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
+                                : 'bg-amber-50 text-amber-700 ring-amber-200')
+                            }
+                          >
+                            {inboundChip === 'on' ? (
+                              <CheckCircle className="h-3 w-3 flex-shrink-0" />
+                            ) : (
+                              <AlertTriangle className="h-3 w-3 flex-shrink-0" />
+                            )}
+                            {inboundChip === 'on'
+                              ? channel === 'telegram'
+                                ? 'Inbound on'
+                                : 'Inbound ready'
+                              : 'Inbound off'}
+                          </span>
+                        )}
+                        {/* Proof-of-life: when did a message last arrive through
+                            this account? Turns "did I wire it right?" into a glance.
+                            min-w-0 + truncate: this is the one row item allowed to
+                            shrink, so the chips never collide with the buttons. */}
+                        {(lastSeen || (isWebhookCh && state?.source === 'db')) && (
+                          <span
+                            title={
+                              lastSeen
+                                ? `${lastSeenLabel}: ${new Date(lastSeen).toLocaleString()}`
+                                : 'No inbound messages received yet — send one to your number/bot/page to verify the webhook'
+                            }
+                            className="hidden min-w-0 truncate text-[11px] text-gray-400 md:block"
+                          >
+                            {lastSeen ? `${lastSeenLabel} ${timeAgo(lastSeen)} ago` : 'No messages yet'}
                           </span>
                         )}
                         {/* Poll-failure warning. Fires at 3 consecutive
@@ -1119,6 +1345,20 @@ export default function ChannelsPage() {
               Test connection
             </button>
           )}
+          {(menuContext.channel === 'email' || menuContext.channel === 'sms') &&
+            (menuContext.state?.source === 'db' || menuContext.state?.source === 'env') && (
+              <button
+                type="button"
+                onClick={() => {
+                  setOpenMenuId(null)
+                  handleSendTestMessage(menuContext!.account, menuContext!.channel)
+                }}
+                className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+              >
+                <Send className="h-4 w-4 text-gray-500" />
+                Send test message
+              </button>
+            )}
           {menuContext.state?.source === 'db' && (
             <button
               type="button"
@@ -1452,7 +1692,9 @@ export default function ChannelsPage() {
                 <>
                   <p className="rounded bg-amber-50 px-3 py-2 text-xs text-amber-800">
                     {modal.kind === 'edit'
-                      ? 'Non-secret fields are pre-filled from your saved config. Passwords and tokens are hidden for security — re-enter them to save.'
+                      ? editSavedSecrets.length > 0
+                        ? 'Non-secret fields are pre-filled from your saved config. Passwords and tokens stay hidden — leave them blank to keep the saved values, or enter a new value to replace one.'
+                        : 'Non-secret fields are pre-filled from your saved config. Passwords and tokens are hidden for security — re-enter them to save.'
                       : 'Secrets are encrypted at rest. Fill all required fields before saving.'}
                   </p>
                   {CRED_FIELDS[currentChannel].map((f) => {
@@ -1464,6 +1706,9 @@ export default function ChannelsPage() {
                       !!reuseSourceId &&
                       f.key.startsWith('azure_')
                     if (reusingTenant) return null
+                    // Blanked secret with a saved value: blank means "keep" —
+                    // say so instead of looking like an empty required field.
+                    const keepsSaved = modal.kind === 'edit' && editSavedSecrets.includes(f.key)
                     return (
                       <div key={f.key}>
                         <label className="block text-sm font-medium text-slate-700">{f.label}</label>
@@ -1478,7 +1723,7 @@ export default function ChannelsPage() {
                           <Input
                             type={f.type === 'password' ? 'password' : f.type === 'number' ? 'number' : 'text'}
                             value={String(formCreds[f.key] ?? '')}
-                            placeholder={f.placeholder}
+                            placeholder={keepsSaved ? 'Unchanged — leave blank to keep the saved value' : f.placeholder}
                             onChange={(e) =>
                               setFormCreds((v) => ({
                                 ...v,
@@ -1491,6 +1736,31 @@ export default function ChannelsPage() {
                       </div>
                     )
                   })}
+                  {/* Receive messages (inbound) — the per-account webhook address
+                      the provider must POST to. Only meaningful once the account
+                      exists (the URL embeds its id), so edit-mode only. */}
+                  {modal.kind === 'edit' && WEBHOOK_CHANNELS.has(currentChannel) && (
+                    <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                      <p className="text-xs font-semibold text-slate-700">Receive messages (inbound)</p>
+                      {currentChannel === 'telegram' ? (
+                        <p className="text-xs text-slate-500">
+                          Nothing to paste anywhere — after saving the bot token, click{' '}
+                          <span className="font-medium">Enable inbound</span> on the account row and the app
+                          registers this webhook with Telegram for you.
+                        </p>
+                      ) : (
+                        <CopyField
+                          label="Inbound webhook URL (this account)"
+                          value={`${origin}/api/webhooks/${currentChannel}?account=${modal.account.id}`}
+                          helpText={
+                            currentChannel === 'sms'
+                              ? 'Paste into Twilio → Phone Numbers → your number → Messaging → "A message comes in" (HTTP POST)'
+                              : 'Paste into Meta → Webhooks together with your Verify Token; deliveries are signature-verified with your App Secret'
+                          }
+                        />
+                      )}
+                    </div>
+                  )}
                 </>
               )}
             </div>

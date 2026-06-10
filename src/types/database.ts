@@ -131,6 +131,9 @@ export interface Account {
   // Poller health (added for shard fanout + circuit breaker — see
   // src/lib/email-poller.ts). Counter increments on each erroring poll
   // and resets to 0 on the next clean run; >= 5 trips the breaker.
+  // `last_polled_at` doubles as proof-of-life: pollers stamp it per sync and
+  // the inbound webhook routes stamp it on every received message.
+  last_polled_at: string | null
   last_poll_error: string | null
   last_poll_error_at: string | null
   consecutive_poll_failures: number

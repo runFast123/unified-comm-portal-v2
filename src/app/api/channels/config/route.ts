@@ -2,9 +2,11 @@ import { NextResponse } from 'next/server'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase-server'
 import {
   getMaskedChannelConfig,
+  getChannelConfig,
   saveChannelConfig,
   deleteChannelConfig,
   firstMissingConfigField,
+  mergeWithStoredSecrets,
   type Channel,
   type ChannelConfigMap,
 } from '@/lib/channel-config'
@@ -96,12 +98,34 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Missing permission: action:credentials.manage' }, { status: 403 })
     }
 
+    // Secrets the form left blank — or echoed back as the •••• mask — mean
+    // "keep the saved value": merge them from the stored config so rotating
+    // one credential doesn't silently wipe another (e.g. the WhatsApp
+    // verify_token, which would break Meta's webhook GET re-verification).
+    // A non-empty new value still replaces the secret. Runs BEFORE the
+    // required-fields check so a kept secret also satisfies validation.
+    const c = await mergeWithStoredSecrets(account_id, channel, config as Record<string, unknown>)
+
     // Minimal shape validation per channel — required fields are declared in the
     // channel-config registry (REQUIRED_CONFIG_FIELDS) so a new channel needs no
     // edit here.
-    const c = config as Record<string, unknown>
     const missing = firstMissingConfigField(channel, c)
     if (missing) return NextResponse.json({ error: `Missing ${missing}` }, { status: 400 })
+
+    // Telegram: webhook_secret is SERVER-managed proof that setWebhook
+    // succeeded for THIS account (only /api/channels/telegram/register writes
+    // it, after Telegram accepts). Never accept it from the client — a
+    // duplicated account would inherit the source's secret and fake
+    // "Inbound on" — and drop it when the bot token changes, because the new
+    // bot has no registered webhook.
+    if (channel === 'telegram') {
+      const existing = await getChannelConfig(account_id, 'telegram')
+      delete c.webhook_secret
+      if (existing?.webhook_secret && existing.bot_token === c.bot_token) {
+        c.webhook_secret = existing.webhook_secret
+      }
+    }
+
     await saveChannelConfig(account_id, channel, c as unknown as ChannelConfigMap[typeof channel])
 
     await writeAudit(gate.ctx.userId, 'channel_config.save', account_id, channel)

@@ -124,15 +124,24 @@ export type ChannelConfigMap = {
   livechat: LivechatConfig
 }
 
-// Fields that should never be returned to the UI in clear text
+/**
+ * Placeholder substituted for secret values in getMaskedChannelConfig, and
+ * recognised on the way back in by mergeWithStoredSecrets ("unchanged").
+ */
+export const SECRET_MASK = '••••••••'
+
+// Fields that should never be returned to the UI in clear text.
+// app_secret / webhook_secret / verify_token are inbound-auth secrets (HMAC
+// keys, header tokens) — masked like every other credential. Presence checks
+// in the admin UI still work: the mask placeholder is truthy.
 const SECRET_FIELDS: Record<Channel, string[]> = {
   email: ['smtp_password', 'imap_password', 'google_refresh_token', 'google_access_token'],
   teams: ['azure_client_secret', 'delegated_refresh_token', 'delegated_access_token'],
-  whatsapp: ['access_token', 'verify_token'],
+  whatsapp: ['access_token', 'verify_token', 'app_secret'],
   sms: ['auth_token'],
-  telegram: ['bot_token'],
-  messenger: ['page_access_token'],
-  instagram: ['page_access_token'],
+  telegram: ['bot_token', 'webhook_secret'],
+  messenger: ['page_access_token', 'verify_token', 'app_secret'],
+  instagram: ['page_access_token', 'verify_token', 'app_secret'],
   livechat: [],
 }
 
@@ -410,9 +419,65 @@ export async function getMaskedChannelConfig<C extends Channel>(
 
   const masked: Record<string, unknown> = { ...raw }
   for (const f of SECRET_FIELDS[channel]) {
-    if (masked[f]) masked[f] = '••••••••'
+    if (masked[f]) masked[f] = SECRET_MASK
   }
   return { source, config: masked as Partial<ChannelConfigMap[C]>, lastTestedAt, lastTestOk }
+}
+
+/**
+ * Merge a user-submitted config with the already-stored one so that secret
+ * fields the form left blank — or echoed back as the •••• mask — keep their
+ * saved values instead of being wiped/corrupted on save. The admin UI never
+ * pre-fills secrets, so every "Update credentials" save would otherwise
+ * persist '' over e.g. a WhatsApp verify_token (breaking Meta's webhook GET
+ * re-verification) or the literal mask over a delegated/Google refresh token.
+ *
+ * Semantics per SECRET_FIELDS[channel] entry:
+ *   - non-empty new value (≠ mask) → replaces the stored secret
+ *   - ''/null/undefined/mask       → stored value is kept
+ *   - mask with nothing stored     → coerced to '' (never persist the mask)
+ * To deliberately clear ALL secrets, delete the credentials and re-create.
+ *
+ * Reads the DB row directly — deliberately NOT getChannelConfig(): its env
+ * fallback would copy platform-wide env secrets into this tenant's row.
+ */
+export async function mergeWithStoredSecrets(
+  accountId: string,
+  channel: Channel,
+  incoming: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+  const merged = { ...incoming }
+
+  let stored: Record<string, unknown> | null = null
+  const supabase = await createServiceRoleClient()
+  const { data } = await supabase
+    .from('channel_configs')
+    .select('config_encrypted')
+    .eq('account_id', accountId)
+    .eq('channel', channel)
+    .maybeSingle()
+  if (data?.config_encrypted) {
+    try {
+      stored = JSON.parse(decrypt(data.config_encrypted)) as Record<string, unknown>
+    } catch {
+      // Undecryptable row (key rotation etc.) — nothing recoverable to keep;
+      // the save below overwrites the broken row with the submitted values.
+      stored = null
+    }
+  }
+
+  for (const f of SECRET_FIELDS[channel]) {
+    const v = merged[f]
+    const untouched = v === undefined || v === null || v === '' || v === SECRET_MASK
+    if (!untouched) continue
+    const storedVal = stored?.[f]
+    if (storedVal !== undefined && storedVal !== null && storedVal !== '') {
+      merged[f] = storedVal
+    } else if (v === SECRET_MASK) {
+      merged[f] = ''
+    }
+  }
+  return merged
 }
 
 /**
