@@ -201,6 +201,7 @@ export default function ChannelsPage() {
     teams: false,
   })
   const [oauthStarting, setOauthStarting] = useState(false)
+  const [tgRegistering, setTgRegistering] = useState<string | null>(null)
 
   useEffect(() => {
     fetch('/api/auth/availability')
@@ -337,6 +338,28 @@ export default function ChannelsPage() {
       await loadConfigStatus(account.id, 'teams')
     } catch (err) {
       toast.error((err as Error).message)
+    }
+  }
+
+  // Register the Telegram bot's webhook with Telegram so inbound flows DIRECTLY
+  // to /api/webhooks/telegram (no relay). The server generates a per-account
+  // secret + calls setWebhook; on success inbound starts immediately.
+  const enableTelegramInbound = async (account: Account) => {
+    setTgRegistering(account.id)
+    try {
+      const res = await fetch('/api/channels/telegram/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ account_id: account.id }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(j.error || 'Failed to enable inbound')
+      toast.success('Telegram inbound enabled — messages now flow into your inbox')
+      await loadConfigStatus(account.id, 'telegram')
+    } catch (err) {
+      toast.error((err as Error).message)
+    } finally {
+      setTgRegistering(null)
     }
   }
 
@@ -982,6 +1005,22 @@ export default function ChannelsPage() {
                           >
                             <LinkIcon className="h-3.5 w-3.5" />
                             Connect Teams
+                          </button>
+                        )}
+                        {channel === 'telegram' && state?.source === 'db' && (
+                          <button
+                            type="button"
+                            onClick={() => enableTelegramInbound(account)}
+                            disabled={tgRegistering === account.id}
+                            title="Register this bot's webhook with Telegram so inbound messages arrive directly in your inbox — no relay needed"
+                            className="inline-flex h-9 items-center gap-2 whitespace-nowrap rounded-lg bg-sky-100 px-3 text-sm font-medium text-sky-700 hover:bg-sky-200 disabled:opacity-60"
+                          >
+                            {tgRegistering === account.id ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <LinkIcon className="h-3.5 w-3.5" />
+                            )}
+                            Enable inbound
                           </button>
                         )}
                         <button

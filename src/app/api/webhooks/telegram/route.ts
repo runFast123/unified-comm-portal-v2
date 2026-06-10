@@ -10,6 +10,9 @@ import { evaluateRouting, applyRoutingResult } from '@/lib/routing-engine'
 import { z } from 'zod'
 import { parseJsonBody } from '@/lib/validation'
 import { parseTelegramInbound } from '@/lib/channels/inbound'
+import { telegramUpdateToRelay } from '@/lib/channels/telegram-native'
+import { getChannelConfig } from '@/lib/channel-config'
+import crypto from 'crypto'
 
 // Inbound Telegram relay payload — a relay normalizes Telegram's Update JSON
 // into this shape and posts it here (mirrors the WhatsApp/SMS relay). Trust is
@@ -24,18 +27,53 @@ const TelegramInboundSchema = z.object({
   timestamp: z.string().optional(),
 })
 
+/** Constant-time compare for the native Telegram webhook secret. */
+function secretsMatch(a: string, b: string): boolean {
+  const ab = Buffer.from(a)
+  const bb = Buffer.from(b)
+  if (ab.length !== bb.length) return false
+  return crypto.timingSafeEqual(ab, bb)
+}
+
 export async function POST(request: Request) {
   try {
-    if (!validateWebhookSecret(request)) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const url = new URL(request.url)
+    const nativeAccount = url.searchParams.get('account')
+    const tgSecret = request.headers.get('x-telegram-bot-api-secret-token')
+
+    let account_id: string | undefined
+    let inbound: ReturnType<typeof parseTelegramInbound>
+
+    if (nativeAccount && tgSecret) {
+      // ── NATIVE Telegram webhook (no relay) ──────────────────────────────
+      // Telegram POSTs its Update JSON directly here, echoing the per-account
+      // secret we set via setWebhook in X-Telegram-Bot-Api-Secret-Token. Auth is
+      // a constant-time compare vs the stored secret; the account is the
+      // ?account= we baked into the registered URL.
+      const cfg = await getChannelConfig(nativeAccount, 'telegram')
+      const expected = cfg?.webhook_secret || ''
+      if (!expected || !secretsMatch(tgSecret, expected)) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+      const update = await request.json().catch(() => null)
+      const relayShape = telegramUpdateToRelay(update, nativeAccount)
+      // Non-text updates (joins, callbacks, edits without text) → ack + ignore.
+      if (!relayShape) return NextResponse.json({ ok: true, ignored: true })
+      inbound = parseTelegramInbound(relayShape)
+      account_id = nativeAccount
+    } else {
+      // ── Relay payload (existing path) ───────────────────────────────────
+      if (!validateWebhookSecret(request)) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+      const parsed = await parseJsonBody(request, TelegramInboundSchema)
+      if (!parsed.ok) return parsed.response
+      inbound = parseTelegramInbound(parsed.data)
+      account_id = parsed.data.account_id
     }
 
-    const parsed = await parseJsonBody(request, TelegramInboundSchema)
-    if (!parsed.ok) return parsed.response
-    const { account_id } = parsed.data
     // Normalize the relay payload into the canonical InboundMessage shape. The
     // Telegram chat id lands in teams_chat_id (the shared chat-id column).
-    const inbound = parseTelegramInbound(parsed.data)
     const messageText = inbound.message_text
     const chatId = inbound.teams_chat_id
 

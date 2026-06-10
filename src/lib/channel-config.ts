@@ -66,6 +66,13 @@ export interface SmsConfig {
 export interface TelegramConfig {
   /** Bot token from @BotFather, e.g. 123456:ABC-DEF... */
   bot_token: string
+  /**
+   * Per-account secret Telegram echoes back in the
+   * X-Telegram-Bot-Api-Secret-Token header on every native webhook delivery
+   * (set via setWebhook). Authenticates native inbound — no relay needed.
+   * Generated server-side when the user enables inbound; never user-entered.
+   */
+  webhook_secret?: string
 }
 
 export interface MessengerConfig {
