@@ -3,6 +3,7 @@ import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supab
 import { verifyAccountAccess } from '@/lib/api-helpers'
 import { isSuperAdmin } from '@/lib/auth'
 import { userIdCan } from '@/lib/permissions/server'
+import { logAudit } from '@/lib/audit'
 
 /**
  * GET /api/export?type=messages&from=2026-01-01&to=2026-12-31&account_id=...
@@ -95,6 +96,7 @@ export async function GET(request: Request) {
 
     let csvContent = ''
     let filename = ''
+    let rowCount = 0
 
     if (type === 'messages') {
       let query = supabase
@@ -133,6 +135,7 @@ export async function GET(request: Request) {
 
       csvContent = [headers.join(','), ...rows.map(r => r.map(v => `"${v}"`).join(','))].join('\n')
       filename = `messages-export-${new Date().toISOString().split('T')[0]}.csv`
+      rowCount = rows.length
 
     } else if (type === 'ai-replies') {
       let query = supabase
@@ -171,10 +174,42 @@ export async function GET(request: Request) {
 
       csvContent = [headers.join(','), ...rows.map(r => r.map(v => `"${v}"`).join(','))].join('\n')
       filename = `ai-replies-export-${new Date().toISOString().split('T')[0]}.csv`
+      rowCount = rows.length
 
     } else {
       return NextResponse.json({ error: 'Invalid export type. Use: messages, ai-replies' }, { status: 400 })
     }
+
+    // company_id explicit: super_admin has none on their profile, so the
+    // trigger-derived value would be NULL and hide the row from the affected
+    // tenant's admins — derive the TARGET tenant from the exported accounts.
+    // Fire-and-forget (lookup included) so the download is never delayed.
+    void (async () => {
+      let auditCompanyId = profile?.company_id ?? null
+      if (!auditCompanyId && accountIds && accountIds.length > 0) {
+        const svc = await createServiceRoleClient()
+        const { data: acc } = await svc
+          .from('accounts')
+          .select('company_id')
+          .eq('id', accountIds[0])
+          .maybeSingle()
+        auditCompanyId = (acc?.company_id as string | null) ?? null
+      }
+      await logAudit({
+        user_id: user.id,
+        company_id: auditCompanyId,
+        action: 'data_exported',
+        entity_type: 'export',
+        details: {
+          type,
+          from: from ?? null,
+          to: to ?? null,
+          account_ids: accountIds,
+          row_count: rowCount,
+          filename,
+        },
+      })
+    })().catch(() => undefined)
 
     return new Response(csvContent, {
       headers: {

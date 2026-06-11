@@ -15,6 +15,11 @@
 
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 
+// The routes encrypt api_key at rest via src/lib/encryption (real module, not
+// mocked) — give it a key ring. loadKeys() is lazy, so setting the env here
+// (before any request runs) is sufficient.
+process.env.CHANNEL_CONFIG_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString('base64')
+
 // selected_company_id cookie is read by the GET handler for super_admin
 // targeting; default to "no cookie set".
 let cookieCompanyId: string | null = null
@@ -240,6 +245,7 @@ vi.mock('@/lib/audit', () => ({ logAudit: vi.fn(async () => {}) }))
 
 import { GET as listGet, POST as createPost } from '@/app/api/ai-providers/route'
 import { PATCH as providerPatch, DELETE as providerDelete } from '@/app/api/ai-providers/[id]/route'
+import { decrypt } from '@/lib/encryption'
 
 function jsonReq(url: string, body: unknown, method: string): Request {
   return new Request(url, {
@@ -379,6 +385,27 @@ describe('POST /api/ai-providers activation rules', () => {
     expect(res.status).toBe(400)
   })
 
+  it('stores the api_key ENCRYPTED at rest (v1: ciphertext), never plaintext', async () => {
+    fixture.authUserId = ADMIN_A_ID
+    const res = await createPost(
+      jsonReq('http://x/api/ai-providers', {
+        name: 'OpenAI',
+        base_url: 'https://api.openai.com/v1',
+        api_key: 'sk-plain-secret-1234',
+        model: 'gpt-4o-mini',
+      }, 'POST'),
+    )
+    expect(res.status).toBe(201)
+    const body = (await res.json()) as { provider: { id: string; api_key_masked: string } }
+    const stored = fixture.ai_providers.get(body.provider.id)?.api_key
+    expect(stored).toBeDefined()
+    expect(stored!.startsWith('v1:')).toBe(true)
+    expect(stored).not.toContain('sk-plain-secret-1234')
+    expect(decrypt(stored!)).toBe('sk-plain-secret-1234')
+    // The mask reflects the PLAINTEXT tail, not the ciphertext's.
+    expect(body.provider.api_key_masked).toBe('••••1234')
+  })
+
   it('rejects an unknown provider_key → 400', async () => {
     fixture.authUserId = ADMIN_A_ID
     const res = await createPost(
@@ -445,7 +472,7 @@ describe('PATCH /api/ai-providers/:id', () => {
     expect(fixture.ai_providers.get('p1')?.api_key).toBe('sk-keepme-7777')
   })
 
-  it('PATCH with a NEW api_key rotates it', async () => {
+  it('PATCH with a NEW api_key rotates it (stored encrypted)', async () => {
     seedProvider({ id: 'p1', company_id: COMP_A, api_key: 'sk-old-0000' })
     fixture.authUserId = ADMIN_A_ID
     const res = await providerPatch(
@@ -453,7 +480,10 @@ describe('PATCH /api/ai-providers/:id', () => {
       { params: Promise.resolve({ id: 'p1' }) },
     )
     expect(res.status).toBe(200)
-    expect(fixture.ai_providers.get('p1')?.api_key).toBe('sk-rotated-5555')
+    const stored = fixture.ai_providers.get('p1')?.api_key
+    expect(stored?.startsWith('v1:')).toBe(true)
+    expect(stored).not.toContain('sk-rotated-5555')
+    expect(decrypt(stored!)).toBe('sk-rotated-5555')
     const body = (await res.json()) as { provider: { api_key_masked: string } }
     expect(body.provider.api_key_masked).toBe('••••5555')
   })

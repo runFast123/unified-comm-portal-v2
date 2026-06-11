@@ -11,6 +11,7 @@ import { cookies } from 'next/headers'
 import { createServiceRoleClient } from '@/lib/supabase-server'
 import { requireCompanyAdmin } from '@/lib/tenant-guard'
 import { generateWidgetKey } from '@/lib/livechat'
+import { logAudit } from '@/lib/audit'
 
 async function resolveTargetCompanyId(
   request: Request,
@@ -121,6 +122,17 @@ export async function POST(request: Request) {
   if (wErr || !widget) {
     return NextResponse.json({ error: wErr?.message || 'Failed to create widget' }, { status: 500 })
   }
+
+  // company_id explicit: super_admin may target another company via the switcher.
+  void logAudit({
+    user_id: ctx.userId,
+    company_id: companyId,
+    action: 'livechat_widget_created',
+    entity_type: 'livechat_widget',
+    entity_id: (widget as { id: string }).id,
+    details: { name, account_id: (acct as { id: string }).id },
+  })
+
   return NextResponse.json({ widget }, { status: 201 })
 }
 
@@ -170,6 +182,16 @@ export async function PATCH(request: Request) {
   if (typeof patch.name === 'string') {
     await admin.from('accounts').update({ name: patch.name }).eq('id', (existing as { account_id: string }).account_id)
   }
+
+  void logAudit({
+    user_id: gate.ctx.userId,
+    company_id: companyId,
+    action: 'livechat_widget_updated',
+    entity_type: 'livechat_widget',
+    entity_id: (existing as { id: string }).id,
+    details: { fields: Object.keys(patch) },
+  })
+
   return NextResponse.json({ widget })
 }
 
@@ -198,5 +220,15 @@ export async function DELETE(request: Request) {
   await admin.from('messages').delete().eq('account_id', accountId)
   await admin.from('conversations').delete().eq('account_id', accountId)
   await admin.from('accounts').delete().eq('id', accountId)
+
+  void logAudit({
+    user_id: gate.ctx.userId,
+    company_id: companyId,
+    action: 'livechat_widget_deleted',
+    entity_type: 'livechat_widget',
+    entity_id: id,
+    details: { name: (existing as { name?: string }).name ?? null, account_id: accountId },
+  })
+
   return NextResponse.json({ ok: true })
 }

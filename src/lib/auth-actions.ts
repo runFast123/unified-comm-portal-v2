@@ -48,6 +48,11 @@ export async function signUp(formData: FormData) {
   const password = formData.get('password') as string
   const fullName = formData.get('fullName') as string
 
+  // Same policy as the invite set-password route — don't trust the client's minLength.
+  if (!password || password.length < 8) {
+    return { error: 'Password must be at least 8 characters.' }
+  }
+
   // Per-IP throttle so the public signup form can't be used to hammer GoTrue
   // (account-enumeration / mail-bombing). Fails open.
   const ip = await clientIp()

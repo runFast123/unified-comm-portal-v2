@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase-server'
 import { getCurrentUser, isCompanyAdmin } from '@/lib/auth'
 
@@ -38,18 +39,25 @@ export async function GET() {
     return NextResponse.json({ error: 'Admin only' }, { status: 403 })
   }
 
-  const companyId = profile.company_id
+  let companyId = profile.company_id
+  if (!companyId && profile.role === 'super_admin') {
+    // super_admin has no company on their profile. Honor the tenant
+    // switcher cookie (like the other admin routes) so the checklist shows
+    // the SELECTED company's real progress.
+    companyId = (await cookies()).get('selected_company_id')?.value?.trim() || null
+  }
   if (!companyId) {
-    // No company attached → nothing to onboard. Return all-false rather
-    // than 500 so the UI can still render a useful empty state.
+    // No company attached and none selected (e.g. super_admin combined
+    // view) → there is no workspace to onboard. Report allComplete so the
+    // checklist self-hides instead of nagging "0 of 4" forever.
     return NextResponse.json({
       steps: [
-        { id: 'add_account', complete: false },
-        { id: 'configure_credentials', complete: false },
-        { id: 'invite_teammate', complete: false },
-        { id: 'first_reply', complete: false },
+        { id: 'add_account', complete: true },
+        { id: 'configure_credentials', complete: true },
+        { id: 'invite_teammate', complete: true },
+        { id: 'first_reply', complete: true },
       ],
-      allComplete: false,
+      allComplete: true,
     })
   }
 

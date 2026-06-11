@@ -11,6 +11,7 @@ import { NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase-server'
 import { requireCompanyAdmin } from '@/lib/tenant-guard'
 import { validateProviderBaseUrl } from '@/lib/ssrf'
+import { decrypt, __parseCiphertextKeyId } from '@/lib/encryption'
 
 export async function POST(
   _request: Request,
@@ -34,7 +35,7 @@ export async function POST(
   }
 
   const baseUrl = String((row as { base_url?: string }).base_url || '')
-  const apiKey = String((row as { api_key?: string }).api_key || '')
+  let apiKey = String((row as { api_key?: string }).api_key || '')
   const model = String((row as { model?: string }).model || '')
 
   // Persist the outcome on the row (fire-and-forget; never blocks the response).
@@ -57,6 +58,16 @@ export async function POST(
   if (ssrfError) {
     await persist(false, ssrfError)
     return NextResponse.json({ ok: false, error: ssrfError }, { status: 200 })
+  }
+  // Stored keys are encrypted at rest (v1:…); legacy rows may still be plaintext.
+  if (apiKey && __parseCiphertextKeyId(apiKey) !== null) {
+    try {
+      apiKey = decrypt(apiKey)
+    } catch {
+      const msg = 'Stored API key could not be decrypted — re-enter it'
+      await persist(false, msg)
+      return NextResponse.json({ ok: false, error: msg }, { status: 200 })
+    }
   }
   if (!apiKey || !model) {
     const msg = 'Provider is missing an API key or model'

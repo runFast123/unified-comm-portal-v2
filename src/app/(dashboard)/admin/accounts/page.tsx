@@ -14,8 +14,10 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@
 import { Modal } from '@/components/ui/modal'
 import { Input } from '@/components/ui/input'
 import { getChannelLabel, timeAgo } from '@/lib/utils'
-import { Search, Filter, ChevronRight, Loader2, Check, AlertCircle, X, Plug } from 'lucide-react'
+import { Search, Filter, ChevronRight, Loader2, X, Plug } from 'lucide-react'
 import { EmptyState } from '@/components/ui/empty-state'
+import { useToast } from '@/components/ui/toast'
+import { CHANNELS, CHANNEL_KEYS } from '@/lib/channels/registry'
 
 const SPAM_ALLOWLIST_MAX = 50
 
@@ -147,6 +149,16 @@ function isAccountOOOActive(a: Account): boolean {
 // modal and avoids colliding with any UUID.
 const NEW_COMPANY_SENTINEL = '__new__'
 
+// Registry-driven channel list for the empty state ("Email, Teams, … or
+// Instagram"). Live Chat is excluded to match the channels page — its
+// accounts are provisioned from the widget admin, not connected here.
+const CONNECTABLE_CHANNEL_LABELS = (() => {
+  const labels = CHANNEL_KEYS.filter((k) => k !== 'livechat').map((k) => CHANNELS[k].label)
+  return labels.length > 1
+    ? `${labels.slice(0, -1).join(', ')} or ${labels[labels.length - 1]}`
+    : labels.join('')
+})()
+
 /**
  * Normalize a raw allowlist entry: trim, lowercase, drop empty.
  * Returns null if the entry is unusable.
@@ -172,7 +184,7 @@ export default function AccountsPage() {
   const [modalForm, setModalForm] = useState<ModalFormState | null>(null)
   const [allowlistDraft, setAllowlistDraft] = useState('')
   const [saving, setSaving] = useState(false)
-  const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const { toast } = useToast()
   const [companies, setCompanies] = useState<Company[]>([])
   // When the user picks "+ Create new company" we reveal an inline input.
   const [newCompanyDraft, setNewCompanyDraft] = useState('')
@@ -237,14 +249,6 @@ export default function AccountsPage() {
     }
   }, [detailAccount])
 
-  // Auto-dismiss toast
-  useEffect(() => {
-    if (toast) {
-      const timer = setTimeout(() => setToast(null), 3500)
-      return () => clearTimeout(timer)
-    }
-  }, [toast])
-
   // Fetch current-month AI spend whenever the detail modal opens.
   // Uses the `account_ai_spend_this_month` RPC directly via the client.
   useEffect(() => {
@@ -280,7 +284,7 @@ export default function AccountsPage() {
       .eq('id', detailAccount.id)
 
     if (updateError) {
-      setToast({ type: 'error', message: `Failed to save: ${updateError.message}` })
+      toast.error(`Failed to save: ${updateError.message}`)
       return false
     }
 
@@ -290,7 +294,7 @@ export default function AccountsPage() {
     )
     setDetailAccount((prev) => (prev ? { ...prev, ...fields } as Account : null))
     return true
-  }, [detailAccount, supabase])
+  }, [detailAccount, supabase, toast])
 
   // Toggle handler that auto-saves a boolean field to DB immediately
   const toggleField = useCallback(async (field: keyof ModalFormState, value: boolean) => {
@@ -309,7 +313,7 @@ export default function AccountsPage() {
     // Guard: if the admin opened the "+ Create new company" input but didn't
     // type anything, that's almost certainly an oversight. Block save.
     if (showNewCompanyInput && newCompanyDraft.trim().length === 0) {
-      setToast({ type: 'error', message: 'Enter a company name or pick an existing one' })
+      toast.error('Enter a company name or pick an existing one')
       return
     }
 
@@ -329,7 +333,7 @@ export default function AccountsPage() {
         .single()
       if (upsertErr || !upserted) {
         setSaving(false)
-        setToast({ type: 'error', message: `Failed to create company: ${upsertErr?.message ?? 'unknown error'}` })
+        toast.error(`Failed to create company: ${upsertErr?.message ?? 'unknown error'}`)
         return
       }
       resolvedCompanyId = upserted.id as string
@@ -381,9 +385,9 @@ export default function AccountsPage() {
       )
       setShowNewCompanyInput(false)
       setNewCompanyDraft('')
-      setToast({ type: 'success', message: 'Account settings saved successfully' })
+      toast.success('Account settings saved successfully')
     }
-  }, [detailAccount, modalForm, saveField, supabase, newCompanyDraft, showNewCompanyInput])
+  }, [detailAccount, modalForm, saveField, supabase, newCompanyDraft, showNewCompanyInput, toast])
 
   // Add a new substring to the allowlist. Dedup, trim, lowercase, enforce cap.
   const addAllowlistEntry = useCallback(() => {
@@ -398,17 +402,14 @@ export default function AccountsPage() {
       return
     }
     if (modalForm.spam_allowlist.length >= SPAM_ALLOWLIST_MAX) {
-      setToast({
-        type: 'error',
-        message: `Allowlist limited to ${SPAM_ALLOWLIST_MAX} entries`,
-      })
+      toast.error(`Allowlist limited to ${SPAM_ALLOWLIST_MAX} entries`)
       return
     }
     setModalForm((prev) =>
       prev ? { ...prev, spam_allowlist: [...prev.spam_allowlist, next] } : prev
     )
     setAllowlistDraft('')
-  }, [allowlistDraft, modalForm])
+  }, [allowlistDraft, modalForm, toast])
 
   // Save OOO config via the dedicated API. Separate from the bulk
   // saveAccountSettings flow because OOO is auth-gated more strictly
@@ -434,7 +435,7 @@ export default function AccountsPage() {
         | { ooo?: { ooo_enabled: boolean; ooo_starts_at: string | null; ooo_ends_at: string | null; ooo_subject: string | null; ooo_body: string | null }; error?: string }
         | null
       if (!res.ok) {
-        setToast({ type: 'error', message: json?.error || `Failed to save OOO (${res.status})` })
+        toast.error(json?.error || `Failed to save OOO (${res.status})`)
         return
       }
       // Reflect server-canonical values into local state so banner / badge
@@ -468,11 +469,11 @@ export default function AccountsPage() {
             : null
         )
       }
-      setToast({ type: 'success', message: 'Out-of-office settings saved' })
+      toast.success('Out-of-office settings saved')
     } finally {
       setSaving(false)
     }
-  }, [detailAccount, modalForm])
+  }, [detailAccount, modalForm, toast])
 
   const removeAllowlistEntry = useCallback((entry: string) => {
     setModalForm((prev) =>
@@ -563,8 +564,9 @@ export default function AccountsPage() {
             : a
         )
       )
+      toast.error("Couldn't update — your change was reverted")
     }
-  }, [])
+  }, [supabase, toast])
 
   const togglePhase2 = useCallback(async (id: string, value: boolean) => {
     // Optimistic update
@@ -583,8 +585,9 @@ export default function AccountsPage() {
       setAccounts((prev) =>
         prev.map((a) => (a.id === id ? { ...a, phase2_enabled: !value } : a))
       )
+      toast.error("Couldn't update — your change was reverted")
     }
-  }, [])
+  }, [supabase, toast])
 
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) => {
@@ -604,45 +607,66 @@ export default function AccountsPage() {
   }
 
   const enableMonitorAll = async () => {
-    // Optimistic update
+    // Scope the bulk update to the accounts this page is showing — an
+    // unscoped UPDATE would flip every tenant's accounts in combined view.
+    const idsToEnable = accounts.filter((a) => !a.phase1_enabled).map((a) => a.id)
+    if (idsToEnable.length === 0) {
+      toast.info('Monitoring is already enabled for every listed account')
+      return
+    }
+
+    // Optimistic update (only the rows being flipped, so a failed update
+    // can be reverted exactly)
     setAccounts((prev) =>
-      prev.map((a) => ({ ...a, phase1_enabled: true }))
+      prev.map((a) => (idsToEnable.includes(a.id) ? { ...a, phase1_enabled: true } : a))
     )
 
     const { error: updateError } = await supabase
       .from('accounts')
       .update({ phase1_enabled: true })
-      .neq('phase1_enabled', true)
+      .in('id', idsToEnable)
 
     if (updateError) {
       console.error('Failed to enable monitor all:', updateError.message)
+      setAccounts((prev) =>
+        prev.map((a) => (idsToEnable.includes(a.id) ? { ...a, phase1_enabled: false } : a))
+      )
+      toast.error("Couldn't update — your change was reverted")
+      return
     }
+    toast.success(
+      `Monitoring enabled for ${idsToEnable.length} account${idsToEnable.length === 1 ? '' : 's'}`
+    )
   }
 
   const enableAIReplySelected = async () => {
+    // Only rows that actually change, so a failed update reverts exactly.
     const idsToUpdate = Array.from(selectedIds).filter((id) => {
       const account = accounts.find((a) => a.id === id)
-      return account?.phase1_enabled
+      return account?.phase1_enabled && !account.phase2_enabled
     })
+    if (idsToUpdate.length === 0) return
 
     // Optimistic update
     setAccounts((prev) =>
       prev.map((a) =>
-        selectedIds.has(a.id) && a.phase1_enabled
-          ? { ...a, phase2_enabled: true }
-          : a
+        idsToUpdate.includes(a.id) ? { ...a, phase2_enabled: true } : a
       )
     )
 
-    if (idsToUpdate.length > 0) {
-      const { error: updateError } = await supabase
-        .from('accounts')
-        .update({ phase2_enabled: true })
-        .in('id', idsToUpdate)
+    const { error: updateError } = await supabase
+      .from('accounts')
+      .update({ phase2_enabled: true })
+      .in('id', idsToUpdate)
 
-      if (updateError) {
-        console.error('Failed to enable AI reply for selected:', updateError.message)
-      }
+    if (updateError) {
+      console.error('Failed to enable AI reply for selected:', updateError.message)
+      setAccounts((prev) =>
+        prev.map((a) =>
+          idsToUpdate.includes(a.id) ? { ...a, phase2_enabled: false } : a
+        )
+      )
+      toast.error("Couldn't update — your change was reverted")
     }
   }
 
@@ -750,7 +774,7 @@ export default function AccountsPage() {
             title={accounts.length === 0 ? 'No accounts configured' : 'No accounts found'}
             description={
               accounts.length === 0
-                ? 'Connect a Gmail, Microsoft Teams, or WhatsApp Business account to start ingesting customer messages.'
+                ? `Connect a ${CONNECTABLE_CHANNEL_LABELS} account to start ingesting customer messages.`
                 : 'Try adjusting your search or filter criteria.'
             }
             action={
@@ -1560,26 +1584,6 @@ export default function AccountsPage() {
           </div>
         )}
       </Modal>
-
-      {/* Toast notification */}
-      {toast && (
-        <div className="fixed bottom-6 right-6 z-[60] animate-in slide-in-from-bottom-4 fade-in duration-300">
-          <div
-            className={`flex items-center gap-2 rounded-lg px-4 py-3 shadow-lg text-sm font-medium ${
-              toast.type === 'success'
-                ? 'bg-green-600 text-white'
-                : 'bg-red-600 text-white'
-            }`}
-          >
-            {toast.type === 'success' ? (
-              <Check className="h-4 w-4" />
-            ) : (
-              <AlertCircle className="h-4 w-4" />
-            )}
-            {toast.message}
-          </div>
-        </div>
-      )}
     </div>
   )
 }

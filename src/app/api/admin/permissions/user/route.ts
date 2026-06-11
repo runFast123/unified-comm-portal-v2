@@ -13,6 +13,7 @@ import { createServiceRoleClient } from '@/lib/supabase-server'
 import { requireCompanyAdmin } from '@/lib/tenant-guard'
 import { isKnownCatalogKey } from '@/lib/permissions/catalog'
 import { userHasPermission } from '@/lib/permissions/server'
+import { logAudit } from '@/lib/audit'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { UserRole } from '@/types/database'
 
@@ -20,7 +21,7 @@ async function resolveTargetUser(
   admin: SupabaseClient,
   ctx: { companyId: string | null; isSuperAdmin: boolean },
   userId: string
-): Promise<{ ok: boolean; role?: string }> {
+): Promise<{ ok: boolean; role?: string; companyId?: string | null }> {
   const { data } = await admin
     .from('users')
     .select('id, role, company_id')
@@ -28,8 +29,10 @@ async function resolveTargetUser(
     .maybeSingle()
   if (!data) return { ok: false }
   const row = data as { role: string; company_id: string | null }
-  if (ctx.isSuperAdmin) return { ok: true, role: row.role }
-  if (row.company_id && row.company_id === ctx.companyId) return { ok: true, role: row.role }
+  if (ctx.isSuperAdmin) return { ok: true, role: row.role, companyId: row.company_id }
+  if (row.company_id && row.company_id === ctx.companyId) {
+    return { ok: true, role: row.role, companyId: row.company_id }
+  }
   return { ok: false }
 }
 
@@ -105,6 +108,17 @@ export async function PUT(request: Request) {
   } else if (body.effect !== null && body.effect !== undefined) {
     return NextResponse.json({ error: "effect must be 'allow', 'deny', or null" }, { status: 400 })
   }
+
+  // company_id = the TARGET user's tenant so its admins can see the row even
+  // when the actor is a super_admin.
+  void logAudit({
+    user_id: ctx.userId,
+    company_id: target.companyId ?? ctx.companyId,
+    action: 'user_permissions_changed',
+    entity_type: 'user',
+    entity_id: userId,
+    details: { permission_key: permissionKey, effect: body.effect ?? null },
+  })
 
   return NextResponse.json({ success: true })
 }

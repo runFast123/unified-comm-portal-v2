@@ -23,6 +23,16 @@ type AuditAction =
   | 'company_tag_created'
   | 'company_tag_updated'
   | 'company_tag_deleted'
+  | 'role_permissions_changed'
+  | 'user_permissions_changed'
+  | 'model_permissions_changed'
+  | 'routing_rule_created'
+  | 'routing_rule_updated'
+  | 'routing_rule_deleted'
+  | 'livechat_widget_created'
+  | 'livechat_widget_updated'
+  | 'livechat_widget_deleted'
+  | 'data_exported'
 
 /**
  * Writes an entry to the audit_log table.

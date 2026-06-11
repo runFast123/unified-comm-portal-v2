@@ -7,16 +7,19 @@
 //   - At least one of `email` / `phone` is required (the data-subject identifier).
 //   - `erase` additionally requires `confirm: true` (it is irreversible).
 //
-// Tenant scope: company_admin only (super_admin spans all accounts). Everything
-// is scoped through `account_id` — the real tenant boundary — so a company admin
-// can only export/erase data inside their own company's accounts. The shared
+// Tenant scope: company admins are scoped to their own company's accounts via
+// `account_id` — the real tenant boundary. super_admin must SELECT a company
+// (tenant switcher cookie) first: data requests always run against exactly one
+// tenant, never platform-wide — an erase is irreversible. The shared
 // `contacts` directory (no account_id column → global) is read-only on export
 // and intentionally left untouched on erase to avoid cross-tenant impact.
 
 import { NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
 import { z } from 'zod'
 import { createServiceRoleClient } from '@/lib/supabase-server'
 import { requireCompanyAdmin, tenantAccountIds } from '@/lib/tenant-guard'
+import { userIdCan } from '@/lib/permissions/server'
 import { parseJsonBody } from '@/lib/validation'
 
 const GdprSchema = z.object({
@@ -47,6 +50,13 @@ export async function POST(request: Request) {
   if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: gate.status })
   const { ctx } = gate
 
+  // RBAC: the /admin/privacy page is gated by section:admin.privacy — enforce
+  // the same key here so an admin explicitly DENIED the section in the roles
+  // console can't just call the API directly (erase is irreversible).
+  if (!(await userIdCan(ctx.userId, 'section:admin.privacy'))) {
+    return NextResponse.json({ error: 'Forbidden: missing permission' }, { status: 403 })
+  }
+
   const parsed = await parseJsonBody(request, GdprSchema)
   if (!parsed.ok) return parsed.response
   const body = parsed.data
@@ -66,10 +76,23 @@ export async function POST(request: Request) {
 
   const admin = await createServiceRoleClient()
 
-  // Account scope. null = super_admin (all accounts); otherwise the caller's
-  // company accounts. An empty list (company with no accounts) matches nothing.
-  const allowed = await tenantAccountIds(ctx)
-  const scoped: string[] | null = allowed ? [...allowed] : null
+  // Account scope. Company admins → their company's accounts. super_admin has
+  // no company of their own: honor the tenant switcher and REQUIRE a selected
+  // company — an irreversible erase across every tenant from the combined
+  // view is never what anyone means.
+  let allowed = await tenantAccountIds(ctx)
+  if (allowed === null) {
+    const selected = (await cookies()).get('selected_company_id')?.value?.trim()
+    if (!selected) {
+      return NextResponse.json(
+        { error: 'Select a company first (top-left company switcher) — data requests run against one tenant at a time.' },
+        { status: 400 }
+      )
+    }
+    const { data: accs } = await admin.from('accounts').select('id').eq('company_id', selected)
+    allowed = new Set((accs ?? []).map((a) => a.id as string))
+  }
+  const scoped: string[] | null = [...allowed]
   if (scoped && scoped.length === 0) {
     return NextResponse.json(
       action === 'export'

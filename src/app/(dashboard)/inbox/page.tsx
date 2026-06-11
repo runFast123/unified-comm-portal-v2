@@ -21,7 +21,7 @@ import {
 } from '@/components/dashboard/inbox-facets-sidebar'
 import type { InboxFacets } from '@/app/api/inbox/facets/route'
 import { createClient } from '@/lib/supabase-client'
-import { CHANNEL_KEYS, isChannel } from '@/lib/channels/registry'
+import { CHANNELS, CHANNEL_KEYS, isChannel } from '@/lib/channels/registry'
 import { decodeHtmlEntities } from '@/lib/utils'
 import { useToast } from '@/components/ui/toast'
 import { useRealtimeMessages } from '@/hooks/useRealtimeMessages'
@@ -37,6 +37,15 @@ const defaultFilters: InboxFilters = {
   priority: 'all',
   search: '',
 }
+
+// Empty-state teaser derived from the channel registry (first few labels +
+// "and more") so the copy never goes stale as channels are added.
+const CHANNEL_TEASER = `${CHANNEL_KEYS.slice(0, 4).map((key) => CHANNELS[key].label).join(', ')} and more`
+
+// InboxItem plus the assignee's display name (joined via conversations →
+// users in this page's queries). Kept off the shared type so other InboxItem
+// producers don't have to supply it; InboxRow reads it as an optional field.
+type InboxItemWithAssignee = InboxItem & { assigned_to_name?: string | null }
 
 /** Map ai_replies.status to the UI's ai_status enum */
 function mapAiStatus(
@@ -130,7 +139,15 @@ export default function InboxPage() {
 
   const INBOX_PAGE_SIZE = 50
   const [items, setItems] = useState<InboxItem[]>([])
-  const [loading, setLoading] = useState(true)
+  // Split loading state: skeletons only while we have nothing to show for the
+  // CURRENT query (first load or a view/filter change). Refetches of the same
+  // query (realtime nudge, banner click, retry) keep the stale list rendered
+  // and only flip `refreshing`, so background refreshes don't blank the list.
+  const [initialLoading, setInitialLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  // Query identity of the last fetch that returned data — a match means the
+  // next fetch is a background refresh of what's already on screen.
+  const fetchedQueryKeyRef = useRef<string | null>(null)
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(false)
   const [totalCount, setTotalCount] = useState(0)
@@ -354,8 +371,19 @@ export default function InboxPage() {
     setSelectedItem(item)
   }, [])
 
+  // Mirrors loadingMore for non-reactive readers: a background refresh and
+  // Load More both full-replace the list, so they must never interleave.
+  const loadingMoreRef = useRef(false)
+
   const fetchInboxItems = useCallback(async () => {
-    setLoading(true)
+    const queryKey = [inboxView, filters.channel, dashboardFilter ?? '', activeCompanyId ?? '', companyAccountIds.join(',')].join('|')
+    const isBackgroundRefresh = fetchedQueryKeyRef.current === queryKey
+    // Skip a background refresh while Load More is in flight — its page-1
+    // replace would wipe the appended pages. The next realtime event (or any
+    // user action) re-triggers the refresh, so nothing is lost for long.
+    if (isBackgroundRefresh && loadingMoreRef.current) return
+    if (isBackgroundRefresh) setRefreshing(true)
+    else setInitialLoading(true)
     setError(null)
 
     try {
@@ -392,7 +420,7 @@ export default function InboxPage() {
           accounts!messages_account_id_fkey ( id, name, phase2_enabled ),
           message_classifications ( category, sentiment, urgency, confidence, classified_at ),
           ai_replies ( status, created_at ),
-          conversations!messages_conversation_id_fkey ( status, assigned_to, tags, snoozed_until, merged_into_id )
+          conversations!messages_conversation_id_fkey ( status, assigned_to, tags, snoozed_until, merged_into_id, assigned:users!conversations_assigned_to_fkey ( full_name ) )
         `)
         .eq('direction', 'inbound')
 
@@ -509,7 +537,7 @@ export default function InboxPage() {
       const data = messagesResult.data
       if (!data) {
         setItems([])
-        setLoading(false)
+        fetchedQueryKeyRef.current = queryKey
         return
       }
 
@@ -520,7 +548,7 @@ export default function InboxPage() {
         return !conv?.merged_into_id
       })
 
-      const mapped: InboxItem[] = visibleMessages.map((msg: any) => {
+      const mapped: InboxItemWithAssignee[] = visibleMessages.map((msg: any) => {
         // accounts comes back as an object (single FK relationship)
         const account = msg.accounts as any
         // message_classifications is a one-to-many — pick the latest by classified_at
@@ -559,12 +587,13 @@ export default function InboxPage() {
           conversation_id: msg.conversation_id,
           conversation_status: conversation?.status ?? null,
           assigned_to: conversation?.assigned_to ?? null,
+          assigned_to_name: conversation?.assigned?.full_name ?? null,
           tags: conversation?.tags ?? null,
           timestamp: msg.received_at || msg.timestamp,
           is_spam: msg.is_spam ?? false,
           spam_reason: msg.spam_reason ?? null,
           snoozed_until: conversation?.snoozed_until ?? null,
-        } satisfies InboxItem
+        } satisfies InboxItemWithAssignee
       })
 
       // Collapse to ONE row per conversation (industry standard, like Gmail/
@@ -602,11 +631,15 @@ export default function InboxPage() {
       setItems(deduped)
       setHasMore(deduped.length >= INBOX_PAGE_SIZE)
       setTotalCount(deduped.length)
+      // Only a fetch that returned data marks the query as "on screen" — a
+      // failed first load keeps skeletons (not a wrong empty state) on retry.
+      fetchedQueryKeyRef.current = queryKey
     } catch (err: any) {
       console.error('Failed to fetch inbox items:', err)
       setError(err.message ?? 'Failed to load inbox messages')
     } finally {
-      setLoading(false)
+      setInitialLoading(false)
+      setRefreshing(false)
     }
   }, [isAdmin, companyAccountIds, activeCompanyId, inboxView, dashboardFilter, filters.channel, INBOX_PAGE_SIZE])
 
@@ -616,8 +649,11 @@ export default function InboxPage() {
 
   // Load more messages (append to existing list)
   const loadMore = useCallback(async () => {
-    if (loadingMore || !hasMore) return
+    // `refreshing` guard: a concurrent background refresh would replace the
+    // list with page 1 and this append would then merge from a stale base.
+    if (loadingMore || !hasMore || refreshing) return
     setLoadingMore(true)
+    loadingMoreRef.current = true
     try {
       const supabase = createClient()
       const lastItem = items[items.length - 1]
@@ -632,7 +668,7 @@ export default function InboxPage() {
           accounts!messages_account_id_fkey ( id, name, phase2_enabled ),
           message_classifications ( category, sentiment, urgency, confidence, classified_at ),
           ai_replies ( status, created_at ),
-          conversations!messages_conversation_id_fkey ( status, assigned_to, tags, snoozed_until, merged_into_id )
+          conversations!messages_conversation_id_fkey ( status, assigned_to, tags, snoozed_until, merged_into_id, assigned:users!conversations_assigned_to_fkey ( full_name ) )
         `)
         .eq('direction', 'inbound')
         .lt('received_at', lastItem.timestamp)
@@ -656,7 +692,7 @@ export default function InboxPage() {
           const conv = msg.conversations as { merged_into_id?: string | null } | null
           return !conv?.merged_into_id
         })
-        const mapped: InboxItem[] = visibleMore.map((msg: any) => {
+        const mapped: InboxItemWithAssignee[] = visibleMore.map((msg: any) => {
           const account = msg.accounts as any
           const classification = Array.isArray(msg.message_classifications)
             ? [...msg.message_classifications].sort((a: any, b: any) => new Date(b.classified_at || 0).getTime() - new Date(a.classified_at || 0).getTime())[0] ?? null
@@ -686,6 +722,7 @@ export default function InboxPage() {
             ai_confidence: classification?.confidence != null ? Math.round(Number(classification.confidence) * 100) : null,
             conversation_status: (conv?.status || 'active') as any,
             assigned_to: conv?.assigned_to || null,
+            assigned_to_name: conv?.assigned?.full_name ?? null,
             tags: conv?.tags || null,
             is_spam: msg.is_spam ?? false,
             spam_reason: msg.spam_reason ?? null,
@@ -727,8 +764,9 @@ export default function InboxPage() {
       console.error('Failed to load more:', err)
     } finally {
       setLoadingMore(false)
+      loadingMoreRef.current = false
     }
-  }, [items, loadingMore, hasMore, isAdmin, companyAccountIds, activeCompanyId, inboxView, filters.channel, INBOX_PAGE_SIZE])
+  }, [items, loadingMore, hasMore, refreshing, isAdmin, companyAccountIds, activeCompanyId, inboxView, filters.channel, INBOX_PAGE_SIZE])
 
   // Real-time: auto-refresh inbox when new messages arrive (debounced 3s)
   const debounceRef = useRef<NodeJS.Timeout | null>(null)
@@ -1329,6 +1367,17 @@ export default function InboxPage() {
             <span className="font-semibold text-gray-900">{items.length}</span>{' '}
             {items.length === 1 ? 'conversation' : 'conversations'}
           </p>
+          {/* Background refresh — the list stays put; just hint that fresher
+              data is on the way instead of flashing skeletons. */}
+          {refreshing && (
+            <span
+              className="inline-flex items-center gap-1 text-xs text-gray-400"
+              title="Refreshing in the background"
+            >
+              <Loader2 size={12} className="animate-spin" />
+              <span className="hidden sm:inline">Refreshing…</span>
+            </span>
+          )}
           {/* View mode toggle — hidden on mobile (split view not usable) */}
           <div className="hidden sm:flex items-center rounded-lg border border-gray-200 bg-gray-50 p-1">
             <button
@@ -1665,8 +1714,9 @@ export default function InboxPage() {
         </div>
       )}
 
-      {/* Loading state — skeleton rows matching the inbox list shape */}
-      {loading && (
+      {/* Loading state — skeleton rows, FIRST load of a query only. Background
+          refreshes keep the existing list rendered (see `refreshing`). */}
+      {initialLoading && (
         <div className="overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04),0_1px_3px_rgba(16,24,40,0.06)]">
           {Array.from({ length: 8 }).map((_, i) => (
             <InboxRowSkeleton key={i} />
@@ -1675,7 +1725,7 @@ export default function InboxPage() {
       )}
 
       {/* Error state */}
-      {!loading && error && (
+      {!initialLoading && error && (
         <div className="flex flex-col items-center justify-center rounded-lg border border-red-200 bg-red-50 py-12">
           <p className="text-sm font-medium text-red-800">Failed to load messages</p>
           <p className="mt-1 text-xs text-red-600">{error}</p>
@@ -1691,7 +1741,7 @@ export default function InboxPage() {
       )}
 
       {/* Empty state */}
-      {!loading && !error && items.length === 0 && (
+      {!initialLoading && !error && items.length === 0 && (
         <div className="overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04),0_1px_3px_rgba(16,24,40,0.06)]">
           {inboxView === 'spam' ? (
             <EmptyState
@@ -1709,7 +1759,7 @@ export default function InboxPage() {
             <EmptyState
               icon={Inbox}
               title="All caught up!"
-              description="Connect a Gmail or Teams account to start receiving messages, or click Sync to pull new mail from your existing channels."
+              description={`Connect ${CHANNEL_TEASER} to start receiving messages, or click Sync to pull new mail from your existing channels.`}
               action={
                 <div className="flex flex-wrap items-center justify-center gap-2">
                   <Button variant="primary" onClick={handleSync} loading={syncing}>
@@ -1730,7 +1780,7 @@ export default function InboxPage() {
       )}
 
       {/* Filtered empty state */}
-      {!loading && !error && items.length > 0 && filteredItems.length === 0 && inboxView === 'inbox' && (
+      {!initialLoading && !error && items.length > 0 && filteredItems.length === 0 && inboxView === 'inbox' && (
         <div className="overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04),0_1px_3px_rgba(16,24,40,0.06)]">
           <EmptyState
             icon={Inbox}
@@ -1741,7 +1791,7 @@ export default function InboxPage() {
       )}
 
       {/* Spam / Newsletter list */}
-      {!loading && !error && inboxView !== 'inbox' && items.length > 0 && (
+      {!initialLoading && !error && inboxView !== 'inbox' && items.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <p className="text-sm text-gray-600">
@@ -1811,7 +1861,7 @@ export default function InboxPage() {
       )}
 
       {/* Inbox list */}
-      {!loading && !error && inboxView === 'inbox' && filteredItems.length > 0 && viewMode === 'list' && (
+      {!initialLoading && !error && inboxView === 'inbox' && filteredItems.length > 0 && viewMode === 'list' && (
         <InboxList
           items={filteredItems}
           selectedIds={selectedIds}
@@ -1821,7 +1871,7 @@ export default function InboxPage() {
 
       {/* Split view — on mobile (<md) collapses to single-pane: list shown
           until a row is tapped, then preview swaps in with a Back button */}
-      {!loading && !error && inboxView === 'inbox' && filteredItems.length > 0 && viewMode === 'split' && (
+      {!initialLoading && !error && inboxView === 'inbox' && filteredItems.length > 0 && viewMode === 'split' && (
         <div className="flex flex-col md:flex-row rounded-lg border border-gray-200 bg-white overflow-hidden" style={{ height: 'calc(100vh - 320px)' }}>
           {/* Left: message list — hidden on mobile when an item is selected */}
           <div className={`md:w-[45%] md:shrink-0 overflow-y-auto md:border-r md:border-gray-200 ${selectedItem ? 'hidden md:block' : 'block'} flex-1 md:flex-initial`}>
@@ -1870,12 +1920,13 @@ export default function InboxPage() {
       )}
 
       {/* Kanban board view */}
-      {!loading && !error && inboxView === 'inbox' && filteredItems.length > 0 && viewMode === 'kanban' && (
+      {!initialLoading && !error && inboxView === 'inbox' && filteredItems.length > 0 && viewMode === 'kanban' && (
         <InboxKanban items={filteredItems} />
       )}
 
-      {/* Load More button */}
-      {!loading && !error && hasMore && (
+      {/* Load More button — hidden during background refreshes too: the
+          refresh's page-1 replace and an append must never interleave. */}
+      {!initialLoading && !refreshing && !error && hasMore && (
         <div className="flex justify-center py-4">
           <Button
             variant="secondary"

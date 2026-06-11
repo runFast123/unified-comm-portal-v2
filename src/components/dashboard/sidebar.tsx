@@ -34,6 +34,7 @@ import {
   Webhook,
   Clock,
   Zap,
+  Fingerprint,
   type LucideIcon,
 } from 'lucide-react'
 import { signOut } from '@/lib/auth-actions'
@@ -137,6 +138,7 @@ const ADMIN_ITEMS: NavItem[] = [
   { label: 'Webhooks', href: '/admin/webhooks', icon: Webhook },
   { label: 'Health', href: '/admin/health', icon: Activity },
   { label: 'Logs', href: '/admin/logs', icon: FileText },
+  { label: 'Privacy & Data', href: '/admin/privacy', icon: Fingerprint },
 ]
 
 export function Sidebar({

@@ -15,6 +15,7 @@ import { cookies } from 'next/headers'
 import { createServiceRoleClient } from '@/lib/supabase-server'
 import { requireCompanyAdmin } from '@/lib/tenant-guard'
 import { userHasPermission } from '@/lib/permissions/server'
+import { logAudit } from '@/lib/audit'
 import type { UserRole } from '@/types/database'
 
 const MANAGEABLE_ROLES = new Set<string>([
@@ -155,6 +156,21 @@ export async function PUT(request: Request) {
   } else {
     return NextResponse.json({ error: "scope must be 'role' or 'user'" }, { status: 400 })
   }
+
+  // company_id explicit: super_admin may target another company via the switcher.
+  void logAudit({
+    user_id: ctx.userId,
+    company_id: companyId,
+    action: 'model_permissions_changed',
+    entity_type: 'ai_model_assignment',
+    entity_id: body.scope === 'user' ? body.user_id : undefined,
+    details: {
+      scope: body.scope,
+      role: body.role ?? null,
+      user_id: body.user_id ?? null,
+      ai_provider_id: providerId,
+    },
+  })
 
   return NextResponse.json({ success: true })
 }

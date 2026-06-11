@@ -15,9 +15,10 @@
  * (GET) or the company switcher's `selected_company_id` cookie / an explicit
  * `company_id` in the POST body.
  *
- * SECURITY: `api_key` is stored plaintext (matching the legacy ai_config
- * table). The raw key is NEVER returned to a client — list responses expose
- * only `has_api_key` + `api_key_masked` ('••••' + last 4).
+ * SECURITY: `api_key` is encrypted at rest (src/lib/encryption envelope
+ * format "v1:<keyId>:…"; pre-encryption plaintext rows are tolerated on
+ * read). The raw key is NEVER returned to a client — list responses expose
+ * only `has_api_key` + `api_key_masked` ('••••' + last 4 of the plaintext).
  */
 
 import { NextResponse } from 'next/server'
@@ -27,6 +28,7 @@ import { createServiceRoleClient } from '@/lib/supabase-server'
 import { requireUser, requireCompanyAdmin } from '@/lib/tenant-guard'
 import { getPreset } from '@/lib/ai-providers'
 import { validateProviderBaseUrl } from '@/lib/ssrf'
+import { encrypt, decrypt, __parseCiphertextKeyId } from '@/lib/encryption'
 
 const MAX_NAME_LEN = 80
 const MAX_URL_LEN = 2048
@@ -64,12 +66,23 @@ type RawRow = {
 /** Strip api_key from a row and replace it with masked, client-safe fields. */
 function maskRow(row: RawRow): Record<string, unknown> {
   const { api_key, ...rest } = row
-  const key = typeof api_key === 'string' ? api_key : ''
+  const stored = typeof api_key === 'string' ? api_key : ''
+  // Stored values are encrypted at rest (v1:…); legacy rows may still hold
+  // plaintext. Mask the PLAINTEXT tail either way — an undecryptable
+  // ciphertext (key rotated out of the ring) masks with no tail.
+  let key = stored
+  if (stored && __parseCiphertextKeyId(stored) !== null) {
+    try {
+      key = decrypt(stored)
+    } catch {
+      key = ''
+    }
+  }
   const last4 = key.length >= 4 ? key.slice(-4) : key
   return {
     ...rest,
-    has_api_key: key.length > 0,
-    api_key_masked: key.length > 0 ? `••••${last4}` : null,
+    has_api_key: stored.length > 0,
+    api_key_masked: stored.length > 0 ? (key ? `••••${last4}` : '••••') : null,
   }
 }
 
@@ -221,6 +234,19 @@ export async function POST(request: Request) {
   const isFirst = (existingCount ?? 0) === 0
   const activate = body.activate === true || isFirst
 
+  // Encrypt BEFORE the deactivation write below: encrypt() throws when the
+  // encryption key env is unset, and throwing after deactivating the other
+  // rows would leave the company with NO active provider.
+  let encryptedKey: string
+  try {
+    encryptedKey = encrypt(apiKey)
+  } catch {
+    return NextResponse.json(
+      { error: 'Server encryption key is not configured — cannot store credentials. Set CHANNEL_CONFIG_ENCRYPTION_KEY.' },
+      { status: 500 }
+    )
+  }
+
   // Honor the partial unique index (one active row per company): deactivate the
   // company's other rows BEFORE inserting an active one.
   if (activate) {
@@ -239,7 +265,7 @@ export async function POST(request: Request) {
       name,
       provider_key: providerKey,
       base_url: baseUrl,
-      api_key: apiKey,
+      api_key: encryptedKey,
       model,
       max_tokens: maxTokens,
       temperature,

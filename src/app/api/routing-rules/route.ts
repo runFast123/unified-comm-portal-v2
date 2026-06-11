@@ -11,6 +11,7 @@ import {
   createServiceRoleClient,
 } from '@/lib/supabase-server'
 import { isCompanyAdmin, isSuperAdmin } from '@/lib/auth'
+import { logAudit } from '@/lib/audit'
 
 /**
  * Admin gate that recognises every privileged role in the multi-tenancy
@@ -104,6 +105,29 @@ async function allowedAccountIds(
   return (data || []).map((a) => a.id as string)
 }
 
+/**
+ * Tenant for an audit row: the actor's own company, else (super_admin —
+ * company_id NULL on their profile) the company that owns the rule's
+ * account, so the AFFECTED tenant's admins see the change in /admin/logs
+ * (see the pitfall documented in src/lib/audit.ts). Global rules
+ * (account_id null) by a super_admin stay platform-scoped — correct, since
+ * they belong to no tenant.
+ */
+async function resolveAuditCompanyId(
+  admin: ReturnType<typeof createServiceRoleClient> extends Promise<infer C> ? C : never,
+  gate: { companyId: string | null },
+  accountId: string | null | undefined
+): Promise<string | null> {
+  if (gate.companyId) return gate.companyId
+  if (!accountId) return null
+  const { data } = await admin
+    .from('accounts')
+    .select('company_id')
+    .eq('id', accountId)
+    .maybeSingle()
+  return (data?.company_id as string | null) ?? null
+}
+
 export async function GET() {
   const gate = await requireAdmin()
   if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: gate.status })
@@ -193,6 +217,20 @@ export async function POST(request: Request) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
+
+  void resolveAuditCompanyId(admin, gate, (data.account_id as string | null) ?? null)
+    .then((cid) =>
+      logAudit({
+        user_id: gate.userId,
+        company_id: cid,
+        action: 'routing_rule_created',
+        entity_type: 'routing_rule',
+        entity_id: data.id as string,
+        details: { name: data.name, account_id: data.account_id ?? null },
+      })
+    )
+    .catch(() => undefined)
+
   return NextResponse.json({ rule: data }, { status: 201 })
 }
 
@@ -284,6 +322,20 @@ export async function PATCH(request: Request) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
+
+  void resolveAuditCompanyId(admin, gate, (data.account_id as string | null) ?? null)
+    .then((cid) =>
+      logAudit({
+        user_id: gate.userId,
+        company_id: cid,
+        action: 'routing_rule_updated',
+        entity_type: 'routing_rule',
+        entity_id: id,
+        details: { fields: Object.keys(patch), account_id: data.account_id ?? null },
+      })
+    )
+    .catch(() => undefined)
+
   return NextResponse.json({ rule: data })
 }
 
@@ -299,9 +351,28 @@ export async function DELETE(request: Request) {
   const denied = await authorizeRuleAccess(admin, id, gate)
   if (denied) return denied
 
-  const { error } = await admin.from('routing_rules').delete().eq('id', id)
+  const { data: deleted, error } = await admin
+    .from('routing_rules')
+    .delete()
+    .eq('id', id)
+    .select('name, account_id')
+    .maybeSingle()
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
+
+  void resolveAuditCompanyId(admin, gate, (deleted?.account_id as string | null) ?? null)
+    .then((cid) =>
+      logAudit({
+        user_id: gate.userId,
+        company_id: cid,
+        action: 'routing_rule_deleted',
+        entity_type: 'routing_rule',
+        entity_id: id,
+        details: { name: deleted?.name ?? null, account_id: deleted?.account_id ?? null },
+      })
+    )
+    .catch(() => undefined)
+
   return NextResponse.json({ ok: true })
 }

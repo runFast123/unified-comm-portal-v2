@@ -17,6 +17,7 @@ import { NextResponse } from 'next/server'
 import { requireCompanyAdmin } from '@/lib/tenant-guard'
 import { createServiceRoleClient } from '@/lib/supabase-server'
 import { validateProviderBaseUrl } from '@/lib/ssrf'
+import { decrypt, __parseCiphertextKeyId } from '@/lib/encryption'
 
 interface Body {
   base_url?: string
@@ -50,7 +51,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
     baseUrl = baseUrl || ((row.base_url as string | null) ?? '')
-    apiKey = apiKey || ((row.api_key as string | null) ?? '')
+    // Stored keys are encrypted at rest (v1:…); legacy rows may still be
+    // plaintext. An undecryptable ciphertext falls through to the 400 below.
+    let stored = (row.api_key as string | null) ?? ''
+    if (stored && __parseCiphertextKeyId(stored) !== null) {
+      try {
+        stored = decrypt(stored)
+      } catch {
+        stored = ''
+      }
+    }
+    apiKey = apiKey || stored
   }
 
   if (!baseUrl || !apiKey) {

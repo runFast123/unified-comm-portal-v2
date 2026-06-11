@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Archive, AlertTriangle, CheckCheck, Sparkles, Clock } from 'lucide-react'
+import { Archive, AlertTriangle, CheckCheck, Sparkles, Clock, User } from 'lucide-react'
 import { useToast } from '@/components/ui/toast'
 import { isUnread } from '@/hooks/useReadStatus'
 import { ChannelIcon } from '@/components/ui/channel-icon'
@@ -20,7 +20,9 @@ import type { InboxItem, ConversationStatus } from '@/types/database'
 const READ_ONLY_ROLES = new Set(['viewer'])
 
 interface InboxRowProps {
-  item: InboxItem
+  // `assigned_to_name` is joined by the inbox page query (conversations →
+  // users); optional so other InboxItem producers don't have to supply it.
+  item: InboxItem & { assigned_to_name?: string | null }
   selected: boolean
   onSelect: (id: string, checked: boolean) => void
   onItemClick?: (item: InboxItem) => void
@@ -297,6 +299,7 @@ export function InboxRow({ item, selected, onSelect, onItemClick, isActive }: In
   const senderName = cleanSenderName(rawSender)
   const senderEmail = extractEmail(rawSender)
   const accountName = item.account_name || ''
+  const assigneeName = item.assigned_to_name || null
 
   // Defer client-only state derivations until after mount so the SSR
   // markup matches the initial client render and React doesn't throw
@@ -447,6 +450,25 @@ export function InboxRow({ item, selected, onSelect, onItemClick, isActive }: In
             ))}
           </div>
         )}
+
+        {/* Assignee — initials avatar with the assignee's name on hover;
+            empty when unassigned. Fixed-width wrapper keeps the badge
+            columns aligned (same idiom as the status/sentiment dots). */}
+        <div className="hidden md:flex w-5 justify-center">
+          {item.assigned_to && (
+            <span
+              role="img"
+              title={`Assigned to ${assigneeName ?? 'a teammate'}`}
+              aria-label={`Assigned to ${assigneeName ?? 'a teammate'}`}
+              className={cn(
+                'flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white',
+                assigneeName ? getAvatarColor(assigneeName) : 'bg-gray-400'
+              )}
+            >
+              {assigneeName ? getInitials(assigneeName) : <User className="h-3 w-3" />}
+            </span>
+          )}
+        </div>
 
         {/* Status dot — compact colored dot, never clips. Hover/aria
             reveal the full status label. */}

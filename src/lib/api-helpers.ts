@@ -13,6 +13,7 @@ import {
 import { withCircuitBreaker, CircuitBreakerOpenError as _CircuitBreakerOpenError } from '@/lib/ai-circuit-breaker'
 import type { Account } from '@/types/database'
 import { decodeHtmlEntities } from '@/lib/utils'
+import { encrypt, decrypt, __parseCiphertextKeyId } from '@/lib/encryption'
 
 // Re-export so callers can `import { AIBudgetExceededError } from '@/lib/api-helpers'`
 export { AIBudgetExceededError } from '@/lib/ai-usage'
@@ -462,6 +463,49 @@ async function resolveAssignedProviderId(
   return null
 }
 
+/**
+ * api_key columns historically stored PLAINTEXT; new writes are envelope-
+ * encrypted ("v1:<keyId>:…", src/lib/encryption.ts). Tolerate both shapes:
+ * ciphertext is decrypted; legacy plaintext is returned as-is and lazily
+ * re-encrypted back onto its row (fire-and-forget) so the tables converge to
+ * encrypted-at-rest without a migration. Returns null when a ciphertext no
+ * longer decrypts (key rotated out of the ring) — callers fall through to
+ * the next config tier.
+ */
+function resolveStoredApiKey(
+  supabase: Awaited<ReturnType<typeof createServiceRoleClient>>,
+  table: 'ai_providers' | 'ai_config',
+  rowId: string | null | undefined,
+  stored: string,
+): string | null {
+  if (__parseCiphertextKeyId(stored) !== null) {
+    try {
+      return decrypt(stored)
+    } catch {
+      return null
+    }
+  }
+  if (rowId) {
+    try {
+      // Compare-and-swap on the exact plaintext we read: without it, this
+      // fire-and-forget write could land AFTER an admin rotates the key and
+      // silently revert the rotation to the old (re-encrypted) value.
+      void supabase
+        .from(table)
+        .update({ api_key: encrypt(stored) })
+        .eq('id', rowId)
+        .eq('api_key', stored)
+        .then(
+          () => undefined,
+          () => undefined,
+        )
+    } catch {
+      // Encryption key unconfigured — keep serving the plaintext value.
+    }
+  }
+  return stored
+}
+
 async function getAIConfig(accountId?: string, userId?: string): Promise<AIConfig> {
   try {
     const supabase = await createServiceRoleClient()
@@ -493,12 +537,15 @@ async function getAIConfig(accountId?: string, userId?: string): Promise<AIConfi
           .eq('company_id', companyId)
           .maybeSingle()
         if (assigned?.api_key) {
-          return {
-            base_url: assigned.base_url,
-            api_key: assigned.api_key,
-            model: assigned.model,
-            max_tokens: assigned.max_tokens,
-            temperature: Number(assigned.temperature),
+          const apiKey = resolveStoredApiKey(supabase, 'ai_providers', assignedId, assigned.api_key)
+          if (apiKey) {
+            return {
+              base_url: assigned.base_url,
+              api_key: apiKey,
+              model: assigned.model,
+              max_tokens: assigned.max_tokens,
+              temperature: Number(assigned.temperature),
+            }
           }
         }
       }
@@ -511,7 +558,7 @@ async function getAIConfig(accountId?: string, userId?: string): Promise<AIConfi
       // tenants keep working until they add a provider here.
       const { data: provider } = await supabase
         .from('ai_providers')
-        .select('base_url, api_key, model, max_tokens, temperature')
+        .select('id, base_url, api_key, model, max_tokens, temperature')
         .eq('company_id', companyId)
         .eq('is_active', true)
         .order('updated_at', { ascending: false })
@@ -519,18 +566,21 @@ async function getAIConfig(accountId?: string, userId?: string): Promise<AIConfi
         .maybeSingle()
 
       if (provider?.api_key) {
-        return {
-          base_url: provider.base_url,
-          api_key: provider.api_key,
-          model: provider.model,
-          max_tokens: provider.max_tokens,
-          temperature: Number(provider.temperature),
+        const apiKey = resolveStoredApiKey(supabase, 'ai_providers', provider.id, provider.api_key)
+        if (apiKey) {
+          return {
+            base_url: provider.base_url,
+            api_key: apiKey,
+            model: provider.model,
+            max_tokens: provider.max_tokens,
+            temperature: Number(provider.temperature),
+          }
         }
       }
 
       const { data: scoped } = await supabase
         .from('ai_config')
-        .select('base_url, api_key, model, max_tokens, temperature')
+        .select('id, base_url, api_key, model, max_tokens, temperature')
         .eq('company_id', companyId)
         .eq('is_active', true)
         .order('created_at', { ascending: false })
@@ -538,12 +588,15 @@ async function getAIConfig(accountId?: string, userId?: string): Promise<AIConfi
         .maybeSingle()
 
       if (scoped?.api_key) {
-        return {
-          base_url: scoped.base_url,
-          api_key: scoped.api_key,
-          model: scoped.model,
-          max_tokens: scoped.max_tokens,
-          temperature: Number(scoped.temperature),
+        const apiKey = resolveStoredApiKey(supabase, 'ai_config', scoped.id, scoped.api_key)
+        if (apiKey) {
+          return {
+            base_url: scoped.base_url,
+            api_key: apiKey,
+            model: scoped.model,
+            max_tokens: scoped.max_tokens,
+            temperature: Number(scoped.temperature),
+          }
         }
       }
     }
@@ -553,7 +606,7 @@ async function getAIConfig(accountId?: string, userId?: string): Promise<AIConfi
     // unique index allows exactly ONE active global row.
     const { data: legacy } = await supabase
       .from('ai_config')
-      .select('base_url, api_key, model, max_tokens, temperature')
+      .select('id, base_url, api_key, model, max_tokens, temperature')
       .is('company_id', null)
       .eq('is_active', true)
       .order('created_at', { ascending: false })
@@ -561,12 +614,15 @@ async function getAIConfig(accountId?: string, userId?: string): Promise<AIConfi
       .maybeSingle()
 
     if (legacy?.api_key) {
-      return {
-        base_url: legacy.base_url,
-        api_key: legacy.api_key,
-        model: legacy.model,
-        max_tokens: legacy.max_tokens,
-        temperature: Number(legacy.temperature),
+      const apiKey = resolveStoredApiKey(supabase, 'ai_config', legacy.id, legacy.api_key)
+      if (apiKey) {
+        return {
+          base_url: legacy.base_url,
+          api_key: apiKey,
+          model: legacy.model,
+          max_tokens: legacy.max_tokens,
+          temperature: Number(legacy.temperature),
+        }
       }
     }
   } catch {

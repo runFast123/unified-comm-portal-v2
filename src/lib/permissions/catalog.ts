@@ -39,6 +39,7 @@ export const SECTION_PERMISSIONS = {
   'section:admin.webhooks': 'Admin · Webhooks',
   'section:admin.health': 'Admin · Health',
   'section:admin.logs': 'Admin · Logs',
+  'section:admin.privacy': 'Admin · Privacy & Data Requests',
   'section:admin.roles': 'Admin · Roles & Permissions',
   'section:admin.livechat': 'Admin · Live Chat',
 } as const
@@ -112,6 +113,7 @@ export const ROUTE_TO_SECTION: Record<string, SectionPermission> = {
   '/admin/webhooks': 'section:admin.webhooks',
   '/admin/health': 'section:admin.health',
   '/admin/logs': 'section:admin.logs',
+  '/admin/privacy': 'section:admin.privacy',
   '/admin/roles': 'section:admin.roles',
   '/admin/livechat': 'section:admin.livechat',
 }

@@ -28,7 +28,7 @@ const STEPS: StepMeta[] = [
     id: 'add_account',
     title: 'Add your first account',
     description: 'Connect a company inbox to start receiving messages.',
-    href: '/admin/accounts',
+    href: '/admin/channels',
     cta: 'Add account',
   },
   {
@@ -42,7 +42,7 @@ const STEPS: StepMeta[] = [
     id: 'invite_teammate',
     title: 'Invite a teammate',
     description: 'Bring in agents so they can triage and reply.',
-    href: '/admin/accounts',
+    href: '/admin/users',
     cta: 'Invite',
   },
   {

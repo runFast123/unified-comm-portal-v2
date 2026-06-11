@@ -18,6 +18,7 @@ import { createServiceRoleClient } from '@/lib/supabase-server'
 import { requireCompanyAdmin } from '@/lib/tenant-guard'
 import { isKnownCatalogKey } from '@/lib/permissions/catalog'
 import { userHasPermission } from '@/lib/permissions/server'
+import { logAudit } from '@/lib/audit'
 import type { UserRole } from '@/types/database'
 
 // Roles an admin may edit here. super_admin is all-access and never editable.
@@ -151,6 +152,21 @@ export async function PUT(request: Request) {
   } else if (body.allowed !== null && body.allowed !== undefined) {
     return NextResponse.json({ error: 'allowed must be boolean or null' }, { status: 400 })
   }
+
+  // company_id explicit: the actor may be super_admin editing another tenant
+  // (platform scope → null, visible to super_admins only).
+  void logAudit({
+    user_id: ctx.userId,
+    company_id: companyId,
+    action: 'role_permissions_changed',
+    entity_type: 'role_permissions',
+    details: {
+      role,
+      permission_key: permissionKey,
+      allowed: body.allowed ?? null,
+      scope: isPlatform ? 'platform' : 'company',
+    },
+  })
 
   return NextResponse.json({ success: true })
 }

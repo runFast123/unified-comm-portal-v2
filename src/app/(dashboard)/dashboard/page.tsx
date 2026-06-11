@@ -20,12 +20,16 @@ import {
   ShieldCheck,
   AlertTriangle,
   Globe,
+  Plug,
 } from 'lucide-react'
 import { CHANNEL_KEYS } from '@/lib/channels/registry'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { EmptyState } from '@/components/ui/empty-state'
 import { ChannelIcon } from '@/components/ui/channel-icon'
 import { KPICard } from '@/components/dashboard/kpi-card'
+import { OnboardingChecklist } from '@/components/dashboard/onboarding-checklist'
 import { ChannelFilter, type ChannelFilterValue } from '@/components/dashboard/channel-filter'
 import { AccountsTable } from '@/components/dashboard/accounts-table'
 import { ActivityFeed } from '@/components/dashboard/activity-feed'
@@ -173,6 +177,10 @@ export default function DashboardPage() {
   const [channelStats, setChannelStats] = useState<ChannelStats[]>(defaultChannelStats)
   const [categories, setCategories] = useState<CategoryBreakdown[]>([])
   const [accounts, setAccounts] = useState<AccountOverview[]>([])
+  // Distinguishes "fetch failed" from "genuinely zero accounts" — the
+  // first-run state must never tell an established tenant to re-do setup
+  // because of a transient query error.
+  const [loadFailed, setLoadFailed] = useState(false)
   const [selectedAccountIds, setSelectedAccountIds] = useState<Set<string>>(new Set())
   const [accountFilterOpen, setAccountFilterOpen] = useState(false)
   const [slaStats, setSlaStats] = useState<{ avgResponseMins: number; compliancePct: number; breachedCount: number }>({
@@ -824,8 +832,12 @@ export default function DashboardPage() {
         setChannelStats(processedChannelStats)
         setCategories(processedCategories)
         setAccounts(processedAccounts)
+        // Supabase returns query failures as { data: null, error } without
+        // throwing — an errored accounts query must not look like "0 accounts".
+        setLoadFailed(Boolean(accountsResult.error))
       } catch (err) {
         console.error('Failed to fetch dashboard data:', err)
+        setLoadFailed(true)
       } finally {
         setLoading(false)
       }
@@ -904,6 +916,44 @@ export default function DashboardPage() {
     )
   }
 
+  // First-run state: no connected accounts. The KPI wall below would render
+  // fabricated defaults (SLA compliance 100%, sentiment 100% neutral, "across
+  // all 0 accounts"), so show the onboarding path instead until the first
+  // account exists. Gated on a SUCCESSFUL fetch — on failure, fall through to
+  // the regular dashboard (zeroed, but not affirmatively claiming emptiness).
+  if (accounts.length === 0 && !loadFailed) {
+    return (
+      <div className="space-y-6 animate-fade-in">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+          <p className="mt-1 text-sm text-gray-500">No accounts connected yet</p>
+        </div>
+
+        {/* Self-hides for non-admins, when dismissed, or when all steps complete */}
+        <OnboardingChecklist />
+
+        <Card>
+          <EmptyState
+            icon={Plug}
+            title="Connect your first channel to start seeing live metrics"
+            description="Message volume, pending replies, SLA and sentiment will show up here as soon as your first account is connected."
+            action={
+              isAdmin ? (
+                <Link href="/admin/channels">
+                  <Button variant="primary">
+                    <Plug className="h-4 w-4" />
+                    Connect a channel
+                  </Button>
+                </Link>
+              ) : undefined
+            }
+            hint={isAdmin ? undefined : 'Ask your administrator to connect a channel.'}
+          />
+        </Card>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Combined-view banner: shown only when super_admin has no tenant
@@ -954,6 +1004,10 @@ export default function DashboardPage() {
           />
         </div>
       </div>
+
+      {/* Onboarding checklist — self-hides for non-admins, when dismissed,
+          or once all steps are complete */}
+      <OnboardingChecklist />
 
       {/* Date Range Selector + Account Filter */}
       <div className="flex flex-wrap items-center gap-4">
