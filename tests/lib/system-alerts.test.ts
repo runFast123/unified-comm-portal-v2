@@ -7,8 +7,10 @@
  *   - buildSystemAlertSlackPayload → Block Kit shape (text + 3 blocks, action
  *     button URL).
  *   - sendSystemAlert → emails every active company admin via SMTP, posts to
- *     account-scoped/unscoped Slack rule webhooks (deduped), prefixes portal
- *     paths, and NEVER throws (fail-soft contract for cron/poller callers).
+ *     Slack rule webhooks scoped to the alerted account (deduped; unscoped and
+ *     other-account rules are dropped as a cross-tenant disclosure guard),
+ *     prefixes portal paths, and NEVER throws (fail-soft contract for
+ *     cron/poller callers).
  */
 
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
@@ -174,7 +176,10 @@ function baseAlert(overrides: Partial<SystemAlert> = {}): SystemAlert {
 function slackRule(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     id: 'rule-1',
-    account_id: null,
+    // Default to baseAlert()'s account so the rule DELIVERS by default. Tests
+    // that exercise tenant scoping override account_id — setting it to null
+    // models an unscoped/other-tenant rule, which must now be dropped.
+    account_id: 'acct-1',
     notify_slack: true,
     slack_webhook_url: 'https://hooks.slack.com/services/T/B/X',
     is_active: true,
@@ -222,22 +227,54 @@ describe('sendSystemAlert', () => {
     expect(fetchCalls[0].url).toBe('https://hooks.slack.com/services/T/B/X')
   })
 
-  it('posts to account-scoped + unscoped rule webhooks, skipping other accounts and deduping URLs', async () => {
+  it('posts only to rules scoped to the alerted account, dropping unscoped + other-account rules and deduping URLs', async () => {
     const supabase = fakeSupabase({
       rules: [
-        slackRule({ id: 'r1', slack_webhook_url: 'https://hooks.slack.com/services/A' }),
+        // unscoped (account_id = null) → DROPPED: no owning company (see filter)
+        slackRule({ id: 'r1', account_id: null, slack_webhook_url: 'https://hooks.slack.com/services/A' }),
+        // scoped to the alerted account → DELIVERED
         slackRule({ id: 'r2', account_id: 'acct-1', slack_webhook_url: 'https://hooks.slack.com/services/B' }),
+        // scoped to a different account → DROPPED
         slackRule({ id: 'r3', account_id: 'other-acct', slack_webhook_url: 'https://hooks.slack.com/services/C' }),
-        // duplicate URL of r1 → must collapse into one POST
-        slackRule({ id: 'r4', slack_webhook_url: 'https://hooks.slack.com/services/A' }),
-        slackRule({ id: 'r5', notify_slack: false, slack_webhook_url: 'https://hooks.slack.com/services/D' }),
+        // duplicate URL of r2, also account-scoped → collapses into one POST
+        slackRule({ id: 'r4', account_id: 'acct-1', slack_webhook_url: 'https://hooks.slack.com/services/B' }),
+        // account matches but notify_slack off → DROPPED
+        slackRule({ id: 'r5', account_id: 'acct-1', notify_slack: false, slack_webhook_url: 'https://hooks.slack.com/services/D' }),
       ],
     })
     await sendSystemAlert(supabase, baseAlert())
-    expect(fetchCalls.map((c) => c.url).sort()).toEqual([
-      'https://hooks.slack.com/services/A',
-      'https://hooks.slack.com/services/B',
-    ])
+    expect(fetchCalls.map((c) => c.url)).toEqual(['https://hooks.slack.com/services/B'])
+  })
+
+  it('does NOT deliver to an unscoped rule that may belong to a different company (cross-tenant guard)', async () => {
+    // An unscoped rule (account_id = NULL) cannot be attributed to any company
+    // — notification_rules has no company_id column, only account_id. Such a
+    // rule may have been created by, or be visible to, a DIFFERENT tenant, so
+    // an alert about acct-1 (company co-1) must never POST to it. An
+    // other-company account-scoped rule must likewise be dropped.
+    const supabase = fakeSupabase({
+      rules: [
+        slackRule({
+          id: 'global',
+          account_id: null,
+          slack_webhook_url: 'https://hooks.slack.com/services/OTHER-TENANT',
+        }),
+        slackRule({
+          id: 'other-co',
+          account_id: 'acct-in-co-2',
+          slack_webhook_url: 'https://hooks.slack.com/services/CO2',
+        }),
+      ],
+    })
+    await sendSystemAlert(supabase, baseAlert({ account_id: 'acct-1', company_id: 'co-1' }))
+    expect(fetchCalls).toHaveLength(0)
+    // And the summary log must reflect zero Slack deliveries.
+    expect(logInfo).toHaveBeenCalledWith(
+      'notification',
+      'system_alert_sent',
+      expect.any(String),
+      expect.objectContaining({ slack_webhooks: 0 }),
+    )
   })
 
   it('prefixes portal paths with NEXT_PUBLIC_SITE_URL in the Slack button', async () => {

@@ -187,7 +187,12 @@ export async function triggerNotifications(
 
     const matchingRules = rules.filter((rule: Record<string, unknown>) => {
       if (rule.channel && rule.channel !== messageData.channel) return false
-      if (rule.account_id && rule.account_id !== messageData.account_id) return false
+      // Tenant isolation (mirrors sendSystemAlert): require an exact account
+      // match. The former `rule.account_id && ...` wildcard let an unscoped
+      // (account_id = NULL) rule match EVERY tenant's messages, leaking
+      // sender/subject/preview cross-tenant. A NULL rule has no owning company
+      // (notification_rules is scoped only via account_id), so it is dropped.
+      if (rule.account_id !== messageData.account_id) return false
       const ruleMinPriority = PRIORITY_ORDER[rule.min_priority as string] ?? 1
       if (messagePriorityValue < ruleMinPriority) return false
       return true
@@ -364,9 +369,14 @@ export function buildSystemAlertSlackPayload(opts: {
  *
  *   - Email: every active admin/company_admin (incl. super_admin scoped to
  *     the company) via the same SMTP transport as message notifications.
- *   - Slack: every active notification_rules webhook scoped to this account
- *     (or unscoped), deduped by URL. System alerts are operational/urgent,
- *     so rule min_priority / channel filters are intentionally not applied.
+ *   - Slack: every active notification_rules webhook scoped to THIS account
+ *     (exact account_id match), deduped by URL. Unscoped (account_id = NULL)
+ *     rules are intentionally EXCLUDED: notification_rules has no company_id
+ *     column — tenancy is account_id → accounts.company_id — so a global rule
+ *     has no owning company and would POST this tenant's alert (participant,
+ *     channel, account name) to another tenant's webhook. System alerts are
+ *     operational/urgent, so rule min_priority / channel filters are
+ *     intentionally not applied.
  *
  * Fail-soft: NEVER throws — a broken alert pipeline must not break the
  * cron/poller that fired it. Dedupe is the CALLER's job: only invoke this
@@ -471,7 +481,14 @@ export async function sendSystemAlert(
       ...new Set(
         ((rules ?? []) as Record<string, unknown>[])
           .filter((r) => r.notify_slack && r.slack_webhook_url)
-          .filter((r) => !r.account_id || r.account_id === alert.account_id)
+          // Tenant isolation: ONLY rules scoped to the alerted account. The
+          // former `!r.account_id` wildcard matched unscoped (account_id =
+          // NULL) rules against EVERY account — a cross-tenant disclosure
+          // vector, since notification_rules has no company_id and a NULL rule
+          // has no derivable owning company to scope it to. Require an exact
+          // account match (and a truthy alert.account_id, so a missing id can
+          // never accidentally match a NULL rule).
+          .filter((r) => !!alert.account_id && r.account_id === alert.account_id)
           .map((r) => r.slack_webhook_url as string)
       ),
     ]

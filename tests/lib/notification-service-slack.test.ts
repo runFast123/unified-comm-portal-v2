@@ -14,6 +14,8 @@
  *                          → matching rule triggers exactly one Slack POST
  *                            with the expected webhook URL + Block Kit body.
  *                          → notify_slack=false rule is ignored.
+ *                          → unscoped (account_id=NULL) + other-account rules
+ *                            are dropped (tenant isolation).
  *                          → Slack 500 must NOT throw out of triggerNotifications.
  */
 
@@ -282,7 +284,10 @@ function baseMessage(overrides: Partial<NotificationMessageData> = {}): Notifica
 function slackRule(overrides: Partial<RuleRow> = {}): RuleRow {
   return {
     id: 'rule-1',
-    account_id: null,
+    // Default to baseMessage()'s account so the rule DELIVERS by default. The
+    // matcher now requires an exact account match (unscoped NULL rules are
+    // dropped), so a null default would make every "matching" test a no-op.
+    account_id: 'acct-1',
     channel: null,
     min_priority: 'low',
     notify_email: false,
@@ -369,5 +374,18 @@ describe('triggerNotifications (Slack path)', () => {
       'https://hooks.slack.com/services/A',
       'https://hooks.slack.com/services/B',
     ])
+  })
+
+  it('drops unscoped (account_id=NULL) rules — no cross-tenant fan-out', async () => {
+    // Mirrors sendSystemAlert: an unscoped rule has no owning company
+    // (notification_rules is scoped only via account_id) and must not match
+    // every tenant's messages. Was the old `rule.account_id && ...` wildcard;
+    // an exact account match is now required.
+    const supabase = fakeSupabase([
+      slackRule({ id: 'unscoped', account_id: null }),
+      slackRule({ id: 'other', account_id: 'other-acct', slack_webhook_url: 'https://hooks.slack.com/services/Z' }),
+    ]) as never
+    await triggerNotifications(supabase, baseMessage({ account_id: 'acct-1' }))
+    expect(fetchCalls).toHaveLength(0)
   })
 })
