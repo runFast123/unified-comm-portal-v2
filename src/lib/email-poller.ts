@@ -8,6 +8,7 @@ import { mintRequestId } from '@/lib/request-id'
 import { ingestInboundEmail } from '@/lib/email-ingest'
 import { computeThreadRoot, normalizeMessageId } from '@/lib/email-threading'
 import { logError } from '@/lib/logger'
+import { sendSystemAlert, shouldAlertChannelDisconnect } from '@/lib/notification-service'
 
 // ─── Sharding + circuit breaker shared across the email/teams pollers ──
 // Shard math: stable hash of account id → 32-bit int → modulo total. Same
@@ -156,13 +157,30 @@ export async function pollEmailAccount(
   const supabase = await createServiceRoleClient()
   const { data: accountRow } = await supabase
     .from('accounts')
-    .select('last_imap_uid, last_imap_sent_uid, consecutive_poll_failures, last_poll_error_at')
+    .select('name, company_id, last_imap_uid, last_imap_sent_uid, consecutive_poll_failures, last_poll_error_at')
     .eq('id', accountId)
     .maybeSingle()
 
   const failures = (accountRow?.consecutive_poll_failures as number | null | undefined) ?? 0
   const lastUid = accountRow?.last_imap_uid as number | null | undefined
   const lastSentUid = accountRow?.last_imap_sent_uid as number | null | undefined
+  const accountName = (accountRow?.name as string | null | undefined) || accountId
+
+  // Alert company admins exactly ONCE per outage: on the run that trips the
+  // circuit breaker (failures 4 → 5). Subsequent failing runs (5 → 6 via the
+  // half-open retry) stay silent; a successful poll resets the counter so
+  // the next outage alerts again. sendSystemAlert never throws.
+  const maybeAlertDisconnect = async (errMsg: string): Promise<void> => {
+    if (!shouldAlertChannelDisconnect(failures, failures + 1, CIRCUIT_BREAKER_THRESHOLD)) return
+    await sendSystemAlert(supabase, {
+      account_id: accountId,
+      company_id: (accountRow?.company_id as string | null | undefined) ?? null,
+      type: 'channel_disconnected',
+      title: `Channel disconnected: ${accountName} (email)`,
+      body: `Email polling for "${accountName}" has failed ${CIRCUIT_BREAKER_THRESHOLD} times in a row and the circuit breaker is now open. Last error: ${errMsg.slice(0, 300)}`,
+      link: '/admin/channels',
+    })
+  }
 
   // Persist a failure and return. Replaces the four `result.errors.push();
   // return result` snippets that left the DB untouched. Best-effort —
@@ -178,6 +196,7 @@ export async function pollEmailAccount(
           last_poll_error_at: new Date().toISOString(),
         })
         .eq('id', accountId)
+      await maybeAlertDisconnect(errMsg)
     } catch {
       /* observability write must never break the caller */
     }
@@ -664,6 +683,7 @@ export async function pollEmailAccount(
       patch.last_poll_error_at = new Date().toISOString()
     }
     await supabase.from('accounts').update(patch).eq('id', accountId)
+    if (result.errors.length > 0) await maybeAlertDisconnect(result.errors[0])
   } catch { /* ignore */ }
 
   return result

@@ -38,6 +38,12 @@ interface CronEntry {
    *  data for matching account groups. NULL for non-polling crons (e.g.
    *  dispatch-scheduled). */
   channel: 'email' | 'teams' | null
+  /** Stem of the `cron.<name>.duration_ms` metric every cron route records.
+   *  vercel.json only proves the schedule is declared — the latest metric
+   *  event is the dead-man's switch proving the job actually executes. */
+  metric_name: string
+  last_run_at: string | null
+  cadence_minutes: number | null
 }
 
 interface VercelCron {
@@ -52,6 +58,31 @@ interface VercelJson {
 function inferChannel(p: string): 'email' | 'teams' | null {
   if (p.includes('email-poll')) return 'email'
   if (p.includes('teams-poll')) return 'teams'
+  return null
+}
+
+/** `/api/cron/email-poll?shard=0&total=4` → `email_poll` — matches the
+ *  `cron.<name>.duration_ms` naming every cron route uses with recordMetric. */
+function metricNameFor(p: string): string {
+  const last = p.split('?')[0].split('/').filter(Boolean).pop() ?? p
+  return last.replace(/-/g, '_')
+}
+
+/** Expected minutes between runs, derived from the cron expression. Handles
+ *  the shapes we actually write (step minutes, fixed-minute hourly/daily);
+ *  null = can't infer, the UI skips staleness judgement for that row. */
+function cadenceMinutes(schedule: string): number | null {
+  const [minute, hour] = schedule.trim().split(/\s+/)
+  if (!minute || !hour) return null
+  if (minute === '*') return 1
+  const step = minute.match(/^\*\/(\d+)$/)
+  if (step) return parseInt(step[1], 10)
+  if (/^\d+$/.test(minute)) {
+    if (hour === '*') return 60
+    const hourStep = hour.match(/^\*\/(\d+)$/)
+    if (hourStep) return 60 * parseInt(hourStep[1], 10)
+    if (/^\d+$/.test(hour)) return 1440
+  }
   return null
 }
 
@@ -70,6 +101,9 @@ export async function GET() {
       path: c.path,
       schedule: c.schedule,
       channel: inferChannel(c.path),
+      metric_name: metricNameFor(c.path),
+      last_run_at: null,
+      cadence_minutes: cadenceMinutes(c.schedule),
     }))
   } catch (err) {
     vercelJsonError = err instanceof Error ? err.message : 'Failed to read vercel.json'
@@ -104,6 +138,30 @@ export async function GET() {
       account_count: data.length,
     }
   }
+
+  // Dead-man's switch: every cron route records `cron.<name>.duration_ms` on
+  // each run, so the latest event per name is proof of execution. One
+  // latest-row query per unique name (shards share a name). Failures degrade
+  // to null — the UI reads that as "no data yet" rather than breaking.
+  const uniqueNames = [...new Set(crons.map((c) => c.metric_name))]
+  const lastRuns = new Map<string, string | null>()
+  await Promise.all(
+    uniqueNames.map(async (name) => {
+      try {
+        const { data, error } = await admin
+          .from('metrics_events')
+          .select('ts')
+          .eq('metric_name', `cron.${name}.duration_ms`)
+          .order('ts', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        lastRuns.set(name, error ? null : data?.ts ?? null)
+      } catch {
+        lastRuns.set(name, null)
+      }
+    })
+  )
+  crons = crons.map((c) => ({ ...c, last_run_at: lastRuns.get(c.metric_name) ?? null }))
 
   return NextResponse.json({
     vercel_json_error: vercelJsonError,

@@ -62,6 +62,11 @@ interface CronEntry {
   path: string
   schedule: string
   channel: 'email' | 'teams' | null
+  metric_name: string
+  /** Latest `cron.<metric_name>.duration_ms` event — proof the job executes,
+   *  not just that it's declared in vercel.json. */
+  last_run_at: string | null
+  cadence_minutes: number | null
 }
 
 interface ChannelStat {
@@ -148,6 +153,20 @@ function pollRecencyStatus(iso: string | null): HealthStatus {
   const ageMs = Date.now() - new Date(iso).getTime()
   if (ageMs < 10 * 60_000) return 'healthy'
   if (ageMs < 30 * 60_000) return 'warning'
+  return 'error'
+}
+
+/**
+ * Dead-man's switch per cron: a job whose latest metric is older than 2× its
+ * cadence is overdue; older than 6× (or no metric ever) means it is not
+ * executing at all, no matter what vercel.json says.
+ */
+function cronRunStatus(lastRunAt: string | null, cadenceMinutes: number | null): HealthStatus {
+  if (!lastRunAt) return 'error'
+  if (!cadenceMinutes) return 'unknown'
+  const ageMs = Date.now() - new Date(lastRunAt).getTime()
+  if (ageMs <= cadenceMinutes * 2 * 60_000) return 'healthy'
+  if (ageMs <= cadenceMinutes * 6 * 60_000) return 'warning'
   return 'error'
 }
 
@@ -476,7 +495,7 @@ export default function HealthPage() {
       {/* D. Cron schedules */}
       <Card
         title="D. Cron schedules"
-        description="From vercel.json. Email + Teams entries also show how recently any account in that channel was polled."
+        description="From vercel.json, cross-checked against each job's latest metric event — a schedule listed here doesn't prove the job actually executes. Email + Teams entries also show how recently any account in that channel was polled."
       >
         {!crons ? (
           <div className="space-y-3">
@@ -526,6 +545,7 @@ export default function HealthPage() {
                   <tr>
                     <th className="px-3 py-2 font-semibold">Path</th>
                     <th className="px-3 py-2 font-semibold">Schedule (UTC)</th>
+                    <th className="px-3 py-2 font-semibold">Last run</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -533,6 +553,9 @@ export default function HealthPage() {
                     <tr key={`${c.path}-${i}`} className="text-gray-700">
                       <td className="px-3 py-1.5 font-mono text-xs">{c.path}</td>
                       <td className="px-3 py-1.5 font-mono text-xs">{c.schedule}</td>
+                      <td className="px-3 py-1.5">
+                        <CronRunChip cron={c} />
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -742,6 +765,37 @@ export default function HealthPage() {
 }
 
 // ─── Subcomponents ─────────────────────────────────────────────────────
+
+function CronRunChip({ cron }: { cron: CronEntry }) {
+  const status = cronRunStatus(cron.last_run_at, cron.cadence_minutes)
+  // Unparseable schedule — show the raw timestamp without a verdict.
+  if (status === 'unknown') {
+    return <span className="text-xs text-gray-500">ran {relativeTime(cron.last_run_at)}</span>
+  }
+  const label = !cron.last_run_at
+    ? 'no data yet'
+    : status === 'healthy'
+    ? `ran ${relativeTime(cron.last_run_at)}`
+    : status === 'warning'
+    ? `overdue · ran ${relativeTime(cron.last_run_at)}`
+    : `not running · last ${relativeTime(cron.last_run_at)}`
+  return (
+    <div>
+      <Badge
+        variant={status === 'healthy' ? 'success' : status === 'warning' ? 'warning' : 'danger'}
+      >
+        {label}
+      </Badge>
+      {status === 'error' && (
+        <div className="mt-0.5 text-[11px] text-red-600">
+          {cron.last_run_at
+            ? 'check WEBHOOK_SECRET / Vercel cron logs'
+            : 'never reported a metric — fine right after a deploy, otherwise check WEBHOOK_SECRET / Vercel cron logs'}
+        </div>
+      )}
+    </div>
+  )
+}
 
 function EnvRow({ check, requiredVar }: { check: EnvCheck; requiredVar: boolean }) {
   const status: HealthStatus = check.set ? 'healthy' : requiredVar ? 'error' : 'warning'

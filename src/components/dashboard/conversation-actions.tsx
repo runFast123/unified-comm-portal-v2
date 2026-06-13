@@ -21,6 +21,7 @@ import {
   Eye,
   Clock,
   Paperclip,
+  RotateCcw,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -156,6 +157,80 @@ export function ConversationActions({
   const [showScheduleModal, setShowScheduleModal] = useState(false)
   const [scheduledFor, setScheduledFor] = useState<string>('') // datetime-local string
   const [scheduling, setScheduling] = useState(false)
+
+  // ── Failed sends ─────────────────────────────────────────────────────
+  // Replies that died AFTER the undo window (cron dispatch failed). Without
+  // this banner the failure is invisible: no timeline row exists and the
+  // customer never got the reply.
+  type FailedSend = {
+    id: string
+    kind: 'pending_send' | 'scheduled'
+    channel: string
+    body_preview: string
+    error: string | null
+    failed_at: string
+    to_address: string | null
+  }
+  const [failedSends, setFailedSends] = useState<FailedSend[]>([])
+  const [failedActionId, setFailedActionId] = useState<string | null>(null)
+  const failedRecheckRef = useRef<NodeJS.Timeout | null>(null)
+
+  const fetchFailedSends = useCallback(async () => {
+    try {
+      const res = await fetch(
+        `/api/scheduled-messages?conversation_id=${encodeURIComponent(conversationId)}&include=failed`,
+        { cache: 'no-store' }
+      )
+      if (!res.ok) return
+      const json = await res.json()
+      setFailedSends(Array.isArray(json.failed) ? json.failed : [])
+    } catch { /* banner is best-effort — never block the composer */ }
+  }, [conversationId])
+
+  useEffect(() => {
+    fetchFailedSends()
+    return () => {
+      if (failedRecheckRef.current) clearTimeout(failedRecheckRef.current)
+    }
+  }, [fetchFailedSends])
+
+  // After queueing a send the cron dispatches within ~60s; re-check once
+  // past that window so a failure surfaces while the agent is still here.
+  const scheduleFailedRecheck = useCallback(() => {
+    if (failedRecheckRef.current) clearTimeout(failedRecheckRef.current)
+    failedRecheckRef.current = setTimeout(() => { void fetchFailedSends() }, 90_000)
+  }, [fetchFailedSends])
+
+  const handleFailedAction = useCallback(
+    async (item: FailedSend, op: 'retry' | 'dismiss') => {
+      setFailedActionId(item.id)
+      try {
+        const res = await fetch('/api/scheduled-messages/retry', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: item.id, kind: item.kind, op }),
+        })
+        if (!res.ok) {
+          let msg = ''
+          try {
+            const j = await res.json()
+            msg = j?.error ? ` (${j.error})` : ''
+          } catch { /* non-JSON */ }
+          throw new Error(`${op === 'retry' ? 'Retry' : 'Dismiss'} failed${msg}`)
+        }
+        setFailedSends((prev) => prev.filter((x) => x.id !== item.id))
+        if (op === 'retry') {
+          toast.success('Reply re-queued — sending within a minute')
+          scheduleFailedRecheck()
+        }
+      } catch (err) {
+        toast.error((err as Error).message)
+      } finally {
+        setFailedActionId(null)
+      }
+    },
+    [toast, scheduleFailedRecheck]
+  )
 
   // ── Email signature toggle (email channel only) ─────────────────────
   // Defaults ON — matches the server-side default for `append_signature`.
@@ -815,6 +890,10 @@ export function ConversationActions({
           },
         })
 
+        // The dispatch can still fail at the provider after the undo window
+        // closes — re-check the failed-sends banner once that window passes.
+        scheduleFailedRecheck()
+
         // Run post-send bookkeeping immediately. If the user undoes,
         // `onUndone` re-populates the draft. The cron will pick up the
         // row within ~60s if not cancelled.
@@ -833,7 +912,7 @@ export function ConversationActions({
         setIsSending(false)
       }
     },
-    [toast]
+    [toast, scheduleFailedRecheck]
   )
 
   const handleApprove = useCallback(async () => {
@@ -1373,6 +1452,59 @@ export function ConversationActions({
         className="hidden"
         onChange={handleAttachmentFiles}
       />
+
+      {/* Failed sends — a queued reply the dispatcher couldn't deliver after
+          the undo window closed. The customer never received it, so this
+          stays loud (red) until the agent retries or dismisses it. */}
+      {failedSends.map((item) => {
+        const errText = item.error
+          ? item.error.length > 120
+            ? item.error.slice(0, 120).trimEnd() + '…'
+            : item.error
+          : 'delivery failed'
+        const isBusy = failedActionId === item.id
+        return (
+          <div
+            key={`${item.kind}-${item.id}`}
+            className="flex items-start gap-2 rounded-lg bg-red-50 border border-red-200 px-3 py-2"
+          >
+            <AlertTriangle size={14} className="shrink-0 mt-0.5 text-red-600" />
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-medium text-red-800">
+                Reply failed to send — {errText}
+              </p>
+              {item.body_preview && (
+                <p className="mt-0.5 text-[11px] text-red-600/80 line-clamp-1">
+                  &ldquo;{item.body_preview}&rdquo;
+                </p>
+              )}
+            </div>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <Button
+                size="sm"
+                variant="secondary"
+                className="bg-white text-red-700 border border-red-200 hover:bg-red-100"
+                onClick={() => handleFailedAction(item, 'retry')}
+                disabled={isBusy}
+                title="Re-queue this reply — it sends within a minute"
+              >
+                {isBusy ? <Loader2 size={12} className="animate-spin" /> : <RotateCcw size={12} />}
+                Retry
+              </Button>
+              <button
+                type="button"
+                onClick={() => handleFailedAction(item, 'dismiss')}
+                disabled={isBusy}
+                aria-label="Dismiss failed send"
+                title="Dismiss"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-red-400 hover:bg-red-100 hover:text-red-700 disabled:opacity-50"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          </div>
+        )
+      })}
 
       {/* Schedule-send modal */}
       {showScheduleModal && (

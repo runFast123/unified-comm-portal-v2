@@ -3,6 +3,9 @@ import { createServiceRoleClient } from '@/lib/supabase-server'
 import { validateWebhookSecret } from '@/lib/api-helpers'
 import { logAudit } from '@/lib/audit'
 import { isWithinBusinessHours, businessMillisElapsed } from '@/lib/business-hours'
+import { getRequestId } from '@/lib/request-id'
+import { recordMetric } from '@/lib/metrics'
+import { sendSystemAlert } from '@/lib/notification-service'
 
 /**
  * Accept either `X-Webhook-Secret` (internal callers) or
@@ -31,8 +34,15 @@ function authorizeCron(request: Request): boolean {
  *
  * Authentication: requires WEBHOOK_SECRET header (or Bearer for Vercel Cron)
  * or valid user session.
+ *
+ * Logic lives in GET because Vercel Cron invokes scheduled paths via GET
+ * (every other cron route follows the same `export const POST = GET` pattern).
+ * It previously lived in POST with a no-op GET stub, so the scheduled run did
+ * nothing — fixed here.
  */
-export async function POST(request: Request) {
+export async function GET(request: Request) {
+  const requestId = await getRequestId()
+  const startedAt = Date.now()
   try {
     // Authenticate via webhook secret (for cron calls) — accepts both
     // X-Webhook-Secret and Authorization: Bearer (Vercel Cron).
@@ -49,7 +59,19 @@ export async function POST(request: Request) {
       .eq('is_active', true)
 
     if (accountsError) {
+      // The SLA columns (sla_critical_hours / sla_auto_escalate) are not
+      // provisioned in every environment. Treat a missing-column error as
+      // "feature not enabled" — a HEALTHY no-op run, not a failure — so the
+      // cron-health dead-man's-switch stays green instead of crying wolf.
+      const code = (accountsError as { code?: string }).code
+      const missingColumn = code === '42703' || /column .* does not exist/i.test(accountsError.message || '')
+      if (missingColumn) {
+        recordMetric('cron.sla_check.duration_ms', Date.now() - startedAt, { success: true, sla_unconfigured: true }, requestId)
+        return NextResponse.json({ escalated: 0, message: 'SLA escalation not configured for this environment', request_id: requestId })
+      }
       console.error('SLA check: failed to fetch accounts', accountsError)
+      recordMetric('cron.sla_check.duration_ms', Date.now() - startedAt, { success: false }, requestId)
+      recordMetric('cron.sla_check.errors', 1, { stage: 'query', fatal: true }, requestId)
       return NextResponse.json({ error: 'Failed to fetch accounts' }, { status: 500 })
     }
 
@@ -88,6 +110,10 @@ export async function POST(request: Request) {
 
     let totalEscalated = 0
     const escalationDetails: { account_id: string; conversation_ids: string[] }[] = []
+    // System-alert deliveries collected across accounts, awaited before the
+    // response so serverless teardown can't cut them off. sendSystemAlert
+    // never throws, so this can't fail the run.
+    const alertPromises: Promise<void>[] = []
 
     for (const account of accounts) {
       // Skip if auto-escalate is disabled
@@ -149,7 +175,7 @@ export async function POST(request: Request) {
         .in('id', conversationIds)
         // PostgREST `in` filter: parenthesized, comma-separated, no spaces
         .not('status', 'in', '(escalated,resolved,archived,waiting_on_customer)')
-        .select('id, account_id, participant_name, channel')
+        .select('id, account_id, participant_name, channel, assigned_to')
 
       if (updateError) {
         console.error(`SLA check: failed to escalate conversations for account ${account.id}`, updateError)
@@ -159,20 +185,21 @@ export async function POST(request: Request) {
       const escalatedCount = updated?.length ?? 0
       if (escalatedCount > 0) {
         totalEscalated += escalatedCount
-        escalationDetails.push({
-          account_id: account.id,
-          conversation_ids: updated!.map((c: { id: string }) => c.id),
-        })
-
-        // 4. Escalation notification per conversation via the existing audit_log
-        // mechanism. Fire-and-forget; company_id passed explicitly because the
-        // cron runs as service-role with no acting user.
-        for (const c of updated as {
+        const escalatedRows = updated as {
           id: string
           account_id: string
           participant_name: string | null
           channel: string | null
-        }[]) {
+          assigned_to: string | null
+        }[]
+        escalationDetails.push({
+          account_id: account.id,
+          conversation_ids: escalatedRows.map((c) => c.id),
+        })
+
+        // 4. Audit each escalation (per-entity event). Fire-and-forget;
+        // company_id explicit because the cron runs as service-role.
+        for (const c of escalatedRows) {
           void logAudit({
             user_id: null,
             company_id: account.company_id ?? null,
@@ -190,16 +217,45 @@ export async function POST(request: Request) {
             },
           })
         }
+
+        // 5. ONE digest system-alert per account per run — never one-per-
+        // conversation (a backlog flipping 50 conversations must not email each
+        // admin 50×, and would re-open 50 SMTP sockets). These rows are exactly
+        // this run's not-escalated → escalated transitions (already-escalated
+        // rows are excluded by the status filter), so re-runs won't re-alert.
+        const names = escalatedRows.map((c) => c.participant_name || 'Unknown').slice(0, 5).join(', ')
+        const more = escalatedCount > 5 ? `, +${escalatedCount - 5} more` : ''
+        alertPromises.push(
+          sendSystemAlert(supabase, {
+            account_id: account.id,
+            company_id: account.company_id ?? null,
+            type: 'sla_breach',
+            title: `SLA breach: ${escalatedCount} conversation${escalatedCount === 1 ? '' : 's'} auto-escalated`,
+            body: `${escalatedCount} conversation${escalatedCount === 1 ? '' : 's'} had no reply within ${criticalHours}h and ${escalatedCount === 1 ? 'was' : 'were'} auto-escalated: ${names}${more}.`,
+            link: escalatedCount === 1 ? `/conversations/${escalatedRows[0].id}` : `/inbox?status=escalated`,
+          })
+        )
       }
     }
+
+    await Promise.allSettled(alertPromises)
+
+    // ── Operational metrics — mirrors the other cron routes. `success`
+    // label distinguishes these rows from the error catch's emit below.
+    const durationMs = Date.now() - startedAt
+    recordMetric('cron.sla_check.duration_ms', durationMs, { success: true }, requestId)
+    recordMetric('cron.sla_check.escalated', totalEscalated, undefined, requestId)
 
     return NextResponse.json({
       escalated: totalEscalated,
       details: escalationDetails,
       checked_at: new Date().toISOString(),
+      request_id: requestId,
     })
   } catch (err: any) {
     console.error('SLA check error:', err)
+    recordMetric('cron.sla_check.duration_ms', Date.now() - startedAt, { success: false }, requestId)
+    recordMetric('cron.sla_check.errors', 1, { fatal: true }, requestId)
     return NextResponse.json(
       { error: err.message || 'Internal server error' },
       { status: 500 }
@@ -207,11 +263,6 @@ export async function POST(request: Request) {
   }
 }
 
-// Also support GET for simple health checks / manual triggers
-export async function GET() {
-  return NextResponse.json({
-    status: 'ok',
-    endpoint: '/api/sla-check',
-    description: 'POST with x-webhook-secret header to trigger SLA escalation check',
-  })
-}
+// Vercel Cron invokes scheduled paths via GET; keep POST working for internal
+// callers and manual triggers (both verbs run the same authorized logic).
+export const POST = GET

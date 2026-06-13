@@ -1,5 +1,6 @@
 import { getChannelConfig, type TeamsConfig } from '@/lib/channel-config'
 import { simpleHash, CIRCUIT_BREAKER_THRESHOLD } from '@/lib/email-poller'
+import { sendSystemAlert, shouldAlertChannelDisconnect } from '@/lib/notification-service'
 import { createServiceRoleClient } from '@/lib/supabase-server'
 import { getDelegatedAccessToken, TeamsOAuthExpiredError } from '@/lib/teams-delegated'
 import { mintRequestId, REQUEST_ID_HEADER } from '@/lib/request-id'
@@ -94,11 +95,29 @@ export async function pollTeamsAccount(
   const supabase = await createServiceRoleClient()
   const { data: account } = await supabase
     .from('accounts')
-    .select('teams_user_id, last_polled_at, consecutive_poll_failures, last_poll_error_at')
+    .select('name, company_id, teams_user_id, last_polled_at, consecutive_poll_failures, last_poll_error_at')
     .eq('id', accountId)
     .maybeSingle()
 
   const failures = (account?.consecutive_poll_failures as number | null | undefined) ?? 0
+  const accountName = (account?.name as string | null | undefined) || accountId
+
+  // Alert company admins exactly ONCE per outage: on the run that trips the
+  // circuit breaker (failures 4 → 5). Subsequent failing runs (5 → 6 via the
+  // half-open retry) stay silent; a successful poll resets the counter so
+  // the next outage alerts again. sendSystemAlert never throws. Mirrors the
+  // email-poller pattern.
+  const maybeAlertDisconnect = async (errMsg: string): Promise<void> => {
+    if (!shouldAlertChannelDisconnect(failures, failures + 1, CIRCUIT_BREAKER_THRESHOLD)) return
+    await sendSystemAlert(supabase, {
+      account_id: accountId,
+      company_id: (account?.company_id as string | null | undefined) ?? null,
+      type: 'channel_disconnected',
+      title: `Channel disconnected: ${accountName} (teams)`,
+      body: `Teams polling for "${accountName}" has failed ${CIRCUIT_BREAKER_THRESHOLD} times in a row and the circuit breaker is now open. Last error: ${errMsg.slice(0, 300)}`,
+      link: '/admin/channels',
+    })
+  }
 
   // Persist a failure and return. Replaces the "result.errors.push();
   // return result" snippets that bypassed the persist block at the
@@ -114,6 +133,7 @@ export async function pollTeamsAccount(
           last_poll_error_at: new Date().toISOString(),
         })
         .eq('id', accountId)
+      await maybeAlertDisconnect(errMsg)
     } catch {
       /* observability write must never break the caller */
     }
@@ -305,6 +325,7 @@ export async function pollTeamsAccount(
             last_poll_error_at: new Date().toISOString(),
           }
     await supabase.from('accounts').update(patch).eq('id', accountId)
+    if (result.errors.length > 0) await maybeAlertDisconnect(result.errors[0])
   } catch { /* ignore */ }
 
   // Suppress unused warning — sinceIso is informational for future debugging

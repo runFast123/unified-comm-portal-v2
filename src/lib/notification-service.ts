@@ -12,6 +12,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import nodemailer from 'nodemailer'
 import { logInfo, logError } from '@/lib/logger'
+import { COMPANY_ADMIN_ROLE_NAMES } from '@/lib/roles'
 import type { ChannelType } from '@/types/database'
 
 export interface NotificationMessageData {
@@ -289,5 +290,220 @@ export async function triggerNotifications(
     await Promise.allSettled([...emailPromises, ...slackPromises])
   } catch (outerError) {
     console.error('triggerNotifications error:', outerError instanceof Error ? outerError.message : outerError)
+  }
+}
+
+// ─── System alerts (SLA breach / channel disconnect) ──────────────────
+//
+// Operational alerts aimed at company admins, not agents. Callers own the
+// "when" (state-transition detection happens at the call site); this module
+// owns the "who + how" (resolve the account's company admins, deliver via
+// the existing email transport + any Slack webhooks configured for the
+// account in notification_rules).
+
+export type SystemAlertType = 'sla_breach' | 'channel_disconnected'
+
+export interface SystemAlert {
+  account_id: string
+  /** Pass when known — saves the accounts lookup. */
+  company_id?: string | null
+  type: SystemAlertType
+  title: string
+  body: string
+  /** Portal path ('/conversations/<id>') or absolute URL. */
+  link: string
+}
+
+/**
+ * True exactly when the consecutive-poll-failure counter CROSSES the
+ * circuit-breaker threshold (e.g. 4 → 5). Keeps channel-disconnect alerts
+ * to one per outage instead of one per failing poll run; a successful poll
+ * resets the counter, so the NEXT outage alerts again.
+ */
+export function shouldAlertChannelDisconnect(
+  prevFailures: number,
+  nextFailures: number,
+  threshold: number
+): boolean {
+  return prevFailures < threshold && nextFailures >= threshold
+}
+
+/** Slack Block Kit payload for a system alert. Exported for unit testing. */
+export function buildSystemAlertSlackPayload(opts: {
+  title: string
+  body: string
+  link: string
+}): { text: string; blocks: Array<Record<string, unknown>> } {
+  return {
+    text: opts.title,
+    blocks: [
+      {
+        type: 'section',
+        text: { type: 'mrkdwn', text: `:rotating_light: *${opts.title}*` },
+      },
+      {
+        type: 'section',
+        text: { type: 'mrkdwn', text: opts.body },
+      },
+      {
+        type: 'actions',
+        elements: [
+          {
+            type: 'button',
+            text: { type: 'plain_text', text: 'Open in Portal' },
+            url: opts.link,
+          },
+        ],
+      },
+    ],
+  }
+}
+
+/**
+ * Deliver a system alert to the account's company admins.
+ *
+ *   - Email: every active admin/company_admin (incl. super_admin scoped to
+ *     the company) via the same SMTP transport as message notifications.
+ *   - Slack: every active notification_rules webhook scoped to this account
+ *     (or unscoped), deduped by URL. System alerts are operational/urgent,
+ *     so rule min_priority / channel filters are intentionally not applied.
+ *
+ * Fail-soft: NEVER throws — a broken alert pipeline must not break the
+ * cron/poller that fired it. Dedupe is the CALLER's job: only invoke this
+ * on a state transition (escalation flip, breaker trip), not on every run.
+ */
+export async function sendSystemAlert(
+  supabase: SupabaseClient,
+  alert: SystemAlert
+): Promise<void> {
+  try {
+    let companyId = alert.company_id ?? null
+    if (!companyId) {
+      const { data: account } = await supabase
+        .from('accounts')
+        .select('company_id')
+        .eq('id', alert.account_id)
+        .maybeSingle()
+      companyId = (account as { company_id?: string | null } | null)?.company_id ?? null
+    }
+
+    const portalUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://unified-comm-portal.vercel.app'
+    const link = alert.link.startsWith('http') ? alert.link : `${portalUrl}${alert.link}`
+
+    let adminEmails: string[] = []
+    if (companyId) {
+      const { data: admins } = await supabase
+        .from('users')
+        .select('email')
+        .eq('company_id', companyId)
+        .in('role', [...COMPANY_ADMIN_ROLE_NAMES])
+        .eq('is_active', true)
+      adminEmails = [
+        ...new Set(
+          ((admins ?? []) as { email: string | null }[])
+            .map((a) => a.email?.trim().toLowerCase())
+            .filter((e): e is string => !!e)
+        ),
+      ]
+    }
+
+    const deliveries: Promise<unknown>[] = []
+
+    // ── Email path — same transport as message notifications ─────────
+    const smtpUser = process.env.SMTP_USER
+    const smtpPassword = process.env.SMTP_PASSWORD
+    if (adminEmails.length > 0 && smtpUser && smtpPassword) {
+      const transporter = nodemailer.createTransport({
+        host: 'smtp.gmail.com',
+        port: 587,
+        secure: false,
+        auth: { user: smtpUser, pass: smtpPassword },
+        // This runs INSIDE crons + pollers, so a hung/rate-limited mail server
+        // must not stall message ingestion. nodemailer's defaults are
+        // 2min/30s/10min — far too long for a fire-and-forget alert.
+        connectionTimeout: 8000,
+        greetingTimeout: 8000,
+        socketTimeout: 12000,
+      })
+      const badgeLabel = alert.type === 'sla_breach' ? 'SLA BREACH' : 'CHANNEL DISCONNECTED'
+      const badgeColor = alert.type === 'sla_breach' ? '#dc2626' : '#ea580c'
+      const html = `
+<div style="font-family:sans-serif;max-width:600px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
+  <div style="background:#1e293b;padding:16px 24px;"><h1 style="margin:0;color:#fff;font-size:16px;">Unified Comms Portal</h1></div>
+  <div style="padding:20px 24px;">
+    <span style="display:inline-block;padding:4px 12px;border-radius:12px;font-size:12px;font-weight:600;color:#fff;background:${badgeColor};">${badgeLabel}</span>
+    <h2 style="margin:12px 0 16px;font-size:15px;color:#1e293b;">${escapeHtml(alert.title)}</h2>
+    <p style="margin:0 0 16px;font-size:13px;color:#334155;line-height:1.5;">${escapeHtml(alert.body)}</p>
+    <a href="${link}" style="display:inline-block;background:#3b82f6;color:#fff;text-decoration:none;padding:8px 20px;border-radius:6px;font-size:13px;font-weight:500;">Open in Portal</a>
+  </div>
+  <div style="padding:12px 24px;border-top:1px solid #e2e8f0;"><p style="margin:0;font-size:11px;color:#94a3b8;">Unified Communication Portal system alert</p></div>
+</div>`.trim()
+
+      for (const email of adminEmails) {
+        deliveries.push(
+          (async () => {
+            try {
+              await transporter.sendMail({
+                from: `"Unified Comms Portal" <${smtpUser}>`,
+                to: email,
+                subject: `[System Alert] ${alert.title}`,
+                html,
+              })
+            } catch (sendError) {
+              console.error(
+                `Failed to send system alert to ${email}:`,
+                sendError instanceof Error ? sendError.message : sendError
+              )
+            }
+          })()
+        )
+      }
+    } else if (adminEmails.length > 0) {
+      console.error('SMTP_USER or SMTP_PASSWORD not configured — skipping system alert emails')
+    }
+
+    // ── Slack path — reuse notification_rules webhooks for the account ─
+    const { data: rules } = await supabase
+      .from('notification_rules')
+      .select('*')
+      .eq('is_active', true)
+    const webhookUrls = [
+      ...new Set(
+        ((rules ?? []) as Record<string, unknown>[])
+          .filter((r) => r.notify_slack && r.slack_webhook_url)
+          .filter((r) => !r.account_id || r.account_id === alert.account_id)
+          .map((r) => r.slack_webhook_url as string)
+      ),
+    ]
+    if (webhookUrls.length > 0) {
+      const payload = buildSystemAlertSlackPayload({ title: alert.title, body: alert.body, link })
+      for (const url of webhookUrls) {
+        deliveries.push(
+          sendSlackNotification(url, payload, {
+            alert_type: alert.type,
+            account_id: alert.account_id,
+          })
+        )
+      }
+    }
+
+    // Overall cap: even with per-transport SMTP timeouts, a hung Slack webhook
+    // fetch could block the caller. Bound the whole fan-out so the cron/poller
+    // that fired this alert always proceeds. Orphaned deliveries settle on
+    // their own; this path is already fire-and-forget from the caller's view.
+    await Promise.race([
+      Promise.allSettled(deliveries),
+      new Promise((resolve) => setTimeout(resolve, 15000)),
+    ])
+    await logInfo('notification', 'system_alert_sent', alert.title, {
+      alert_type: alert.type,
+      account_id: alert.account_id,
+      company_id: companyId,
+      email_recipients: adminEmails.length,
+      slack_webhooks: webhookUrls.length,
+    })
+  } catch (err) {
+    // Fail-soft: alerts must never break the cron/poller that fired them.
+    console.error('sendSystemAlert error:', err instanceof Error ? err.message : err)
   }
 }

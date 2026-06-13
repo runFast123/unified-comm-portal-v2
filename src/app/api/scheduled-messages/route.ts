@@ -142,10 +142,21 @@ export async function POST(request: Request) {
   }
 }
 
+/** Truncated body preview for failed-send banners. */
+function bodyPreview(text: string | null): string {
+  const t = text || ''
+  return t.length > 140 ? t.slice(0, 140).trimEnd() + '…' : t
+}
+
 /**
  * GET /api/scheduled-messages
  * Returns pending scheduled messages the caller can see. Admins see all; regular
  * users see their own account. Optional ?conversation_id=... filter.
+ *
+ * With ?conversation_id=...&include=failed the response additionally carries a
+ * `failed` array — that conversation's FAILED pending_sends + scheduled_messages
+ * rows (id, kind, body preview, error, failed_at) so the UI can surface replies
+ * that died after the undo window. Same tenant scoping as the pending list.
  */
 export async function GET(request: Request) {
   try {
@@ -163,22 +174,26 @@ export async function GET(request: Request) {
 
     const url = new URL(request.url)
     const conversationId = url.searchParams.get('conversation_id')
+    const includeFailed = url.searchParams.get('include') === 'failed' && !!conversationId
+
+    // super_admin sees everything (allowedIds === null); everyone else is
+    // scoped to the union of accounts in their company (or their single
+    // account_id for legacy users with no company_id).
+    let allowedIds: string[] | null = null
+    if (!isSuperAdmin(profile.role)) {
+      const allowed = await getAllowedAccountIds(user.id)
+      allowedIds = allowed ? Array.from(allowed) : []
+      if (allowedIds.length === 0) {
+        return NextResponse.json(includeFailed ? { items: [], failed: [] } : { items: [] })
+      }
+    }
 
     let query = admin
       .from('scheduled_messages')
       .select('*')
       .eq('status', 'pending')
       .order('scheduled_for', { ascending: true })
-
-    // super_admin sees everything (allowed === null); everyone else is scoped
-    // to the union of accounts in their company (or their single account_id
-    // for legacy users with no company_id).
-    if (!isSuperAdmin(profile.role)) {
-      const allowed = await getAllowedAccountIds(user.id)
-      const ids = allowed ? Array.from(allowed) : []
-      if (ids.length === 0) return NextResponse.json({ items: [] })
-      query = query.in('account_id', ids)
-    }
+    if (allowedIds) query = query.in('account_id', allowedIds)
     if (conversationId) {
       query = query.eq('conversation_id', conversationId)
     }
@@ -186,7 +201,56 @@ export async function GET(request: Request) {
     const { data, error } = await query
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-    return NextResponse.json({ items: data ?? [] })
+    if (!includeFailed) return NextResponse.json({ items: data ?? [] })
+
+    // ── Failed-send reader ────────────────────────────────────────────
+    // Both queues, same account scope as the pending list above.
+    let failedScheduledQ = admin
+      .from('scheduled_messages')
+      .select('id, channel, reply_text, error, scheduled_for, to_address')
+      .eq('status', 'failed')
+      .eq('conversation_id', conversationId)
+    if (allowedIds) failedScheduledQ = failedScheduledQ.in('account_id', allowedIds)
+
+    let failedPendingQ = admin
+      .from('pending_sends')
+      .select('id, channel, reply_text, error, send_at, to_address')
+      .eq('status', 'failed')
+      .eq('conversation_id', conversationId)
+    if (allowedIds) failedPendingQ = failedPendingQ.in('account_id', allowedIds)
+
+    const [failedScheduled, failedPending] = await Promise.all([failedScheduledQ, failedPendingQ])
+    if (failedScheduled.error) {
+      return NextResponse.json({ error: failedScheduled.error.message }, { status: 500 })
+    }
+    if (failedPending.error) {
+      return NextResponse.json({ error: failedPending.error.message }, { status: 500 })
+    }
+
+    // Neither table stores a failure timestamp; the dispatcher attempts a row
+    // within ~60s of its due time, so the due time is the closest proxy.
+    const failed = [
+      ...(failedScheduled.data ?? []).map((r) => ({
+        id: r.id as string,
+        kind: 'scheduled' as const,
+        channel: r.channel as string,
+        body_preview: bodyPreview(r.reply_text as string | null),
+        error: (r.error as string | null) ?? null,
+        failed_at: r.scheduled_for as string,
+        to_address: (r.to_address as string | null) ?? null,
+      })),
+      ...(failedPending.data ?? []).map((r) => ({
+        id: r.id as string,
+        kind: 'pending_send' as const,
+        channel: r.channel as string,
+        body_preview: bodyPreview(r.reply_text as string | null),
+        error: (r.error as string | null) ?? null,
+        failed_at: r.send_at as string,
+        to_address: (r.to_address as string | null) ?? null,
+      })),
+    ].sort((a, b) => new Date(b.failed_at).getTime() - new Date(a.failed_at).getTime())
+
+    return NextResponse.json({ items: data ?? [], failed })
   } catch (err) {
     console.error('Scheduled-messages GET error:', err)
     return NextResponse.json(

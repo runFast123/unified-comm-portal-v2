@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import nodemailer from 'nodemailer'
 import { createServiceRoleClient } from '@/lib/supabase-server'
 import { sendViaChannel } from '@/lib/channels/adapters'
 import { resolveRecipient } from '@/lib/channels/registry'
@@ -23,6 +24,92 @@ interface ScheduledRow {
   teams_chat_id: string | null
   attachments: unknown
   scheduled_for: string
+  created_by: string | null
+}
+
+function escapeHtml(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+
+/**
+ * Email the agent whose queued reply just failed to dispatch, so the
+ * failure isn't invisible (no timeline row exists for a failed send).
+ *
+ * Fail-soft by design: every error is logged and swallowed so a broken
+ * SMTP config can never break the dispatch loop. Fires on the state
+ * TRANSITION only — the claim CAS guarantees each row goes
+ * pending → failed at most once per queue attempt (a user-initiated
+ * retry resets to 'pending', making a second failure a new transition),
+ * so this can't spam on every cron run.
+ */
+async function notifySenderOfFailure(
+  admin: Awaited<ReturnType<typeof createServiceRoleClient>>,
+  opts: {
+    createdBy: string | null
+    conversationId: string
+    channel: string
+    toAddress: string | null
+    error: string
+    kind: 'scheduled' | 'pending_send'
+    requestId: string
+  }
+): Promise<void> {
+  try {
+    if (!opts.createdBy) return
+    const smtpUser = process.env.SMTP_USER
+    const smtpPassword = process.env.SMTP_PASSWORD
+    if (!smtpUser || !smtpPassword) return
+
+    const { data: sender } = await admin
+      .from('users')
+      .select('email')
+      .eq('id', opts.createdBy)
+      .maybeSingle()
+    const senderEmail = (sender as { email: string | null } | null)?.email
+    if (!senderEmail) return
+
+    const portalUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://unified-comm-portal.vercel.app'
+    const conversationUrl = `${portalUrl}/conversations/${opts.conversationId}`
+    const recipientLabel = opts.toAddress || `the ${opts.channel} recipient`
+
+    const transporter = nodemailer.createTransport({
+      host: 'smtp.gmail.com',
+      port: 587,
+      secure: false,
+      auth: { user: smtpUser, pass: smtpPassword },
+    })
+    await transporter.sendMail({
+      from: `"Unified Comms Portal" <${smtpUser}>`,
+      to: senderEmail,
+      subject: `Your reply to ${recipientLabel} failed to send`,
+      html: `
+<div style="font-family:sans-serif;max-width:600px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
+  <div style="background:#1e293b;padding:16px 24px;"><h1 style="margin:0;color:#fff;font-size:16px;">Unified Comms Portal</h1></div>
+  <div style="padding:20px 24px;">
+    <h2 style="margin:0 0 12px;font-size:15px;color:#dc2626;">Your reply to ${escapeHtml(recipientLabel)} failed to send</h2>
+    <p style="margin:0 0 16px;font-size:13px;color:#334155;line-height:1.5;">The customer did not receive it. Open the conversation to retry.</p>
+    <div style="background:#fef2f2;border-left:3px solid #dc2626;padding:10px 14px;margin:0 0 20px;border-radius:0 4px 4px 0;">
+      <p style="margin:0 0 4px;font-size:11px;color:#64748b;text-transform:uppercase;">Error</p>
+      <p style="margin:0;font-size:13px;color:#334155;line-height:1.5;">${escapeHtml(opts.error.slice(0, 300))}</p>
+    </div>
+    <a href="${conversationUrl}" style="display:inline-block;background:#dc2626;color:#fff;text-decoration:none;padding:8px 20px;border-radius:6px;font-size:13px;font-weight:500;">Open Conversation</a>
+  </div>
+  <div style="padding:12px 24px;border-top:1px solid #e2e8f0;"><p style="margin:0;font-size:11px;color:#94a3b8;">Unified Communication Portal notification</p></div>
+</div>`.trim(),
+    })
+  } catch (err) {
+    await logError(
+      'system',
+      'dispatch_failure_notify_failed',
+      err instanceof Error ? err.message : String(err),
+      {
+        request_id: opts.requestId,
+        conversation_id: opts.conversationId,
+        kind: opts.kind,
+        channel: opts.channel,
+      }
+    )
+  }
 }
 
 /**
@@ -71,7 +158,7 @@ export async function GET(request: Request) {
 
   const { data: rows, error } = await admin
     .from('scheduled_messages')
-    .select('id, conversation_id, account_id, channel, reply_text, to_address, subject, teams_chat_id, attachments, scheduled_for')
+    .select('id, conversation_id, account_id, channel, reply_text, to_address, subject, teams_chat_id, attachments, scheduled_for, created_by')
     .eq('status', 'pending')
     .lte('scheduled_for', nowIso)
     .order('scheduled_for', { ascending: true })
@@ -253,6 +340,16 @@ export async function GET(request: Request) {
         .from('scheduled_messages')
         .update({ status: 'failed', error: message })
         .eq('id', row.id)
+      // Tell the agent who queued it — fire-and-forget, never blocks the loop.
+      void notifySenderOfFailure(admin, {
+        createdBy: row.created_by,
+        conversationId: row.conversation_id,
+        channel: row.channel,
+        toAddress: row.to_address,
+        error: message,
+        kind: 'scheduled',
+        requestId,
+      })
     }
   }
 
@@ -270,7 +367,7 @@ export async function GET(request: Request) {
 
   const { data: pendingRows, error: pendingQueryErr } = await admin
     .from('pending_sends')
-    .select('id, conversation_id, account_id, channel, reply_text, to_address, subject, teams_chat_id, attachments, send_at')
+    .select('id, conversation_id, account_id, channel, reply_text, to_address, subject, teams_chat_id, attachments, send_at, created_by')
     .eq('status', 'pending')
     .lte('send_at', nowIso)
     .order('send_at', { ascending: true })
@@ -292,6 +389,7 @@ export async function GET(request: Request) {
       teams_chat_id: string | null
       attachments: unknown
       send_at: string
+      created_by: string | null
     }>) {
       // Compare-and-set claim: pending → sending. Guards against double
       // dispatch if two cron invocations overlap or against the user
@@ -436,6 +534,16 @@ export async function GET(request: Request) {
           .from('pending_sends')
           .update({ status: 'failed', error: message })
           .eq('id', row.id)
+        // Tell the agent who queued it — fire-and-forget, never blocks the loop.
+        void notifySenderOfFailure(admin, {
+          createdBy: row.created_by,
+          conversationId: row.conversation_id,
+          channel: row.channel,
+          toAddress: row.to_address,
+          error: message,
+          kind: 'pending_send',
+          requestId,
+        })
       }
     }
   }
