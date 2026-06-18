@@ -123,8 +123,8 @@ export interface Account {
   working_timezone: string | null
   is_active: boolean
   teams_reply_webhook_url: string | null
-  sla_warning_hours: number
-  sla_critical_hours: number
+  sla_warning_hours: number | null
+  sla_critical_hours: number | null
   sla_auto_escalate: boolean
   spam_detection_enabled: boolean
   spam_allowlist: string[]
