@@ -42,6 +42,10 @@ interface InboxRowProps {
   // Keyed by `message_id` (the inbox row's mutation key), NOT `id`.
   onItemRemoved?: (messageId: string) => void
   onItemUpdated?: (messageId: string, patch: Partial<InboxItem>) => void
+  // Called just before navigating to the full conversation view, so the parent
+  // can persist the inbox's displayed order for queue navigation (‹ Prev/Next ›
+  // + auto-advance in the detail view). Only fires on the navigation path.
+  onNavigate?: () => void
 }
 
 const avatarColors = [
@@ -216,7 +220,7 @@ function getSentimentDot(sentiment: InboxItem['sentiment']) {
 }
 
 export const InboxRow = forwardRef<InboxRowHandle, InboxRowProps>(function InboxRow(
-  { item, selected, onSelect, onItemClick, isActive, isFocused, onItemRemoved, onItemUpdated }: InboxRowProps,
+  { item, selected, onSelect, onItemClick, isActive, isFocused, onItemRemoved, onItemUpdated, onNavigate }: InboxRowProps,
   ref
 ) {
   const router = useRouter()
@@ -228,6 +232,9 @@ export const InboxRow = forwardRef<InboxRowHandle, InboxRowProps>(function Inbox
     if (onItemClick) {
       onItemClick(item)
     } else if (item.conversation_id) {
+      // Persist the inbox's displayed order before leaving, so the detail view
+      // can offer queue navigation (‹ Prev/Next › + auto-advance).
+      onNavigate?.()
       router.push(`/conversations/${item.conversation_id}`)
     }
   }

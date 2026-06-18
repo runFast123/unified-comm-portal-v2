@@ -33,6 +33,7 @@ import { useUser } from '@/context/user-context'
 import { isSupervisor } from '@/lib/roles'
 import type { ReplyTemplate } from '@/types/database'
 import { substituteTemplate as substituteTemplateVars } from '@/lib/templates'
+import { resolveInboxNavTarget } from '@/lib/inbox-nav'
 
 // Roles that may NOT take any write action on a conversation. Mirrors the
 // "viewer" notion in the user_role enum — read-only seats. The active role
@@ -1277,6 +1278,20 @@ export function ConversationActions({
     return { abs, rel, invalid: mins < 1 }
   })()
 
+  // Queue auto-advance shared by Resolve (and Archive via the status dropdown):
+  // after the conversation is "done", jump to the next conversation in the
+  // inbox order the agent arrived with. Three cases (see resolveInboxNavTarget):
+  //   next  → push to the following conversation,
+  //   inbox → this was the last in the queue, go back to /inbox,
+  //   none  → no queue context, keep the existing refresh-in-place behaviour.
+  // Intentionally NOT used by reply-send or Mark-as-Replied.
+  const autoAdvanceAfterStatusChange = useCallback(() => {
+    const target = resolveInboxNavTarget(conversationId)
+    if (target.kind === 'next') router.push(`/conversations/${target.id}`)
+    else if (target.kind === 'inbox') router.push('/inbox')
+    else router.refresh()
+  }, [conversationId, router])
+
   const handleMarkReplied = useCallback(async () => {
     setLoading('mark_replied')
     try {
@@ -1393,13 +1408,14 @@ export function ConversationActions({
         .eq('id', conversationId)
       if (error) throw error
       toast.success('Conversation resolved!')
-      router.refresh()
+      autoAdvanceAfterStatusChange()
     } catch (err: any) {
       toast.error('Failed to resolve: ' + err.message)
     } finally {
       setLoading(null)
     }
-  }, [conversationId, router, toast])
+    // `router` is reached via autoAdvanceAfterStatusChange, not directly here.
+  }, [conversationId, toast, autoAdvanceAfterStatusChange])
 
   // Global keyboard shortcuts for conversation actions
   useEffect(() => {

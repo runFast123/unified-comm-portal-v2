@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { InboxRow, type InboxRowHandle } from '@/components/inbox/inbox-row'
 import { Select } from '@/components/ui/select'
+import { writeInboxNavContract } from '@/lib/inbox-nav'
 import type { InboxItem } from '@/types/database'
 
 /**
@@ -109,6 +110,20 @@ export function InboxList({ items, onItemClick, selectedItemId, selectedIds: ext
     }
     return sorted
   }, [items, sortBy])
+
+  // ── Queue-navigation contract ─────────────────────────────────────────
+  // When a row navigates to /conversations/[id] we stash the inbox's current
+  // displayed order (this `sortedItems` list — filtered upstream, then sorted
+  // here) so the detail view can offer ‹ Prev / Next › and auto-advance. We
+  // write it in the row's click handler (the navigation point) rather than on
+  // every render. Recomputed only when the displayed order changes.
+  const orderedConversationIds = useMemo(
+    () => sortedItems.map((it) => it.conversation_id),
+    [sortedItems]
+  )
+  const writeNavContract = useCallback(() => {
+    writeInboxNavContract(orderedConversationIds)
+  }, [orderedConversationIds])
 
   const handleSelect = useCallback((id: string, checked: boolean) => {
     setSelectedIds((prev) => {
@@ -294,6 +309,7 @@ export function InboxList({ items, onItemClick, selectedItemId, selectedIds: ext
               isFocused={index === focusedIndex}
               onItemRemoved={onItemRemoved}
               onItemUpdated={onItemUpdated}
+              onNavigate={writeNavContract}
             />
           </div>
         ))

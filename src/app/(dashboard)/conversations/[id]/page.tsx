@@ -8,6 +8,7 @@ import { MarkRead } from '@/components/dashboard/mark-read'
 import { ConversationRealtime } from '@/components/dashboard/conversation-realtime'
 import { AISidebar } from '@/components/dashboard/ai-sidebar'
 import { ConversationActions } from '@/components/dashboard/conversation-actions'
+import { ConversationQueueNav } from '@/components/dashboard/conversation-queue-nav'
 import { ScheduledMessagesList } from '@/components/dashboard/scheduled-messages-list'
 import { SuggestedReplies } from '@/components/dashboard/suggested-replies'
 import { ResizableBottomPanel } from '@/components/dashboard/resizable-bottom-panel'
@@ -400,6 +401,9 @@ export default async function ConversationPage({
           >
             <ArrowLeft size={20} />
           </Link>
+          {/* Queue navigation — self-hides unless the inbox stashed a queue
+              order that includes this conversation. */}
+          <ConversationQueueNav conversationId={id} />
           <ChannelIcon channel={channel} size={22} className="shrink-0 mt-0.5" />
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">

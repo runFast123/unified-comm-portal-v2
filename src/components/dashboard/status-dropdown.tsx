@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { ChevronDown, Loader2, Check } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/components/ui/toast'
+import { resolveInboxNavTarget } from '@/lib/inbox-nav'
 import type { ConversationStatus } from '@/types/database'
 
 interface CustomStatus {
@@ -113,7 +114,20 @@ export function StatusDropdown({
       }
       setStatus(newStatus)
       toast.success(`Status changed to ${statusConfig[newStatus].label}`)
-      router.refresh()
+      // Queue auto-advance: resolving or archiving from the dropdown means the
+      // agent is done with this conversation, so move them to the next one in
+      // the inbox order they arrived with (matching the Resolve button). Other
+      // status changes (active / in_progress / waiting / escalated) just
+      // refresh in place. `kind: 'none'` (no queue context) also refreshes, so
+      // a deep-linked conversation isn't yanked to the inbox.
+      if (newStatus === 'resolved' || newStatus === 'archived') {
+        const target = resolveInboxNavTarget(conversationId)
+        if (target.kind === 'next') router.push(`/conversations/${target.id}`)
+        else if (target.kind === 'inbox') router.push('/inbox')
+        else router.refresh()
+      } else {
+        router.refresh()
+      }
     } catch (err: any) {
       toast.error('Failed to update status: ' + err.message)
     } finally {
