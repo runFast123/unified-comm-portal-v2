@@ -9,6 +9,7 @@ import { ConversationRealtime } from '@/components/dashboard/conversation-realti
 import { AISidebar } from '@/components/dashboard/ai-sidebar'
 import { ConversationActions } from '@/components/dashboard/conversation-actions'
 import { ConversationQueueNav } from '@/components/dashboard/conversation-queue-nav'
+import { computeReplyWindow, formatReplyWindow } from '@/lib/messaging-window'
 import { ScheduledMessagesList } from '@/components/dashboard/scheduled-messages-list'
 import { SuggestedReplies } from '@/components/dashboard/suggested-replies'
 import { ResizableBottomPanel } from '@/components/dashboard/resizable-bottom-panel'
@@ -356,6 +357,16 @@ export default async function ConversationPage({
   const messageCount = (messages || []).length
   const inboundCount = (messages || []).filter((m: any) => m.direction === 'inbound').length
 
+  // Meta 24-hour customer-care window — anchored on the customer's LAST inbound
+  // message (NOT last_message_at, which may be our own outbound). Messages are
+  // ordered ascending, so the final inbound row is the most recent one.
+  const lastInboundAt: string | null = (() => {
+    const inbound = (messages || []).filter((m: any) => m.direction === 'inbound')
+    const last = inbound[inbound.length - 1]
+    return last ? (last.timestamp || last.received_at || last.created_at || null) : null
+  })()
+  const replyWindow = computeReplyWindow(channel, lastInboundAt)
+
   // ─── CSAT eligibility — used to gate the "Send CSAT" button ────────
   // Pulls the conversation's account → company → csat_enabled flag.
   // Best-effort; failure leaves the button hidden (which is the safe default).
@@ -495,6 +506,24 @@ export default async function ConversationPage({
           )}
           <span className="text-gray-300">&middot;</span>
           <span>{messageCount} msgs ({inboundCount} inbound)</span>
+          {/* Meta 24-hour reply-window state (WhatsApp/Messenger/Instagram only). */}
+          {replyWindow.applicable && (
+            <span
+              title={
+                replyWindow.open
+                  ? 'Meta’s 24-hour customer-care window is open — you can send a freeform reply.'
+                  : 'Meta’s 24-hour window has closed — a freeform reply may be rejected; a message template is required.'
+              }
+              className={
+                'ml-1 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ' +
+                (replyWindow.open
+                  ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200'
+                  : 'bg-amber-50 text-amber-800 ring-1 ring-amber-200')
+              }
+            >
+              {formatReplyWindow(replyWindow)}
+            </span>
+          )}
           {totalConversations > 1 && (
             <>
               <span className="text-gray-300">&middot;</span>

@@ -25,6 +25,7 @@ import { CHANNELS, CHANNEL_KEYS, isChannel } from '@/lib/channels/registry'
 import { decodeHtmlEntities } from '@/lib/utils'
 import { useToast } from '@/components/ui/toast'
 import { useRealtimeMessages } from '@/hooks/useRealtimeMessages'
+import { isUnread } from '@/hooks/useReadStatus'
 import type { InboxItem, Priority, SavedView, SavedViewFilters } from '@/types/database'
 import { useUser } from '@/context/user-context'
 
@@ -902,6 +903,11 @@ export default function InboxPage() {
         const ageHours = (nowMs - new Date(item.timestamp).getTime()) / 36e5
         if (ageHours < viewFilters.age_hours_gt) return false
       }
+      // Unread-only: unread = latest activity newer than the last time THIS
+      // device opened the conversation (per-device localStorage via isUnread).
+      // This was previously a silent no-op — the saved-view flag was stored but
+      // never applied here.
+      if (viewFilters.unread_only && !isUnread(item.conversation_id, item.timestamp)) return false
       // ── Smart-inbox sidebar filters ───────────────────────────────
       // Channel/category/sentiment are mirrored into `filters` (above) so
       // they're already applied. Urgency/status/assignment are sidebar-only.
