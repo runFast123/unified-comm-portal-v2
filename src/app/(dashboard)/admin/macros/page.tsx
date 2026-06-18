@@ -33,6 +33,7 @@ import {
   TableCell,
 } from '@/components/ui/table'
 import { useToast } from '@/components/ui/toast'
+import { useConfirm } from '@/components/ui/confirm-dialog'
 import type { MacroActions } from '@/lib/macros'
 import {
   type MacroFormState,
@@ -91,6 +92,7 @@ const PRIORITY_OPTIONS = [
 export default function MacrosPage() {
   const supabase = createClient()
   const { toast } = useToast()
+  const confirm = useConfirm()
   // Tenant scope: super_admin uses the company switcher (activeCompanyId) so
   // reads/writes target the viewed tenant. company_admins are pinned to their
   // own company server-side, so activeCompanyId is a no-op for them.
@@ -282,7 +284,7 @@ export default function MacrosPage() {
   }
 
   const handleDelete = async (macro: Macro) => {
-    if (!window.confirm(`Delete macro "${macro.name}"? This can't be undone.`)) return
+    if (!(await confirm({ title: 'Delete macro', message: `Delete macro "${macro.name}"? This can't be undone.`, danger: true }))) return
     const res = await fetch(`/api/macros/${macro.id}`, { method: 'DELETE' })
     if (!res.ok) {
       const j = await res.json().catch(() => ({}))

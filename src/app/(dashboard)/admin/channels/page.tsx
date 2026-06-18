@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
+import { useConfirm } from '@/components/ui/confirm-dialog'
 import {
   Mail,
   MessageSquare,
@@ -238,6 +239,7 @@ type ModalMode =
 export default function ChannelsPage() {
   const supabase = createClient()
   const { toast } = useToast()
+  const confirm = useConfirm()
   const searchParams = useSearchParams()
   const router = useRouter()
   // Tenant scope from the company switcher. When a tenant is selected
@@ -407,7 +409,7 @@ export default function ChannelsPage() {
   }, [searchParams, router, toast])
 
   const handleGmailDisconnect = async (account: Account) => {
-    if (!confirm(`Disconnect Gmail OAuth for "${account.name}"? The app will revert to SMTP/IMAP password auth — you'll need to re-enter an app password to keep sending/receiving.`)) return
+    if (!(await confirm({ message: `Disconnect Gmail OAuth for "${account.name}"? The app will revert to SMTP/IMAP password auth — you'll need to re-enter an app password to keep sending/receiving.`, danger: true }))) return
     try {
       const res = await fetch(`/api/auth/gmail/disconnect?account_id=${account.id}`, { method: 'POST' })
       if (!res.ok) {
@@ -422,7 +424,7 @@ export default function ChannelsPage() {
   }
 
   const handleTeamsDisconnect = async (account: Account) => {
-    if (!confirm(`Disconnect Teams OAuth for "${account.name}"? The app will revert to client-credentials (app permissions) for this account.`)) return
+    if (!(await confirm({ message: `Disconnect Teams OAuth for "${account.name}"? The app will revert to client-credentials (app permissions) for this account.`, danger: true }))) return
     try {
       const res = await fetch(`/api/auth/teams/disconnect?account_id=${account.id}`, { method: 'POST' })
       if (!res.ok) {
@@ -472,7 +474,7 @@ export default function ChannelsPage() {
         toast.error('This account has no mailbox address set')
         return
       }
-      if (!confirm(`Send a test email from "${account.name}" to its own mailbox (${addr})?`)) return
+      if (!(await confirm({ title: 'Send test', message: `Send a test email from "${account.name}" to its own mailbox (${addr})?` }))) return
     }
     try {
       const res = await fetch('/api/channels/test-message', {
@@ -614,7 +616,7 @@ export default function ChannelsPage() {
   }
 
   const handleDeleteAccount = async (account: Account) => {
-    if (!confirm(`Delete account "${account.name}" and all its credentials? This cannot be undone.`)) return
+    if (!(await confirm({ title: 'Delete account', message: `Delete account "${account.name}" and all its credentials? This cannot be undone.`, danger: true }))) return
     try {
       const res = await fetch(`/api/accounts?id=${account.id}`, { method: 'DELETE' })
       if (!res.ok) throw new Error((await res.json()).error || 'Delete failed')
@@ -626,7 +628,7 @@ export default function ChannelsPage() {
   }
 
   const handleDeleteCreds = async (account: Account, channel: Channel) => {
-    if (!confirm(`Remove saved credentials for "${account.name}"? Account will fall back to env defaults.`)) return
+    if (!(await confirm({ title: 'Remove credentials', message: `Remove saved credentials for "${account.name}"? Account will fall back to env defaults.`, danger: true }))) return
     try {
       const res = await fetch(`/api/channels/config?account_id=${account.id}&channel=${channel}`, { method: 'DELETE' })
       if (!res.ok) throw new Error('Delete failed')

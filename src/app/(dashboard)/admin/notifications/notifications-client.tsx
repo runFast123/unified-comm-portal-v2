@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
+import { useConfirm } from '@/components/ui/confirm-dialog'
 import { Select } from '@/components/ui/select'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
 import { useToast } from '@/components/ui/toast'
@@ -68,6 +69,7 @@ interface NotificationsClientProps {
 export default function NotificationsClient({ companyAccountIds }: NotificationsClientProps) {
   const supabase = createClient()
   const { toast } = useToast()
+  const confirm = useConfirm()
   const [rules, setRules] = useState<NotificationRule[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -259,7 +261,7 @@ export default function NotificationsClient({ companyAccountIds }: Notifications
   }
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this notification rule?')) return
+    if (!(await confirm({ message: 'Are you sure you want to delete this notification rule?', danger: true }))) return
     setStatusMessage(null)
     if (noCompanyAccounts) {
       setStatusMessage('Failed to delete rule: no accounts in your company.')

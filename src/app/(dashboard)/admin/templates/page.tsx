@@ -23,6 +23,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Modal } from '@/components/ui/modal'
+import { useConfirm } from '@/components/ui/confirm-dialog'
 import { Toggle } from '@/components/ui/toggle'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -69,6 +70,7 @@ const PREVIEW_CONTEXT = {
 // ---------------------------------------------------------------------------
 
 export default function TemplatesPage() {
+  const confirm = useConfirm()
   const [templates, setTemplates] = useState<ReplyTemplate[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -161,7 +163,7 @@ export default function TemplatesPage() {
   }
 
   async function handleDelete(id: string) {
-    if (!window.confirm('Are you sure you want to delete this template? This cannot be undone.')) {
+    if (!(await confirm({ message: 'Are you sure you want to delete this template? This cannot be undone.', danger: true }))) {
       return
     }
     const previous = templates

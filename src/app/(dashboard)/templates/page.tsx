@@ -32,6 +32,7 @@ import type { ReplyTemplate } from '@/types/database'
 import { truncate, timeAgo } from '@/lib/utils'
 import { useUser } from '@/context/user-context'
 import { useToast } from '@/components/ui/toast'
+import { useConfirm } from '@/components/ui/confirm-dialog'
 
 interface AccountOption {
   id: string
@@ -72,6 +73,7 @@ export default function TemplatesPage() {
   const { isAdmin, role, companyAccountIds, activeCompanyId } = useUser()
   const isSuper = role === 'super_admin'
   const { toast } = useToast()
+  const confirm = useConfirm()
   const [templates, setTemplates] = useState<ReplyTemplate[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -216,7 +218,7 @@ export default function TemplatesPage() {
   }
 
   async function handleDelete(id: string) {
-    if (!window.confirm('Are you sure you want to delete this template? This cannot be undone.')) {
+    if (!(await confirm({ message: 'Are you sure you want to delete this template? This cannot be undone.', danger: true }))) {
       return
     }
     // Optimistic update

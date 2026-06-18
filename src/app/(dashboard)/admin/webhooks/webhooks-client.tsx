@@ -19,6 +19,7 @@ import {
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
+import { useConfirm } from '@/components/ui/confirm-dialog'
 import { Input } from '@/components/ui/input'
 import { CopyField } from '@/components/ui/copy-field'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
@@ -72,6 +73,7 @@ function statusOf(w: WebhookRow): { label: string; variant: 'success' | 'warning
 export function WebhooksClient({ initialWebhooks, knownEvents, canCreate }: Props) {
   const router = useRouter()
   const { toast } = useToast()
+  const confirm = useConfirm()
   // Active tenant (super_admin company switcher). Sent on create so a
   // super_admin's webhook lands under the VIEWED company, not their home one.
   // The route ignores it for company_admins (pinned server-side).
@@ -189,7 +191,7 @@ export function WebhooksClient({ initialWebhooks, knownEvents, canCreate }: Prop
 
   const handleDelete = useCallback(
     async (w: WebhookRow) => {
-      const ok = window.confirm(`Delete webhook for ${w.url}?\nThis cannot be undone.`)
+      const ok = await confirm({ message: `Delete webhook for ${w.url}?\nThis cannot be undone.`, danger: true })
       if (!ok) return
       try {
         const res = await fetch(`/api/admin/webhooks/${w.id}`, { method: 'DELETE' })
@@ -204,7 +206,7 @@ export function WebhooksClient({ initialWebhooks, knownEvents, canCreate }: Prop
         toast.error(err instanceof Error ? err.message : 'Network error')
       }
     },
-    [toast],
+    [toast, confirm],
   )
 
   const handleTest = useCallback(

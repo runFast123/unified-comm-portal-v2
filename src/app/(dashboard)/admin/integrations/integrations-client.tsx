@@ -28,6 +28,7 @@ import {
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import { useConfirm } from '@/components/ui/confirm-dialog'
 import { CopyField } from '@/components/ui/copy-field'
 import { useToast } from '@/components/ui/toast'
 import { timeAgo } from '@/lib/utils'
@@ -270,6 +271,7 @@ function GoogleIntegrationCard({
   onChanged: () => void | Promise<void>
 }) {
   const { toast } = useToast()
+  const confirm = useConfirm()
   const [clientId, setClientId] = useState('')
   const [clientSecret, setClientSecret] = useState('')
   const [saving, setSaving] = useState(false)
@@ -365,7 +367,7 @@ function GoogleIntegrationCard({
   }
 
   const handleRemove = async () => {
-    if (!confirm('Remove saved Google OAuth credentials? The portal will fall back to env vars (if set).')) {
+    if (!(await confirm({ message: 'Remove saved Google OAuth credentials? The portal will fall back to env vars (if set).', danger: true }))) {
       return
     }
     setRemoving(true)
@@ -553,6 +555,7 @@ function AzureIntegrationCard({
   onChanged: () => void | Promise<void>
 }) {
   const { toast } = useToast()
+  const confirm = useConfirm()
   const [tenantId, setTenantId] = useState('')
   const [clientId, setClientId] = useState('')
   const [clientSecret, setClientSecret] = useState('')
@@ -654,7 +657,7 @@ function AzureIntegrationCard({
   }
 
   const handleRemove = async () => {
-    if (!confirm('Remove saved Azure OAuth credentials? The portal will fall back to env vars (if set).')) {
+    if (!(await confirm({ message: 'Remove saved Azure OAuth credentials? The portal will fall back to env vars (if set).', danger: true }))) {
       return
     }
     setRemoving(true)

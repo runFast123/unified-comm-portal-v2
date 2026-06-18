@@ -36,6 +36,7 @@ import { Toggle } from '@/components/ui/toggle'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
 import { useToast } from '@/components/ui/toast'
+import { useConfirm } from '@/components/ui/confirm-dialog'
 import { timeAgo } from '@/lib/utils'
 import { TenantSettingsLinks } from '@/components/dashboard/tenant-settings-links'
 
@@ -746,6 +747,7 @@ function AccountsTab({
   onChanged: () => void
 }) {
   const { toast } = useToast()
+  const confirm = useConfirm()
   const [busyId, setBusyId] = useState<string | null>(null)
   const [attachOpen, setAttachOpen] = useState(false)
   const [attachId, setAttachId] = useState('')
@@ -753,7 +755,7 @@ function AccountsTab({
 
   const detach = useCallback(
     async (accountId: string) => {
-      if (!confirm('Detach this account from the company?')) return
+      if (!(await confirm({ message: 'Detach this account from the company?', danger: true }))) return
       setBusyId(accountId)
       try {
         const res = await fetch(
@@ -773,7 +775,7 @@ function AccountsTab({
         setBusyId(null)
       }
     },
-    [companyId, onChanged, toast],
+    [companyId, onChanged, toast, confirm],
   )
 
   const attach = useCallback(async () => {
@@ -1249,6 +1251,7 @@ function LogoUploader({
   onChanged: (nextUrl: string | null) => void
 }) {
   const { toast } = useToast()
+  const confirm = useConfirm()
   const inputRef = useRef<HTMLInputElement | null>(null)
   const [busy, setBusy] = useState<'upload' | 'delete' | null>(null)
 
@@ -1285,7 +1288,7 @@ function LogoUploader({
   )
 
   const handleRemove = useCallback(async () => {
-    if (!confirm('Remove the logo for this company?')) return
+    if (!(await confirm({ message: 'Remove the logo for this company?', danger: true }))) return
     setBusy('delete')
     try {
       const res = await fetch(`/api/admin/companies/${companyId}/logo`, {
@@ -1303,7 +1306,7 @@ function LogoUploader({
     } finally {
       setBusy(null)
     }
-  }, [companyId, onChanged, toast])
+  }, [companyId, onChanged, toast, confirm])
 
   return (
     <div className="rounded-lg border border-gray-200 bg-gray-50/60 p-4">

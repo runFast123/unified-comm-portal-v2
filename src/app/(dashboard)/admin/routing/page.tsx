@@ -14,6 +14,7 @@ import { Modal } from '@/components/ui/modal'
 import { Toggle } from '@/components/ui/toggle'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
 import { useToast } from '@/components/ui/toast'
+import { useConfirm } from '@/components/ui/confirm-dialog'
 import {
   GitBranch,
   Plus,
@@ -164,6 +165,7 @@ function summarizeActions(rule: RoutingRule): string {
 export default function RoutingRulesPage() {
   const supabase = createClient()
   const { toast } = useToast()
+  const confirm = useConfirm()
   // Active-tenant scope for the "Applies to" (accounts) and "Assign to user"
   // dropdowns. null activeCompanyId = super_admin combined view (unscoped).
   const { activeCompanyId, companyAccountIds } = useUser()
@@ -296,7 +298,7 @@ export default function RoutingRulesPage() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('Delete this routing rule?')) return
+    if (!(await confirm({ title: 'Delete rule', message: 'Delete this routing rule?', danger: true }))) return
     const res = await fetch(`/api/routing-rules?id=${id}`, { method: 'DELETE' })
     if (!res.ok) {
       const j = await res.json().catch(() => ({}))

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Copy, Check, Code2, MessagesSquare, ExternalLink, Plus, Trash2, Pencil } from 'lucide-react'
+import { useConfirm } from '@/components/ui/confirm-dialog'
 
 interface BusinessHours {
   tz: string
@@ -86,6 +87,7 @@ function timeAgo(iso: string | null): string {
 }
 
 export default function LiveChatAdminPage() {
+  const confirm = useConfirm()
   const [widgets, setWidgets] = useState<Widget[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const widget = widgets.find((w) => w.id === selectedId) ?? null
@@ -213,7 +215,7 @@ export default function LiveChatAdminPage() {
   }
 
   async function del(w: Widget) {
-    if (typeof window !== 'undefined' && !window.confirm(`Delete “${w.name}” and its chat history? This can't be undone.`)) return
+    if (!(await confirm({ title: 'Delete widget', message: `Delete “${w.name}” and its chat history? This can't be undone.`, danger: true }))) return
     setSaving(true)
     setError(null)
     try {

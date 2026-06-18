@@ -34,6 +34,7 @@ import { cn, truncate, timeAgo } from '@/lib/utils'
 import { useUser } from '@/context/user-context'
 import Link from 'next/link'
 import { useToast } from '@/components/ui/toast'
+import { useConfirm } from '@/components/ui/confirm-dialog'
 
 function GapCount() {
   const { isAdmin, companyAccountIds, activeCompanyId } = useUser()
@@ -63,6 +64,7 @@ function GapCount() {
 
 function GapAnalysis() {
   const { isAdmin, companyAccountIds, activeCompanyId } = useUser()
+  const { toast } = useToast()
   const [gaps, setGaps] = useState<{
     id: string
     message_text: string
@@ -181,7 +183,7 @@ function GapAnalysis() {
                   const title = `${gap.account_name || 'General'} - ${gap.category || 'FAQ'} Gap`
                   const content = `## Topic\n${gap.message_text.substring(0, 200)}\n\n## Answer\n[Draft your answer here based on the customer question above]\n\n## Related Information\n- Category: ${gap.category || 'General'}\n- Confidence was low (${Math.round(gap.confidence * 100)}%) — this topic needs KB coverage`
                   navigator.clipboard.writeText(`Title: ${title}\n\n${content}`)
-                  alert('KB article draft copied to clipboard! Paste it in the "Add Article" form.')
+                  toast.success('KB article draft copied — paste it in the "Add Article" form.')
                 }}
                 className="inline-flex items-center gap-1 rounded-md bg-teal-50 px-2 py-0.5 text-[10px] font-medium text-teal-700 hover:bg-teal-100 transition-colors"
               >
@@ -236,6 +238,7 @@ export default function KnowledgeBasePage() {
   const { isAdmin, role, companyAccountIds, activeCompanyId } = useUser()
   const isSuper = role === 'super_admin'
   const { toast } = useToast()
+  const confirm = useConfirm()
   const [articles, setArticles] = useState<KBArticle[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -392,7 +395,7 @@ export default function KnowledgeBasePage() {
   }
 
   async function handleDelete(id: string) {
-    if (!window.confirm('Are you sure you want to delete this article? This cannot be undone.')) {
+    if (!(await confirm({ message: 'Are you sure you want to delete this article? This cannot be undone.', danger: true }))) {
       return
     }
     // Optimistic update

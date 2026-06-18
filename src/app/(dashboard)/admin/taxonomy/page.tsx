@@ -16,6 +16,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { useUser } from '@/context/user-context'
 import { Button } from '@/components/ui/button'
+import { useConfirm } from '@/components/ui/confirm-dialog'
 import { Input } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
 import {
@@ -57,6 +58,7 @@ const DEFAULT_COLOR = '#6b7280'
 
 export default function TaxonomyPage() {
   const { toast } = useToast()
+  const confirm = useConfirm()
   // Scope every read/create to the tenant the super_admin is currently viewing
   // (the company switcher). Without this the page always managed the caller's
   // OWN company's taxonomy regardless of the active tenant. company_admins are
@@ -163,7 +165,7 @@ export default function TaxonomyPage() {
     }
   }
   const deleteStatus = async (s: CompanyStatus) => {
-    if (!confirm(`Remove status "${s.name}"? Existing conversations keep their label.`)) return
+    if (!(await confirm({ message: `Remove status "${s.name}"? Existing conversations keep their label.`, danger: true }))) return
     setBusyId(s.id)
     try {
       const res = await fetch(`/api/company-statuses/${s.id}`, { method: 'DELETE' })
@@ -247,7 +249,7 @@ export default function TaxonomyPage() {
     }
   }
   const deleteTag = async (t: CompanyTag) => {
-    if (!confirm(`Remove tag "${t.name}"? Existing conversations keep the tag string.`)) return
+    if (!(await confirm({ message: `Remove tag "${t.name}"? Existing conversations keep the tag string.`, danger: true }))) return
     setBusyId(t.id)
     try {
       const res = await fetch(`/api/company-tags/${t.id}`, { method: 'DELETE' })

@@ -64,11 +64,13 @@ function SyncStatusBadge({ status }: { status: SyncStatus }) {
 }
 
 import { useUser } from '@/context/user-context'
+import { useConfirm } from '@/components/ui/confirm-dialog'
 
 interface AccountOption { id: string; name: string }
 
 export default function SheetsPage() {
   const { isAdmin, companyAccountIds, activeCompanyId } = useUser()
+  const confirm = useConfirm()
   const supabase = createClient()
   const [sheets, setSheets] = useState<GoogleSheetsSync[]>([])
   const [accounts, setAccounts] = useState<AccountOption[]>([])
@@ -240,7 +242,7 @@ export default function SheetsPage() {
   }
 
   const handleRemove = async (id: string) => {
-    if (!window.confirm('Are you sure you want to remove this sheet sync? This cannot be undone.')) return
+    if (!(await confirm({ message: 'Are you sure you want to remove this sheet sync? This cannot be undone.', danger: true }))) return
     setStatusMessage(null)
     try {
       const { error } = await supabase

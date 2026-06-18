@@ -13,6 +13,7 @@ import {
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
+import { useConfirm } from '@/components/ui/confirm-dialog'
 import { Input } from '@/components/ui/input'
 import { CopyField } from '@/components/ui/copy-field'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
@@ -49,6 +50,7 @@ function formatDate(iso: string | null): string {
 export function ApiTokensClient({ initialTokens, knownScopes, canCreate }: Props) {
   const router = useRouter()
   const { toast } = useToast()
+  const confirm = useConfirm()
   // Active tenant (super_admin company switcher). Sent on create so a token a
   // super_admin mints lands under the VIEWED company, not their home one. The
   // route ignores it for company_admins (pinned server-side).
@@ -131,9 +133,10 @@ export function ApiTokensClient({ initialTokens, knownScopes, canCreate }: Props
 
   const handleRevoke = useCallback(
     async (token: TokenRow) => {
-      const ok = window.confirm(
-        `Revoke API token "${token.name}"?\n\nAny integration using this token will stop working immediately. This cannot be undone.`,
-      )
+      const ok = await confirm({
+        message: `Revoke API token "${token.name}"?\n\nAny integration using this token will stop working immediately. This cannot be undone.`,
+        danger: true,
+      })
       if (!ok) return
       try {
         const res = await fetch(`/api/admin/api-tokens/${token.id}`, { method: 'DELETE' })
@@ -152,7 +155,7 @@ export function ApiTokensClient({ initialTokens, knownScopes, canCreate }: Props
         toast.error(err instanceof Error ? err.message : 'Network error')
       }
     },
-    [toast],
+    [toast, confirm],
   )
 
   return (

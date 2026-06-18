@@ -23,6 +23,7 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import { useConfirm } from '@/components/ui/confirm-dialog'
 import {
   AI_PROVIDER_PRESETS,
   getPreset,
@@ -139,6 +140,7 @@ function rowToForm(row: AiProviderRow): ProviderForm {
 }
 
 export function AIProvidersManager({ companyId }: AIProvidersManagerProps) {
+  const confirm = useConfirm()
   const [providers, setProviders] = useState<AiProviderRow[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -499,9 +501,10 @@ export function AIProvidersManager({ companyId }: AIProvidersManagerProps) {
   const handleDelete = useCallback(
     async (row: AiProviderRow) => {
       if (
-        !window.confirm(
-          `Delete the "${row.name}" provider? This cannot be undone.`
-        )
+        !(await confirm({
+          message: `Delete the "${row.name}" provider? This cannot be undone.`,
+          danger: true,
+        }))
       ) {
         return
       }
@@ -530,7 +533,7 @@ export function AIProvidersManager({ companyId }: AIProvidersManagerProps) {
         setRowBusy(null)
       }
     },
-    [withScope, mode, closeForm, flashBanner, fetchProviders]
+    [confirm, withScope, mode, closeForm, flashBanner, fetchProviders]
   )
 
   // Health-check a saved provider in place using its STORED key, then refetch
