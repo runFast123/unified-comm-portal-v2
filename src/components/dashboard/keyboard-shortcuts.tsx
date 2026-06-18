@@ -36,6 +36,14 @@ const GROUPS: ShortcutGroup[] = [
     title: 'Inbox',
     rows: [
       { label: 'Focus search (on /inbox)', keys: ['/'] },
+      // Row-triage shortcuts (handled in inbox-list.tsx, list & split views).
+      { label: 'Navigate rows', keys: ['j', 'k'] },
+      { label: 'Navigate rows (arrows)', keys: ['↑', '↓'] },
+      { label: 'Open focused conversation', keys: ['Enter'] },
+      { label: 'Open focused conversation', keys: ['o'] },
+      { label: 'Select / deselect focused row', keys: ['x'] },
+      { label: 'Archive focused row', keys: ['e'] },
+      { label: 'Reply (opens conversation)', keys: ['r'] },
     ],
   },
   {

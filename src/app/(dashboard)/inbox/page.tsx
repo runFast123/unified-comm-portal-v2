@@ -371,6 +371,34 @@ export default function InboxPage() {
     setSelectedItem(item)
   }, [])
 
+  // Optimistic list mutations for InboxList → InboxRow (hover actions + the
+  // keyboard `e` archive). Keyed by `message_id` — the same key the bulk
+  // handlers and Supabase writes use. Mirrors the existing setItems filter
+  // pattern so a row leaves / updates immediately instead of waiting for a
+  // refetch.
+  const handleItemRemoved = useCallback((messageId: string) => {
+    // Resolve the removed row's `id` from the SAME snapshot we filter, so a
+    // concurrent realtime refetch can't make the selection-prune read a stale
+    // `items` closure. Selection keys off `id`, removal off `message_id`.
+    let removedId: string | undefined
+    setItems((prev) => {
+      removedId = prev.find((it) => it.message_id === messageId)?.id
+      return prev.filter((item) => item.message_id !== messageId)
+    })
+    setSelectedIds((prev) => {
+      if (!removedId || !prev.has(removedId)) return prev
+      const next = new Set(prev)
+      next.delete(removedId)
+      return next
+    })
+  }, [])
+
+  const handleItemUpdated = useCallback((messageId: string, patch: Partial<InboxItem>) => {
+    setItems((prev) =>
+      prev.map((item) => (item.message_id === messageId ? { ...item, ...patch } : item))
+    )
+  }, [])
+
   // Mirrors loadingMore for non-reactive readers: a background refresh and
   // Load More both full-replace the list, so they must never interleave.
   const loadingMoreRef = useRef(false)
@@ -1866,6 +1894,8 @@ export default function InboxPage() {
           items={filteredItems}
           selectedIds={selectedIds}
           onSelectionChange={handleSelectionChange}
+          onItemRemoved={handleItemRemoved}
+          onItemUpdated={handleItemUpdated}
         />
       )}
 
@@ -1881,6 +1911,8 @@ export default function InboxPage() {
               selectedItemId={selectedItem?.id || null}
               selectedIds={selectedIds}
               onSelectionChange={handleSelectionChange}
+              onItemRemoved={handleItemRemoved}
+              onItemUpdated={handleItemUpdated}
             />
           </div>
 

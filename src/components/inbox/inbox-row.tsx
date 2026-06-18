@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Archive, AlertTriangle, CheckCheck, Sparkles, Clock, User } from 'lucide-react'
 import { useToast } from '@/components/ui/toast'
@@ -19,6 +19,13 @@ import type { InboxItem, ConversationStatus } from '@/types/database'
 // would 403.
 const READ_ONLY_ROLES = new Set(['viewer'])
 
+// Imperative surface the parent (InboxList) drives for keyboard triage, so the
+// keyboard `e` archive reuses this row's exact Supabase write + toast +
+// onItemRemoved call instead of duplicating the archive logic.
+export interface InboxRowHandle {
+  archive: () => Promise<void>
+}
+
 interface InboxRowProps {
   // `assigned_to_name` is joined by the inbox page query (conversations →
   // users); optional so other InboxItem producers don't have to supply it.
@@ -27,6 +34,14 @@ interface InboxRowProps {
   onSelect: (id: string, checked: boolean) => void
   onItemClick?: (item: InboxItem) => void
   isActive?: boolean
+  // Keyboard-triage focus highlight — distinct from `selected`/`isActive` so
+  // the focused row is visible even when also selected or open in split view.
+  isFocused?: boolean
+  // Optimistic list callbacks: fired AFTER a successful Supabase write so the
+  // row leaves / updates immediately rather than lingering until a refetch.
+  // Keyed by `message_id` (the inbox row's mutation key), NOT `id`.
+  onItemRemoved?: (messageId: string) => void
+  onItemUpdated?: (messageId: string, patch: Partial<InboxItem>) => void
 }
 
 const avatarColors = [
@@ -200,7 +215,10 @@ function getSentimentDot(sentiment: InboxItem['sentiment']) {
   )
 }
 
-export function InboxRow({ item, selected, onSelect, onItemClick, isActive }: InboxRowProps) {
+export const InboxRow = forwardRef<InboxRowHandle, InboxRowProps>(function InboxRow(
+  { item, selected, onSelect, onItemClick, isActive, isFocused, onItemRemoved, onItemUpdated }: InboxRowProps,
+  ref
+) {
   const router = useRouter()
   const { toast } = useToast()
   const { role: viewerRole } = useUser()
@@ -218,8 +236,14 @@ export function InboxRow({ item, selected, onSelect, onItemClick, isActive }: In
     e.stopPropagation()
   }
 
-  const handleArchive = async (e: React.MouseEvent) => {
-    e.stopPropagation()
+  // Shared archive action — the single source of truth for archiving this row.
+  // Both the hover "Archive" button and the keyboard `e` shortcut (via the
+  // imperative handle below) call this, so the Supabase write, toast and the
+  // optimistic `onItemRemoved` removal are never duplicated.
+  const archive = async () => {
+    // Read-only roles never mutate from the row (their hover actions are
+    // hidden); guard the keyboard path the same way.
+    if (isReadOnly) return
     const supabase = createClient()
     // When archiving a spam message, also clear is_spam so it doesn't reappear in spam view
     const updateFields = item.is_spam
@@ -234,7 +258,16 @@ export function InboxRow({ item, selected, onSelect, onItemClick, isActive }: In
       toast.error('Failed to archive message')
     } else {
       toast.success('Message archived')
+      onItemRemoved?.(item.message_id)
     }
+  }
+
+  // Expose the archive action to InboxList's keyboard handler.
+  useImperativeHandle(ref, () => ({ archive }))
+
+  const handleArchive = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    await archive()
   }
 
   const handleEscalate = async (e: React.MouseEvent) => {
@@ -249,6 +282,8 @@ export function InboxRow({ item, selected, onSelect, onItemClick, isActive }: In
       toast.error('Failed to escalate message')
     } else {
       toast.success('Message escalated to urgent')
+      // Reflect the new urgency/priority on the row immediately.
+      onItemUpdated?.(item.message_id, { urgency: 'urgent', priority: 'urgent' })
     }
   }
 
@@ -264,6 +299,8 @@ export function InboxRow({ item, selected, onSelect, onItemClick, isActive }: In
       toast.error('Failed to mark as replied')
     } else {
       toast.success('Marked as replied')
+      // Marking replied removes the row from the pending inbox, same as archive.
+      onItemRemoved?.(item.message_id)
     }
   }
 
@@ -344,7 +381,10 @@ export function InboxRow({ item, selected, onSelect, onItemClick, isActive }: In
         'hover:bg-gray-50/80 transition-colors cursor-pointer',
         getPriorityBorderClass(item.priority),
         selected && 'bg-teal-50 hover:bg-teal-50',
-        isActive && 'bg-blue-50 hover:bg-blue-50 ring-1 ring-blue-300'
+        isActive && 'bg-blue-50 hover:bg-blue-50 ring-1 ring-blue-300',
+        // Keyboard focus highlight — an inset teal ring + subtle tint, distinct
+        // from `selected` (teal fill) and `isActive` (blue + outset blue ring).
+        isFocused && 'bg-teal-50/40 ring-2 ring-inset ring-teal-400'
       )}
     >
       {/* Checkbox — hidden for read-only roles since bulk actions also 403. */}
@@ -537,4 +577,4 @@ export function InboxRow({ item, selected, onSelect, onItemClick, isActive }: In
       )}
     </div>
   )
-}
+})
