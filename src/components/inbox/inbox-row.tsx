@@ -48,17 +48,17 @@ interface InboxRowProps {
   onNavigate?: () => void
 }
 
+// Restrained tinted avatar palette (light bg + dark text of the same hue),
+// hash-assigned. Calmer than the old saturated -500 rainbow and drops the
+// purple/pink hues (off-tone for a calm business tool). getAvatarColor's hashing
+// is unchanged — only the palette + the text color (now baked into each pair).
 const avatarColors = [
-  'bg-teal-500',
-  'bg-blue-500',
-  'bg-purple-500',
-  'bg-orange-500',
-  'bg-pink-500',
-  'bg-indigo-500',
-  'bg-emerald-500',
-  'bg-cyan-500',
-  'bg-amber-500',
-  'bg-rose-500',
+  'bg-teal-100 text-teal-700',
+  'bg-blue-100 text-blue-700',
+  'bg-amber-100 text-amber-800',
+  'bg-emerald-100 text-emerald-700',
+  'bg-slate-100 text-slate-700',
+  'bg-cyan-100 text-cyan-700',
 ]
 
 function hashString(str: string): number {
@@ -401,7 +401,7 @@ export const InboxRow = forwardRef<InboxRowHandle, InboxRowProps>(function Inbox
             type="checkbox"
             checked={selected}
             onChange={(e) => onSelect(item.id, e.target.checked)}
-            className="h-4 w-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+            className="h-4 w-4 rounded border-border text-[var(--brand-accent)] focus:ring-[var(--brand-accent)] cursor-pointer"
           />
         </div>
       )}
@@ -430,7 +430,7 @@ export const InboxRow = forwardRef<InboxRowHandle, InboxRowProps>(function Inbox
       <div className="w-48 md:w-56 xl:w-80 flex-shrink-0 min-w-0 flex items-center gap-3">
         <div
           className={cn(
-            'flex-shrink-0 h-9 w-9 rounded-full flex items-center justify-center text-[11px] font-bold text-white',
+            'flex-shrink-0 h-9 w-9 rounded-full flex items-center justify-center text-[11px] font-bold',
             getAvatarColor(accountName || senderName)
           )}
           title={rawSender}
@@ -438,21 +438,21 @@ export const InboxRow = forwardRef<InboxRowHandle, InboxRowProps>(function Inbox
           {getInitials(senderName)}
         </div>
         <div className="min-w-0">
-          <p className={cn("text-sm truncate leading-snug", unread ? "font-bold text-gray-900" : "font-medium text-gray-700")}>
-            {unread && <span className="inline-block h-1.5 w-1.5 rounded-full bg-teal-500 mr-1" />}
+          <p className={cn("text-sm truncate leading-snug", unread ? "font-bold text-foreground" : "font-medium text-zinc-700")}>
+            {unread && <span className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--brand-accent)] mr-1" />}
             {senderName}
           </p>
           <div className="flex items-center gap-1.5 mt-1">
-            <p className="text-[11px] text-gray-400 truncate leading-tight">
+            <p className="text-[11px] text-zinc-500 truncate leading-tight">
               {accountName.replace(/\s+Teams$/i, '').replace(/\s+WhatsApp$/i, '')}
             </p>
             {item.channel === 'teams' && (
-              <span className="inline-flex shrink-0 rounded bg-indigo-50 px-1 py-0 text-[9px] font-semibold text-indigo-600 border border-indigo-100">
+              <span className="inline-flex shrink-0 rounded bg-indigo-50 px-1 py-0 text-[10px] font-semibold text-indigo-600 border border-indigo-100">
                 Teams
               </span>
             )}
             {item.channel === 'whatsapp' && (
-              <span className="inline-flex shrink-0 rounded bg-green-50 px-1 py-0 text-[9px] font-semibold text-green-600 border border-green-100">
+              <span className="inline-flex shrink-0 rounded bg-green-50 px-1 py-0 text-[10px] font-semibold text-green-600 border border-green-100">
                 WA
               </span>
             )}
@@ -462,7 +462,7 @@ export const InboxRow = forwardRef<InboxRowHandle, InboxRowProps>(function Inbox
 
       {/* Subject / Preview */}
       <div className="flex-1 min-w-0 pr-2">
-        <p className="text-sm text-gray-600 truncate">
+        <p className="text-sm text-zinc-600 truncate">
           {truncate(item.subject_or_preview, 70)}
         </p>
       </div>
@@ -472,7 +472,7 @@ export const InboxRow = forwardRef<InboxRowHandle, InboxRowProps>(function Inbox
         {/* Snoozed badge — only when the snooze is still active */}
         {snoozedActive && (
           <span
-            className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700"
+            className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700"
             title={`Snoozed until ${snoozedLabel} — auto-resurfaces when due`}
           >
             <Clock className="h-2.5 w-2.5" />
@@ -491,7 +491,7 @@ export const InboxRow = forwardRef<InboxRowHandle, InboxRowProps>(function Inbox
         {item.tags && item.tags.length > 0 && (
           <div className="hidden xl:flex items-center gap-1">
             {item.tags.slice(0, 2).map(tag => (
-              <span key={tag} className="rounded-full bg-indigo-50 text-indigo-600 px-1.5 py-0 text-[10px] font-medium border border-indigo-100">
+              <span key={tag} className="rounded-full bg-indigo-50 text-indigo-600 px-1.5 py-0 text-[11px] font-medium border border-indigo-100">
                 {tag}
               </span>
             ))}
@@ -508,8 +508,8 @@ export const InboxRow = forwardRef<InboxRowHandle, InboxRowProps>(function Inbox
               title={`Assigned to ${assigneeName ?? 'a teammate'}`}
               aria-label={`Assigned to ${assigneeName ?? 'a teammate'}`}
               className={cn(
-                'flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white',
-                assigneeName ? getAvatarColor(assigneeName) : 'bg-gray-400'
+                'flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full text-[10px] font-bold',
+                assigneeName ? getAvatarColor(assigneeName) : 'bg-zinc-200 text-zinc-500'
               )}
             >
               {assigneeName ? getInitials(assigneeName) : <User className="h-3 w-3" />}
@@ -549,34 +549,38 @@ export const InboxRow = forwardRef<InboxRowHandle, InboxRowProps>(function Inbox
           overlap. Hidden entirely for read-only roles so we don't tease
           buttons whose underlying API mutations would 403. */}
       {!isReadOnly && (
-        <div className="absolute right-2 top-1/2 -translate-y-1/2 hidden group-hover:flex items-center gap-0.5 bg-white rounded-lg px-1.5 py-1 shadow-lg border border-gray-200 z-10">
+        <div className="absolute right-2 top-1/2 -translate-y-1/2 hidden group-hover:flex group-focus-within:flex items-center gap-0.5 bg-card rounded-lg px-1.5 py-1 shadow-lg border border-border z-10">
           {(item.ai_status === 'no_draft' || item.ai_status === 'classify_only') && (
             <button
               onClick={handleGenerateReply}
-              className="p-1.5 rounded-md text-teal-600 hover:bg-teal-50 transition-colors"
+              className="p-2 rounded-md text-[var(--brand-accent)] hover:bg-[var(--brand-accent)]/10 transition-colors"
               title="Generate AI reply"
+              aria-label="Generate AI reply"
             >
               <Sparkles className="h-3.5 w-3.5" />
             </button>
           )}
           <button
             onClick={handleMarkReplied}
-            className="p-1.5 rounded-md text-gray-400 hover:text-green-600 hover:bg-green-50 transition-colors"
+            className="p-2 rounded-md text-zinc-500 hover:text-green-600 hover:bg-green-50 transition-colors"
             title="Mark as Replied"
+            aria-label="Mark as Replied"
           >
             <CheckCheck className="h-3.5 w-3.5" />
           </button>
           <button
             onClick={handleArchive}
-            className="p-1.5 rounded-md text-gray-400 hover:text-teal-600 hover:bg-teal-50 transition-colors"
+            className="p-2 rounded-md text-zinc-500 hover:text-[var(--brand-accent)] hover:bg-[var(--brand-accent)]/10 transition-colors"
             title="Archive"
+            aria-label="Archive"
           >
             <Archive className="h-3.5 w-3.5" />
           </button>
           <button
             onClick={handleEscalate}
-            className="p-1.5 rounded-md text-gray-400 hover:text-orange-600 hover:bg-orange-50 transition-colors"
+            className="p-2 rounded-md text-zinc-500 hover:text-orange-600 hover:bg-orange-50 transition-colors"
             title="Escalate"
+            aria-label="Escalate"
           >
             <AlertTriangle className="h-3.5 w-3.5" />
           </button>

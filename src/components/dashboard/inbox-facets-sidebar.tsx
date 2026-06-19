@@ -177,7 +177,7 @@ export function InboxFacetsSidebar({
 
   // Tailwind: hidden on mobile unless `open`; always visible from md: up.
   const containerClasses = cn(
-    'flex flex-col h-full w-72 shrink-0 border-r border-gray-200 bg-white',
+    'flex flex-col h-full w-72 shrink-0 border-r border-border bg-card',
     open === false && 'hidden md:flex',
     open === true && 'fixed inset-y-0 left-0 z-40 shadow-2xl md:static md:shadow-none md:flex',
   )
@@ -189,12 +189,12 @@ export function InboxFacetsSidebar({
       data-testid="inbox-facets-sidebar"
     >
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
-        <div className="flex items-center gap-2 text-sm font-semibold text-gray-800">
-          <Filter className="h-4 w-4 text-teal-600" />
+      <div className="flex items-center justify-between border-b border-border px-4 py-3">
+        <div className="flex items-center gap-2 text-sm font-semibold text-zinc-700">
+          <Filter className="h-4 w-4 text-[var(--brand-accent)]" />
           Filters
           {facets && (
-            <span className="ml-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
+            <span className="ml-1 rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600">
               {facets.total}
             </span>
           )}
@@ -204,7 +204,7 @@ export function InboxFacetsSidebar({
             <button
               type="button"
               onClick={clearAll}
-              className="text-xs font-medium text-teal-600 hover:text-teal-800"
+              className="text-xs font-medium text-[var(--brand-accent)] hover:opacity-80"
             >
               Clear all
             </button>
@@ -213,7 +213,7 @@ export function InboxFacetsSidebar({
             <button
               type="button"
               onClick={onClose}
-              className="md:hidden rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+              className="md:hidden rounded p-1 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700"
               aria-label="Close filters"
             >
               <XIcon className="h-4 w-4" />
@@ -238,7 +238,7 @@ export function InboxFacetsSidebar({
               <button
                 type="button"
                 onClick={() => onToggleSection?.(section.key)}
-                className="group flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs font-semibold uppercase tracking-wider text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+                className="group flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:bg-zinc-50 hover:text-zinc-700"
               >
                 <span className="flex items-center gap-2">
                   <SIcon className="h-3.5 w-3.5" />
@@ -257,7 +257,7 @@ export function InboxFacetsSidebar({
                     <>
                       {[0, 1, 2].map((i) => (
                         <li key={i} className="px-2 py-1.5">
-                          <div className="h-4 w-full animate-pulse rounded bg-gray-100" />
+                          <div className="h-4 w-full animate-pulse rounded bg-muted" />
                         </li>
                       ))}
                     </>
@@ -272,8 +272,8 @@ export function InboxFacetsSidebar({
                           className={cn(
                             'group flex w-full items-center justify-between rounded-md px-2 py-1.5 text-sm transition-colors',
                             active
-                              ? 'bg-teal-50 font-medium text-teal-800'
-                              : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900',
+                              ? 'bg-[var(--brand-accent)]/10 font-medium text-[var(--brand-accent)]'
+                              : 'text-zinc-700 hover:bg-zinc-50 hover:text-foreground',
                           )}
                           aria-pressed={active}
                         >
@@ -282,8 +282,8 @@ export function InboxFacetsSidebar({
                             className={cn(
                               'ml-2 shrink-0 rounded-full px-2 py-0.5 text-xs',
                               active
-                                ? 'bg-teal-600 text-white'
-                                : 'bg-gray-100 text-gray-600 group-hover:bg-gray-200',
+                                ? 'bg-[var(--brand-accent)] text-white'
+                                : 'bg-zinc-100 text-zinc-600 group-hover:bg-zinc-200',
                             )}
                           >
                             {chip.count}

@@ -1399,12 +1399,12 @@ export default function InboxPage() {
           onClick={handleRefreshNewMessages}
           className="fixed top-4 left-1/2 z-50 -translate-x-1/2 cursor-pointer animate-fade-in"
         >
-          <div className="flex items-center gap-2 rounded-full border border-teal-200 bg-teal-50 px-5 py-2.5 shadow-lg hover:bg-teal-100 transition-colors">
+          <div className="flex items-center gap-2 rounded-full border border-[var(--brand-accent)]/20 bg-[var(--brand-accent)]/10 px-5 py-2.5 shadow-lg hover:bg-[var(--brand-accent)]/20 transition-colors">
             <span className="relative flex h-2.5 w-2.5">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-teal-400 opacity-75" />
-              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-teal-500" />
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--brand-accent)] opacity-75" />
+              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[var(--brand-accent)]" />
             </span>
-            <span className="text-sm font-medium text-teal-800">
+            <span className="text-sm font-medium text-[var(--brand-accent)]">
               {newMessageCount} new message{newMessageCount > 1 ? 's' : ''} — Click to refresh
             </span>
           </div>
@@ -1417,10 +1417,10 @@ export default function InboxPage() {
       {/* Page header */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">
+          <h1 className="text-2xl font-bold text-foreground">
             {inboxView === 'spam' ? 'Spam / Junk' : inboxView === 'newsletter' ? 'Newsletters' : 'Unified Inbox'}
           </h1>
-          <p className="mt-1.5 text-sm text-gray-500">
+          <p className="mt-1.5 text-sm text-muted-foreground">
             {inboxView === 'spam'
               ? 'Messages automatically filtered as spam or junk'
               : inboxView === 'newsletter'
@@ -1432,14 +1432,14 @@ export default function InboxPage() {
           <button
             type="button"
             onClick={() => setSidebarOpenMobile(true)}
-            className="md:hidden inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            className="md:hidden inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
             aria-label="Open filters"
           >
             <Filter size={14} />
             Filters
             {(() => {
               const n = Object.values(facetFilters).filter(Boolean).length
-              return n > 0 ? <span className="rounded-full bg-teal-600 text-white px-2 py-0.5 text-xs">{n}</span> : null
+              return n > 0 ? <span className="rounded-full bg-[var(--brand-accent)] text-white px-2 py-0.5 text-xs">{n}</span> : null
             })()}
           </button>
         )}
@@ -1447,11 +1447,11 @@ export default function InboxPage() {
 
       {/* Dashboard filter banner */}
       {(dashboardFilter || filters.channel !== 'all' || filters.category !== 'all' || filters.sentiment !== 'all') && (searchParams.get('filter') || searchParams.get('channel') || searchParams.get('category') || searchParams.get('sentiment')) && (
-        <div className="flex items-center gap-2 rounded-lg border border-teal-200 bg-teal-50 px-4 py-2 text-sm">
-          <span className="font-medium text-teal-800">
+        <div className="flex items-center gap-2 rounded-lg border border-[var(--brand-accent)]/20 bg-[var(--brand-accent)]/10 px-4 py-2 text-sm">
+          <span className="font-medium text-[var(--brand-accent)]">
             Filtered view from Dashboard:
           </span>
-          <span className="text-teal-600">
+          <span className="text-[var(--brand-accent)]">
             {dashboardFilter === 'pending' && 'Pending replies'}
             {dashboardFilter === 'ai_processed' && 'AI processed messages'}
             {dashboardFilter === 'sla_breached' && 'SLA breached messages'}
@@ -1464,7 +1464,7 @@ export default function InboxPage() {
               setFilters(defaultFilters)
               window.history.replaceState({}, '', '/inbox')
             }}
-            className="ml-auto text-teal-600 hover:text-teal-800"
+            className="ml-auto text-[var(--brand-accent)] hover:opacity-80"
           >
             <X size={16} />
           </button>
@@ -1476,7 +1476,7 @@ export default function InboxPage() {
         <button
           onClick={() => { setInboxView('inbox'); setSelectedItem(null) }}
           className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-            inboxView === 'inbox' ? 'bg-teal-600 text-white shadow-sm' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            inboxView === 'inbox' ? 'bg-[var(--brand-accent)] text-white shadow-sm' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
           }`}
         >
           <Inbox className="h-4 w-4" />
@@ -1486,7 +1486,7 @@ export default function InboxPage() {
               className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
                 inboxView === 'inbox'
                   ? 'bg-white/25 text-white'
-                  : 'bg-teal-100 text-teal-800'
+                  : 'bg-[var(--brand-accent)]/10 text-[var(--brand-accent)]'
               }`}
             >
               {inboxCount}
@@ -1496,7 +1496,7 @@ export default function InboxPage() {
         <button
           onClick={() => { setInboxView('newsletter'); setSelectedItem(null) }}
           className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-            inboxView === 'newsletter' ? 'bg-amber-500 text-white shadow-sm' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            inboxView === 'newsletter' ? 'bg-amber-100 text-amber-800 shadow-sm' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
           }`}
         >
           <Mail className="h-4 w-4" />
@@ -1508,7 +1508,7 @@ export default function InboxPage() {
         <button
           onClick={() => { setInboxView('spam'); setSelectedItem(null) }}
           className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-            inboxView === 'spam' ? 'bg-red-500 text-white shadow-sm' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            inboxView === 'spam' ? 'bg-red-100 text-red-800 shadow-sm' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
           }`}
         >
           <ShieldAlert className="h-4 w-4" />
@@ -1525,12 +1525,12 @@ export default function InboxPage() {
           {activeView && (() => {
             const SVIcon = getSavedViewIcon(activeView.icon)
             return (
-              <span className="inline-flex items-center gap-2 rounded-full border border-teal-200 bg-teal-50 px-3 py-1 text-sm font-medium text-teal-800">
+              <span className="inline-flex items-center gap-2 rounded-full border border-[var(--brand-accent)]/20 bg-[var(--brand-accent)]/10 px-3 py-1 text-sm font-medium text-[var(--brand-accent)]">
                 <SVIcon className="h-3.5 w-3.5" />
                 Viewing: {activeView.name}
                 <button
                   onClick={clearActiveView}
-                  className="ml-1 rounded-full p-0.5 text-teal-600 hover:bg-teal-100 hover:text-teal-900 transition-colors"
+                  className="ml-1 rounded-full p-0.5 text-[var(--brand-accent)] hover:bg-[var(--brand-accent)]/20 transition-colors"
                   title="Clear view"
                   aria-label="Clear active saved view"
                 >
@@ -1538,7 +1538,7 @@ export default function InboxPage() {
                 </button>
                 <button
                   onClick={() => { setEditingView(activeView); setShowSaveViewModal(true) }}
-                  className="rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-teal-700 hover:bg-teal-100 transition-colors"
+                  className="rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-[var(--brand-accent)] hover:bg-[var(--brand-accent)]/20 transition-colors"
                   title="Edit view"
                 >
                   Edit
@@ -1549,7 +1549,7 @@ export default function InboxPage() {
           {!activeView && hasNonDefaultFilters && (
             <button
               onClick={() => { setEditingView(null); setShowSaveViewModal(true) }}
-              className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 py-1 text-sm font-medium text-gray-700 hover:border-teal-300 hover:bg-teal-50 hover:text-teal-700 transition-colors"
+              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-white px-3 py-1 text-sm font-medium text-zinc-700 hover:border-[var(--brand-accent)]/40 hover:bg-[var(--brand-accent)]/10 hover:text-[var(--brand-accent)] transition-colors"
               title="Save current filters as a saved view"
             >
               <BookmarkPlus className="h-3.5 w-3.5" />
@@ -1577,21 +1577,21 @@ export default function InboxPage() {
          The 3 scope toggles (My Conversations / Show snoozed / Save view)
          used to sit detached on the filters row — they belong here with
          the other "act on the inbox" controls. */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-xl border border-gray-200 bg-white px-4 py-3">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-xl border border-border bg-card px-4 py-3">
         {/* ─ Group 1: count + view mode ─────────────────────────────── */}
         <div className="flex items-center gap-3">
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-zinc-600">
             Showing{' '}
-            <span className="font-semibold text-gray-900">{filteredItems.length}</span>{' '}
+            <span className="font-semibold text-foreground">{filteredItems.length}</span>{' '}
             of{' '}
-            <span className="font-semibold text-gray-900">{items.length}</span>{' '}
+            <span className="font-semibold text-foreground">{items.length}</span>{' '}
             {items.length === 1 ? 'conversation' : 'conversations'}
           </p>
           {/* Background refresh — the list stays put; just hint that fresher
               data is on the way instead of flashing skeletons. */}
           {refreshing && (
             <span
-              className="inline-flex items-center gap-1 text-xs text-gray-400"
+              className="inline-flex items-center gap-1 text-xs text-zinc-500"
               title="Refreshing in the background"
             >
               <Loader2 size={12} className="animate-spin" />
@@ -1599,13 +1599,13 @@ export default function InboxPage() {
             </span>
           )}
           {/* View mode toggle — hidden on mobile (split view not usable) */}
-          <div className="hidden sm:flex items-center rounded-lg border border-gray-200 bg-gray-50 p-1">
+          <div className="hidden sm:flex items-center rounded-lg border border-border bg-zinc-50 p-1">
             <button
               onClick={() => handleViewModeChange('list')}
               className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                 viewMode === 'list'
-                  ? 'bg-teal-600 text-white shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700 hover:bg-white'
+                  ? 'bg-[var(--brand-accent)] text-white shadow-sm'
+                  : 'text-muted-foreground hover:text-zinc-700 hover:bg-white'
               }`}
               title="List view"
             >
@@ -1616,8 +1616,8 @@ export default function InboxPage() {
               onClick={() => handleViewModeChange('split')}
               className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                 viewMode === 'split'
-                  ? 'bg-teal-600 text-white shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700 hover:bg-white'
+                  ? 'bg-[var(--brand-accent)] text-white shadow-sm'
+                  : 'text-muted-foreground hover:text-zinc-700 hover:bg-white'
               }`}
               title="Split view"
             >
@@ -1628,8 +1628,8 @@ export default function InboxPage() {
               onClick={() => handleViewModeChange('kanban')}
               className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                 viewMode === 'kanban'
-                  ? 'bg-teal-600 text-white shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700 hover:bg-white'
+                  ? 'bg-[var(--brand-accent)] text-white shadow-sm'
+                  : 'text-muted-foreground hover:text-zinc-700 hover:bg-white'
               }`}
               title="Kanban board"
             >
@@ -1642,14 +1642,14 @@ export default function InboxPage() {
         {/* ─ Group 2: scope toggles (moved here from the filters row) ─ */}
         {inboxView === 'inbox' && (
           <>
-            <div className="hidden md:block h-6 w-px bg-gray-200" />
+            <div className="hidden md:block h-6 w-px bg-border" />
             <div className="flex flex-wrap items-center gap-2">
               <button
                 onClick={() => setMyConversationsOnly(!myConversationsOnly)}
                 className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors whitespace-nowrap ${
                   myConversationsOnly
-                    ? 'bg-teal-600 text-white shadow-sm'
-                    : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+                    ? 'bg-[var(--brand-accent)] text-white shadow-sm'
+                    : 'bg-white text-zinc-600 border border-border hover:bg-zinc-50'
                 }`}
               >
                 <User size={14} />
@@ -1661,7 +1661,7 @@ export default function InboxPage() {
                 className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors whitespace-nowrap ${
                   showSnoozed
                     ? 'bg-amber-500 text-white shadow-sm'
-                    : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50 hover:border-amber-300 hover:text-amber-700'
+                    : 'bg-white text-zinc-600 border border-border hover:bg-zinc-50 hover:border-amber-300 hover:text-amber-700'
                 }`}
                 title={showSnoozed ? 'Hide snoozed conversations' : 'Show snoozed conversations alongside your inbox'}
               >
@@ -1671,7 +1671,7 @@ export default function InboxPage() {
               </button>
               <button
                 onClick={() => { setEditingView(null); setShowSaveViewModal(true) }}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-600 hover:border-teal-300 hover:bg-teal-50 hover:text-teal-700 transition-colors whitespace-nowrap"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-white px-3 py-1.5 text-sm font-medium text-zinc-600 hover:border-[var(--brand-accent)]/40 hover:bg-[var(--brand-accent)]/10 hover:text-[var(--brand-accent)] transition-colors whitespace-nowrap"
                 title="Save current filters as a view"
               >
                 <Bookmark size={14} />
@@ -1792,9 +1792,9 @@ export default function InboxPage() {
       {/* Confirmation Dialog */}
       {confirmAction && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="mx-4 w-full max-w-md rounded-xl border border-gray-200 bg-white p-6 shadow-xl">
-            <h3 className="text-lg font-semibold text-gray-900">Confirm Action</h3>
-            <p className="mt-2 text-sm text-gray-600">
+          <div className="mx-4 w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-foreground">Confirm Action</h3>
+            <p className="mt-2 text-sm text-zinc-600">
               {confirmAction.type === 'smart-approve' &&
                 `Approve ${confirmAction.count} of ${confirmAction.totalCount} messages with >85% AI confidence?`}
               {confirmAction.type === 'approve' &&
@@ -1852,11 +1852,11 @@ export default function InboxPage() {
       {/* Floating bulk action bar */}
       {selectedIds.size > 0 && (
         <div className="fixed bottom-20 sm:bottom-6 left-2 right-2 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 z-40 animate-fade-in">
-          <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 rounded-xl border border-gray-200 bg-white px-3 sm:px-5 py-3 shadow-2xl">
-            <span className="text-sm font-semibold text-gray-700">
+          <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 rounded-xl border border-border bg-card px-3 sm:px-5 py-3 shadow-2xl">
+            <span className="text-sm font-semibold text-zinc-700">
               {selectedIds.size} selected
             </span>
-            <div className="hidden sm:block h-5 w-px bg-gray-200" />
+            <div className="hidden sm:block h-5 w-px bg-border" />
             <Button
               variant="success"
               size="sm"
@@ -1925,7 +1925,7 @@ export default function InboxPage() {
             </Button>
             <button
               onClick={clearSelection}
-              className="ml-1 rounded-full p-2 min-w-[44px] min-h-[44px] flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+              className="ml-1 rounded-full p-2 min-w-[44px] min-h-[44px] flex items-center justify-center text-zinc-500 hover:bg-zinc-100 hover:text-zinc-600 transition-colors"
               title="Clear selection"
             >
               <X className="h-4 w-4" />
@@ -1937,7 +1937,7 @@ export default function InboxPage() {
       {/* Loading state — skeleton rows, FIRST load of a query only. Background
           refreshes keep the existing list rendered (see `refreshing`). */}
       {initialLoading && (
-        <div className="overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04),0_1px_3px_rgba(16,24,40,0.06)]">
+        <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-[0_1px_2px_rgba(16,24,40,0.04),0_1px_3px_rgba(16,24,40,0.06)]">
           {Array.from({ length: 8 }).map((_, i) => (
             <InboxRowSkeleton key={i} />
           ))}
@@ -1962,7 +1962,7 @@ export default function InboxPage() {
 
       {/* Empty state */}
       {!initialLoading && !error && items.length === 0 && (
-        <div className="overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04),0_1px_3px_rgba(16,24,40,0.06)]">
+        <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-[0_1px_2px_rgba(16,24,40,0.04),0_1px_3px_rgba(16,24,40,0.06)]">
           {inboxView === 'spam' ? (
             <EmptyState
               icon={ShieldCheck}
@@ -2001,7 +2001,7 @@ export default function InboxPage() {
 
       {/* Filtered empty state */}
       {!initialLoading && !error && items.length > 0 && filteredItems.length === 0 && inboxView === 'inbox' && (
-        <div className="overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04),0_1px_3px_rgba(16,24,40,0.06)]">
+        <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-[0_1px_2px_rgba(16,24,40,0.04),0_1px_3px_rgba(16,24,40,0.06)]">
           <EmptyState
             icon={Inbox}
             title="No messages match your filters"
@@ -2014,8 +2014,8 @@ export default function InboxPage() {
       {!initialLoading && !error && inboxView !== 'inbox' && items.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-600">
-              <span className="font-semibold text-gray-900">{items.length}</span>{' '}
+            <p className="text-sm text-zinc-600">
+              <span className="font-semibold text-foreground">{items.length}</span>{' '}
               {inboxView === 'newsletter' ? 'newsletter' : 'spam'} message{items.length !== 1 ? 's' : ''}
             </p>
             <Button
@@ -2027,27 +2027,27 @@ export default function InboxPage() {
               Mark All Not Spam
             </Button>
           </div>
-          <div className="rounded-lg border border-gray-200 bg-white divide-y divide-gray-100">
+          <div className="rounded-lg border border-border bg-card divide-y divide-border">
             {items.map((item) => (
               <Link
                 key={item.id}
                 href={`/conversations/${item.conversation_id}`}
-                className="flex items-start gap-4 px-4 py-3 hover:bg-gray-50 transition-colors group"
+                className="flex items-start gap-4 px-4 py-3 hover:bg-zinc-50 transition-colors group"
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-gray-900 truncate group-hover:text-teal-700">
+                    <span className="text-sm font-medium text-foreground truncate group-hover:text-[var(--brand-accent)]">
                       {item.sender_name || 'Unknown'}
                     </span>
-                    <span className="text-xs text-gray-400">
+                    <span className="text-xs text-zinc-500">
                       {item.channel}
                     </span>
                   </div>
-                  <p className="text-sm text-gray-800 font-medium truncate mt-0.5">
+                  <p className="text-sm text-zinc-700 font-medium truncate mt-0.5">
                     {item.subject_or_preview || '(no subject)'}
                   </p>
                   {item.body_preview && (
-                    <p className="text-xs text-gray-500 mt-1 line-clamp-2 leading-relaxed">
+                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2 leading-relaxed">
                       {item.body_preview}
                     </p>
                   )}
@@ -2059,7 +2059,7 @@ export default function InboxPage() {
                   )}
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0 pt-0.5">
-                  <span className="text-xs text-gray-400 whitespace-nowrap">
+                  <span className="text-xs text-zinc-500 whitespace-nowrap">
                     {getRelativeTime(item.time_waiting)}
                   </span>
                   <Button
@@ -2094,9 +2094,9 @@ export default function InboxPage() {
       {/* Split view — on mobile (<md) collapses to single-pane: list shown
           until a row is tapped, then preview swaps in with a Back button */}
       {!initialLoading && !error && inboxView === 'inbox' && filteredItems.length > 0 && viewMode === 'split' && (
-        <div className="flex flex-col md:flex-row rounded-lg border border-gray-200 bg-white overflow-hidden" style={{ height: 'calc(100vh - 320px)' }}>
+        <div className="flex flex-col md:flex-row rounded-lg border border-border bg-card overflow-hidden" style={{ height: 'calc(100vh - 320px)' }}>
           {/* Left: message list — hidden on mobile when an item is selected */}
-          <div className={`md:w-[45%] md:shrink-0 overflow-y-auto md:border-r md:border-gray-200 ${selectedItem ? 'hidden md:block' : 'block'} flex-1 md:flex-initial`}>
+          <div className={`md:w-[45%] md:shrink-0 overflow-y-auto md:border-r md:border-border ${selectedItem ? 'hidden md:block' : 'block'} flex-1 md:flex-initial`}>
             <InboxList
               items={filteredItems}
               onItemClick={handleItemClick}
@@ -2109,14 +2109,14 @@ export default function InboxPage() {
           </div>
 
           {/* Right: conversation preview — hidden on mobile when no selection */}
-          <div className={`flex-1 overflow-hidden bg-gray-50 ${selectedItem ? 'flex flex-col' : 'hidden md:flex md:flex-col'}`}>
+          <div className={`flex-1 overflow-hidden bg-zinc-50 ${selectedItem ? 'flex flex-col' : 'hidden md:flex md:flex-col'}`}>
             {selectedItem ? (
               <>
                 {/* Mobile back button */}
                 <button
                   type="button"
                   onClick={() => setSelectedItem(null)}
-                  className="md:hidden flex items-center gap-2 border-b border-gray-200 bg-white px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 min-h-[44px]"
+                  className="md:hidden flex items-center gap-2 border-b border-border bg-card px-4 py-3 text-sm font-medium text-zinc-700 hover:bg-zinc-50 min-h-[44px]"
                   aria-label="Back to list"
                 >
                   <ChevronLeft className="h-4 w-4" />
@@ -2129,11 +2129,11 @@ export default function InboxPage() {
             ) : (
               <div className="flex h-full items-center justify-center">
                 <div className="text-center">
-                  <Inbox className="mx-auto h-10 w-10 text-gray-300" />
-                  <p className="mt-3 text-sm font-medium text-gray-500">
+                  <Inbox className="mx-auto h-10 w-10 text-zinc-300" />
+                  <p className="mt-3 text-sm font-medium text-muted-foreground">
                     Select a message to preview
                   </p>
-                  <p className="mt-1 text-xs text-gray-400">
+                  <p className="mt-1 text-xs text-zinc-500">
                     Click any message on the left to see the conversation
                   </p>
                 </div>

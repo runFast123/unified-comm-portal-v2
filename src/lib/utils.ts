@@ -25,7 +25,7 @@ export function getChannelLabel(channel: ChannelType): string {
 export function getPriorityColor(priority: Priority): string {
   switch (priority) {
     case 'low': return 'text-gray-500 bg-gray-100'
-    case 'medium': return 'text-blue-700 bg-blue-100'
+    case 'medium': return 'text-amber-800 bg-amber-100'
     case 'high': return 'text-orange-700 bg-orange-100'
     case 'urgent': return 'text-red-700 bg-red-100'
   }

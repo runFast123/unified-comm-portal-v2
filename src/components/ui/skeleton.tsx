@@ -90,20 +90,35 @@ export function SkeletonCard({ className }: SkeletonCardProps) {
  * Used in the inbox page loading state so the layout doesn't shift in.
  */
 export function InboxRowSkeleton() {
+  // Geometry mirrors the real InboxRow outer container + internal layout
+  // (src/components/inbox/inbox-row.tsx): gap-4 px-5 py-4, min-h-[64px],
+  // bottom border, a leading channel chip + fixed-width sender column
+  // (round avatar + two text lines), a flex-1 subject line, and a
+  // horizontally-laid trailing meta row — so real rows swap in without a jump.
   return (
-    <div className="flex items-center gap-3 border-b border-border px-4 py-3">
-      <Skeleton className="h-4 w-4 rounded" />
-      <Skeleton className="h-9 w-9 flex-shrink-0 rounded-full" />
-      <div className="flex-1 space-y-2">
-        <div className="flex items-center gap-2">
-          <Skeleton className="h-4 w-28 rounded" />
-          <Skeleton className="h-3 w-16 rounded" />
+    <div className="flex items-center gap-4 border-b border-border px-5 py-4 min-h-[64px]">
+      {/* Checkbox */}
+      <Skeleton className="h-4 w-4 flex-shrink-0 rounded" />
+      {/* Channel chip */}
+      <Skeleton className="h-7 w-7 flex-shrink-0 rounded-full" />
+      {/* Sender column: avatar + name/subline (fixed width, matches w-48 md:w-56 xl:w-80) */}
+      <div className="flex w-48 flex-shrink-0 items-center gap-3 md:w-56 xl:w-80">
+        <Skeleton className="h-9 w-9 flex-shrink-0 rounded-full" />
+        <div className="min-w-0 flex-1 space-y-1.5">
+          <Skeleton className="h-3.5 w-28 rounded" />
+          <Skeleton className="h-2.5 w-20 rounded" />
         </div>
-        <Skeleton className="h-3 w-3/4 rounded" />
       </div>
-      <div className="flex flex-col items-end gap-1.5">
-        <Skeleton className="h-3 w-12 rounded" />
+      {/* Subject / preview — single line, flex-1 */}
+      <div className="min-w-0 flex-1 pr-2">
+        <Skeleton className="h-3.5 w-3/4 rounded" />
+      </div>
+      {/* Trailing meta — laid out horizontally to match the real row's pills/dots */}
+      <div className="flex flex-shrink-0 items-center gap-2">
+        <Skeleton className="hidden h-2.5 w-2.5 rounded-full md:block" />
+        <Skeleton className="hidden h-3 w-16 rounded md:block" />
         <Skeleton className="h-5 w-14 rounded-full" />
+        <Skeleton className="h-5 w-16 rounded-full" />
       </div>
     </div>
   )
