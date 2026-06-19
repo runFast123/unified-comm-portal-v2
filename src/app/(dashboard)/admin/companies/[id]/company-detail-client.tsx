@@ -77,6 +77,7 @@ interface Company {
   logo_url: string | null
   accent_color: string | null
   monthly_ai_budget_usd: number | null
+  retention_days: number | null
   settings: Record<string, unknown> | null
   default_email_signature: string | null
   archived_at: string | null
@@ -388,6 +389,12 @@ function OverviewTab({
   const [budget, setBudget] = useState(
     company.monthly_ai_budget_usd != null ? String(company.monthly_ai_budget_usd) : '',
   )
+  // '' = Disabled (null). Otherwise a whole number of days (>= 30). The select
+  // only offers >= 30 options, so the cron's 30-day safety floor is enforced
+  // implicitly at the UI layer (and re-checked server-side).
+  const [retentionDays, setRetentionDays] = useState(
+    company.retention_days != null ? String(company.retention_days) : '',
+  )
   const [settingsText, setSettingsText] = useState(
     company.settings ? JSON.stringify(company.settings, null, 2) : '{}',
   )
@@ -416,6 +423,9 @@ function OverviewTab({
       logo_url: logoUrl.trim() || null,
       accent_color: accentColor.trim() || null,
       settings: parsedSettings,
+      // '' → disabled (null); otherwise the chosen whole-day window. The
+      // PATCH route re-validates >= 30 server-side.
+      retention_days: retentionDays === '' ? null : Number(retentionDays),
     }
     if (budget.trim() === '') {
       body.monthly_ai_budget_usd = null
@@ -447,7 +457,7 @@ function OverviewTab({
     } finally {
       setSaving(false)
     }
-  }, [name, slug, logoUrl, accentColor, budget, settingsText, company.id, onSaved])
+  }, [name, slug, logoUrl, accentColor, budget, retentionDays, settingsText, company.id, onSaved])
 
   return (
     <Card className="p-6">
@@ -535,6 +545,30 @@ function OverviewTab({
             step="0.01"
             min="0"
           />
+        </div>
+        <div>
+          <Select
+            label="Data retention"
+            value={retentionDays}
+            onChange={(e) => setRetentionDays(e.target.value)}
+            options={[
+              { value: '', label: 'Disabled (keep forever)' },
+              { value: '30', label: '30 days' },
+              { value: '60', label: '60 days' },
+              { value: '90', label: '90 days' },
+              { value: '180', label: '180 days' },
+              { value: '365', label: '365 days' },
+            ]}
+          />
+          <p className="mt-1.5 flex items-start gap-1.5 text-xs text-amber-700">
+            <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span>
+              When enabled, a daily job <strong>permanently deletes</strong> resolved and
+              archived conversations (and their messages, notes, and attachments) once their
+              last activity is older than this window. Active, in-progress, waiting, and
+              escalated conversations are never deleted. This cannot be undone.
+            </span>
+          </p>
         </div>
         <div>
           <label className="mb-1.5 block text-sm font-medium text-gray-700">Settings (JSON)</label>

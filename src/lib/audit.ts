@@ -34,6 +34,7 @@ type AuditAction =
   | 'livechat_widget_updated'
   | 'livechat_widget_deleted'
   | 'data_exported'
+  | 'data_retention_purge'
 
 /**
  * Writes an entry to the audit_log table.

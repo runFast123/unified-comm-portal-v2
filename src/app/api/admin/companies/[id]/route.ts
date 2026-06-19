@@ -27,6 +27,10 @@ interface UpdateBody {
   monthly_ai_budget_usd?: number | null
   settings?: Record<string, unknown> | null
   default_email_signature?: string | null
+  // Data-retention window in days. null = disabled. When set it must be an
+  // integer >= 30 — the purge cron also enforces a hard 30-day floor, so a
+  // sub-30 value here is rejected rather than silently ignored.
+  retention_days?: number | null
   // Phase 3 soft-archive. true → archive (sets archived_at = now()),
   // false → restore (clears archived_at). Super-admin only.
   archived?: boolean
@@ -61,7 +65,7 @@ export async function GET(
   const { data, error } = await admin
     .from('companies')
     .select(
-      'id, name, slug, logo_url, accent_color, monthly_ai_budget_usd, settings, default_email_signature, created_at, updated_at',
+      'id, name, slug, logo_url, accent_color, monthly_ai_budget_usd, retention_days, settings, default_email_signature, created_at, updated_at',
     )
     .eq('id', id)
     .maybeSingle()
@@ -160,6 +164,24 @@ export async function PATCH(
     }
   }
 
+  if (body.retention_days !== undefined) {
+    if (body.retention_days === null) {
+      patch.retention_days = null
+    } else {
+      const num = Number(body.retention_days)
+      // Whole number of days, >= 30 (the purge cron's hard safety floor), and
+      // bounded so a typo can't set an absurd window. Reject sub-30 explicitly
+      // so the admin gets feedback rather than a silently-ignored value.
+      if (!Number.isInteger(num) || num < 30 || num > 3650) {
+        return NextResponse.json(
+          { error: 'retention_days must be null (disabled) or an integer between 30 and 3650' },
+          { status: 400 },
+        )
+      }
+      patch.retention_days = num
+    }
+  }
+
   if (body.settings !== undefined) {
     // M5 fix: previously `body.settings === null` silently wiped the JSONB
     // blob to {}, which let a typo in a frontend save blow away CSAT
@@ -243,7 +265,7 @@ export async function PATCH(
     .update(patch)
     .eq('id', id)
     .select(
-      'id, name, slug, logo_url, accent_color, monthly_ai_budget_usd, settings, default_email_signature, archived_at, created_at, updated_at',
+      'id, name, slug, logo_url, accent_color, monthly_ai_budget_usd, retention_days, settings, default_email_signature, archived_at, created_at, updated_at',
     )
     .single()
 

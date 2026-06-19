@@ -62,7 +62,7 @@ export default async function CompanyDetailPage({
   const { data: companyRow } = await admin
     .from('companies')
     .select(
-      'id, name, slug, logo_url, accent_color, monthly_ai_budget_usd, settings, default_email_signature, archived_at, created_at, updated_at',
+      'id, name, slug, logo_url, accent_color, monthly_ai_budget_usd, retention_days, settings, default_email_signature, archived_at, created_at, updated_at',
     )
     .eq('id', id)
     .maybeSingle()

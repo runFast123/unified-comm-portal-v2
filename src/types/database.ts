@@ -67,6 +67,11 @@ export interface Company {
    *  null when the admin hasn't configured one. Used as the second-tier
    *  source for `resolveSignature()` when a user has no override. */
   default_email_signature?: string | null
+  /** Data-retention window in days. When set (>= 30), the
+   *  `/api/cron/retention-purge` cron permanently deletes resolved/archived
+   *  conversations (and their cascading children) whose last activity is
+   *  older than this many days. NULL = retention disabled (nothing purged). */
+  retention_days?: number | null
   /** Whether to auto-send a CSAT survey when a conversation is marked
    *  resolved. Off by default — opt-in per company. */
   csat_enabled?: boolean | null
