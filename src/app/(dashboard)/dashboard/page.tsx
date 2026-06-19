@@ -854,30 +854,30 @@ export default function DashboardPage() {
         {/* Header skeleton */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-            <div className="mt-1 h-4 w-48 rounded bg-gray-200 animate-pulse" />
+            <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
+            <div className="mt-1 h-4 w-48 rounded bg-muted animate-pulse" />
           </div>
-          <div className="h-9 w-64 rounded-lg bg-gray-200 animate-pulse" />
+          <div className="h-9 w-64 rounded-lg bg-muted animate-pulse" />
         </div>
 
         {/* Date range skeleton */}
         <div className="flex items-center gap-2">
-          <div className="h-8 w-20 rounded-lg bg-gray-200 animate-pulse" />
-          <div className="h-8 w-20 rounded-lg bg-gray-200 animate-pulse" />
-          <div className="h-8 w-20 rounded-lg bg-gray-200 animate-pulse" />
+          <div className="h-8 w-20 rounded-lg bg-muted animate-pulse" />
+          <div className="h-8 w-20 rounded-lg bg-muted animate-pulse" />
+          <div className="h-8 w-20 rounded-lg bg-muted animate-pulse" />
         </div>
 
         {/* KPI skeleton cards */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+            <div key={i} className="rounded-xl border border-border bg-card p-5 shadow-sm">
               <div className="flex items-start justify-between">
                 <div className="flex-1 space-y-3">
-                  <div className="h-4 w-24 rounded bg-gray-200 animate-pulse" />
-                  <div className="h-8 w-16 rounded bg-gray-200 animate-pulse" />
-                  <div className="h-3 w-20 rounded bg-gray-200 animate-pulse" />
+                  <div className="h-4 w-24 rounded bg-muted animate-pulse" />
+                  <div className="h-8 w-16 rounded bg-muted animate-pulse" />
+                  <div className="h-3 w-20 rounded bg-muted animate-pulse" />
                 </div>
-                <div className="h-10 w-10 rounded-lg bg-gray-200 animate-pulse" />
+                <div className="h-10 w-10 rounded-lg bg-muted animate-pulse" />
               </div>
             </div>
           ))}
@@ -886,14 +886,14 @@ export default function DashboardPage() {
         {/* SLA skeleton */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+            <div key={i} className="rounded-xl border border-border bg-card p-5 shadow-sm">
               <div className="flex items-start justify-between">
                 <div className="flex-1 space-y-3">
-                  <div className="h-4 w-28 rounded bg-gray-200 animate-pulse" />
-                  <div className="h-8 w-16 rounded bg-gray-200 animate-pulse" />
-                  <div className="h-3 w-32 rounded bg-gray-200 animate-pulse" />
+                  <div className="h-4 w-28 rounded bg-muted animate-pulse" />
+                  <div className="h-8 w-16 rounded bg-muted animate-pulse" />
+                  <div className="h-3 w-32 rounded bg-muted animate-pulse" />
                 </div>
-                <div className="h-10 w-10 rounded-lg bg-gray-200 animate-pulse" />
+                <div className="h-10 w-10 rounded-lg bg-muted animate-pulse" />
               </div>
             </div>
           ))}
@@ -902,11 +902,11 @@ export default function DashboardPage() {
         {/* Bottom cards skeleton */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           {Array.from({ length: 2 }).map((_, i) => (
-            <div key={i} className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-              <div className="h-5 w-32 rounded bg-gray-200 animate-pulse mb-4" />
+            <div key={i} className="rounded-xl border border-border bg-card p-6 shadow-sm">
+              <div className="h-5 w-32 rounded bg-muted animate-pulse mb-4" />
               <div className="space-y-3">
                 {Array.from({ length: 3 }).map((_, j) => (
-                  <div key={j} className="h-6 w-full rounded bg-gray-100 animate-pulse" />
+                  <div key={j} className="h-6 w-full rounded bg-muted animate-pulse" />
                 ))}
               </div>
             </div>
@@ -925,8 +925,8 @@ export default function DashboardPage() {
     return (
       <div className="space-y-6 animate-fade-in">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-          <p className="mt-1 text-sm text-gray-500">No accounts connected yet</p>
+          <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
+          <p className="mt-1 text-sm text-muted-foreground">No accounts connected yet</p>
         </div>
 
         {/* Self-hides for non-admins, when dismissed, or when all steps complete */}
@@ -967,7 +967,7 @@ export default function DashboardPage() {
       {isAdmin && activeCompanyId === null && (
         <div
           role="status"
-          className="flex items-start gap-3 rounded-xl border border-teal-200 bg-gradient-to-r from-teal-50 to-emerald-50 px-4 py-3 shadow-sm"
+          className="flex items-start gap-3 rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 shadow-sm"
         >
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-teal-600 text-white shadow">
             <Globe className="h-4 w-4" />
@@ -986,8 +986,8 @@ export default function DashboardPage() {
       {/* Page header with channel filter */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-          <p className="mt-1 text-sm text-gray-500">
+          <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             {isAccountFiltered
               ? `Filtered view: ${filteredAccounts.length} of ${accounts.length} accounts`
               : `Unified overview across all ${accounts.length} accounts`}
@@ -1012,7 +1012,7 @@ export default function DashboardPage() {
       {/* Date Range Selector + Account Filter */}
       <div className="flex flex-wrap items-center gap-4">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-gray-500 mr-1">Period:</span>
+          <span className="text-sm font-medium text-muted-foreground mr-1">Period:</span>
           {([
             { key: 'today' as DateRange, label: 'Today' },
             { key: 'yesterday' as DateRange, label: 'Yesterday' },
@@ -1023,10 +1023,10 @@ export default function DashboardPage() {
             <button
               key={key}
               onClick={() => setDateRange(key)}
-              className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${
+              className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-accent)] focus-visible:ring-offset-2 ${
                 dateRange === key
-                  ? 'bg-teal-600 text-white shadow-sm'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  ? 'bg-[var(--brand-accent)] text-white shadow-sm'
+                  : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
               }`}
             >
               {label}
@@ -1038,14 +1038,14 @@ export default function DashboardPage() {
                 type="date"
                 value={customFrom}
                 onChange={(e) => setCustomFrom(e.target.value)}
-                className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-700 focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                className="rounded-lg border border-border bg-card px-3 py-1.5 text-sm text-zinc-700 focus:border-[var(--brand-accent)] focus:ring-1 focus:ring-[var(--brand-accent)]"
               />
-              <span className="text-sm text-gray-400">to</span>
+              <span className="text-sm text-zinc-500">to</span>
               <input
                 type="date"
                 value={customTo}
                 onChange={(e) => setCustomTo(e.target.value)}
-                className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-700 focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                className="rounded-lg border border-border bg-card px-3 py-1.5 text-sm text-zinc-700 focus:border-[var(--brand-accent)] focus:ring-1 focus:ring-[var(--brand-accent)]"
               />
             </div>
           )}
@@ -1055,10 +1055,10 @@ export default function DashboardPage() {
         {isAdmin && <div className="relative">
           <button
             onClick={() => setAccountFilterOpen((v) => !v)}
-            className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
+            className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-accent)] focus-visible:ring-offset-2 ${
               isAccountFiltered
-                ? 'border-teal-300 bg-teal-50 text-teal-700'
-                : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                ? 'border-[var(--brand-accent)]/30 bg-[var(--brand-accent)]/10 text-[var(--brand-accent)]'
+                : 'border-border bg-card text-zinc-600 hover:bg-zinc-50'
             }`}
           >
             <Filter className="h-4 w-4" />
@@ -1071,7 +1071,7 @@ export default function DashboardPage() {
           {isAccountFiltered && (
             <button
               onClick={handleClearAccountFilter}
-              className="ml-1 inline-flex items-center rounded-full p-1 text-teal-600 hover:bg-teal-100 transition-colors"
+              className="ml-1 inline-flex items-center rounded-full p-1 text-[var(--brand-accent)] hover:bg-teal-100 transition-colors"
               title="Clear account filter"
             >
               <X className="h-3.5 w-3.5" />
@@ -1084,22 +1084,22 @@ export default function DashboardPage() {
                 className="fixed inset-0 z-30"
                 onClick={() => setAccountFilterOpen(false)}
               />
-              <div className="absolute left-0 top-full z-40 mt-1 w-72 rounded-lg border border-gray-200 bg-white shadow-lg">
-                <div className="flex items-center justify-between border-b border-gray-100 px-3 py-2">
-                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+              <div className="absolute left-0 top-full z-40 mt-1 w-72 rounded-lg border border-border bg-card shadow-lg">
+                <div className="flex items-center justify-between border-b border-border px-3 py-2">
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                     Filter by Account
                   </span>
                   <div className="flex items-center gap-2">
                     <button
                       onClick={handleSelectAllAccounts}
-                      className="text-xs text-teal-600 hover:text-teal-800 font-medium"
+                      className="text-xs text-[var(--brand-accent)] hover:text-teal-800 font-medium"
                     >
                       Select All
                     </button>
-                    <span className="text-gray-300">|</span>
+                    <span className="text-zinc-300">|</span>
                     <button
                       onClick={handleClearAccountFilter}
-                      className="text-xs text-gray-500 hover:text-gray-700 font-medium"
+                      className="text-xs text-muted-foreground hover:text-zinc-700 font-medium"
                     >
                       Clear
                     </button>
@@ -1107,21 +1107,21 @@ export default function DashboardPage() {
                 </div>
                 <div className="max-h-64 overflow-y-auto py-1">
                   {accounts.length === 0 ? (
-                    <p className="px-3 py-4 text-center text-sm text-gray-400">No accounts found</p>
+                    <p className="px-3 py-4 text-center text-sm text-zinc-500">No accounts found</p>
                   ) : (
                     accounts.map((account) => (
                       <label
                         key={account.id}
-                        className="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 cursor-pointer transition-colors"
+                        className="flex items-center gap-3 px-3 py-2 hover:bg-zinc-50 cursor-pointer transition-colors"
                       >
                         <input
                           type="checkbox"
                           checked={selectedAccountIds.has(account.id)}
                           onChange={() => handleToggleAccount(account.id)}
-                          className="h-4 w-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+                          className="h-4 w-4 rounded border-border text-[var(--brand-accent)] focus:ring-[var(--brand-accent)]"
                         />
                         <ChannelIcon channel={account.channel_type} size={16} />
-                        <span className="flex-1 text-sm text-gray-700 truncate">
+                        <span className="flex-1 text-sm text-zinc-700 truncate">
                           {account.name}
                         </span>
                         {account.pendingCount > 0 && (
@@ -1185,39 +1185,39 @@ export default function DashboardPage() {
         />
 
         {/* Sentiment gauge card */}
-        <div className="relative rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="relative rounded-xl border border-border bg-card p-5 shadow-sm">
           <div className="absolute left-0 top-0 h-full w-1 rounded-l-xl bg-emerald-500" />
           <div className="flex items-start justify-between">
-            <p className="text-sm font-medium text-gray-500">Sentiment Score</p>
+            <p className="text-sm font-medium text-muted-foreground">Sentiment Score</p>
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600">
               <Smile className="h-5 w-5" />
             </div>
           </div>
-          <div className="mt-3 flex h-3 w-full overflow-hidden rounded-full bg-gray-100">
+          <div className="mt-3 flex h-3 w-full overflow-hidden rounded-full bg-zinc-100">
             <div
-              className="bg-green-500 transition-all"
+              className="bg-[var(--color-success)] transition-all"
               style={{ width: `${filteredKpis.sentimentScore.positive}%` }}
             />
             <div
-              className="bg-gray-400 transition-all"
+              className="bg-muted transition-all"
               style={{ width: `${filteredKpis.sentimentScore.neutral}%` }}
             />
             <div
-              className="bg-red-500 transition-all"
+              className="bg-[var(--color-danger)] transition-all"
               style={{ width: `${filteredKpis.sentimentScore.negative}%` }}
             />
           </div>
-          <div className="mt-2 flex justify-between text-xs text-gray-500">
+          <div className="mt-2 flex justify-between text-xs text-muted-foreground">
             <span className="flex items-center gap-1">
-              <span className="inline-block h-2 w-2 rounded-full bg-green-500" />
+              <span className="inline-block h-2 w-2 rounded-full bg-[var(--color-success)]" />
               {filteredKpis.sentimentScore.positive}%
             </span>
             <span className="flex items-center gap-1">
-              <span className="inline-block h-2 w-2 rounded-full bg-gray-400" />
+              <span className="inline-block h-2 w-2 rounded-full bg-muted" />
               {filteredKpis.sentimentScore.neutral}%
             </span>
             <span className="flex items-center gap-1">
-              <span className="inline-block h-2 w-2 rounded-full bg-red-500" />
+              <span className="inline-block h-2 w-2 rounded-full bg-[var(--color-danger)]" />
               {filteredKpis.sentimentScore.negative}%
             </span>
           </div>
@@ -1280,12 +1280,12 @@ export default function DashboardPage() {
       {dashDrill && (
         <Card className="animate-slide-up">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-gray-900">
+            <h3 className="text-sm font-semibold text-foreground">
               {dashDrillTitle[dashDrill]} ({dashDrillMsgs.length}{dashDrillMsgs.length >= 200 ? '+' : ''})
             </h3>
             <button
               onClick={() => { setDashDrill(null); setDashDrillMsgs([]) }}
-              className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+              className="rounded-lg p-1 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-600 transition-colors"
               aria-label="Close panel"
             >
               <X size={16} />
@@ -1295,16 +1295,16 @@ export default function DashboardPage() {
             <div className="space-y-3">
               {[...Array(5)].map((_, i) => (
                 <div key={i} className="flex gap-3 animate-pulse">
-                  <div className="h-10 w-10 rounded-xl bg-gray-200 shrink-0" />
+                  <div className="h-10 w-10 rounded-xl bg-muted shrink-0" />
                   <div className="flex-1 space-y-2">
-                    <div className="h-4 w-40 bg-gray-200 rounded" />
-                    <div className="h-3 w-64 bg-gray-200 rounded" />
+                    <div className="h-4 w-40 bg-muted rounded" />
+                    <div className="h-3 w-64 bg-muted rounded" />
                   </div>
                 </div>
               ))}
             </div>
           ) : dashDrillMsgs.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-6">No messages found for this filter.</p>
+            <p className="text-sm text-zinc-500 text-center py-6">No messages found for this filter.</p>
           ) : (
             <div className="max-h-[500px] overflow-y-auto space-y-1.5">
               {dashDrillMsgs.map((msg) => {
@@ -1317,7 +1317,7 @@ export default function DashboardPage() {
                   <Link
                     key={msg.id}
                     href={msg.conversation_id ? `/conversations/${msg.conversation_id}` : '#'}
-                    className="group flex items-start gap-3 rounded-xl px-4 py-3 hover:bg-gray-50 transition-all border border-transparent hover:border-gray-200 hover:shadow-sm"
+                    className="group flex items-start gap-3 rounded-xl px-4 py-3 hover:bg-zinc-50 transition-all border border-transparent hover:border-border hover:shadow-sm"
                   >
                     {/* Avatar */}
                     <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${avatarColors[colorIdx]} text-white text-xs font-bold shrink-0 mt-0.5`}>
@@ -1328,29 +1328,29 @@ export default function DashboardPage() {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2 min-w-0">
-                          <span className="text-sm font-semibold text-gray-900 truncate group-hover:text-teal-700 transition-colors">
+                          <span className="text-sm font-semibold text-foreground truncate group-hover:text-[var(--brand-accent)] transition-colors">
                             {name}
                           </span>
                           {email && (
-                            <span className="text-xs text-gray-400 truncate hidden sm:inline">{email}</span>
+                            <span className="text-xs text-zinc-500 truncate hidden sm:inline">{email}</span>
                           )}
                         </div>
-                        <span className="text-xs text-gray-400 shrink-0 whitespace-nowrap">
+                        <span className="text-xs text-zinc-500 shrink-0 whitespace-nowrap">
                           {new Date(msg.received_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                         </span>
                       </div>
 
                       {msg.email_subject && (
-                        <p className="text-sm font-medium text-gray-700 truncate mt-0.5">{msg.email_subject}</p>
+                        <p className="text-sm font-medium text-zinc-700 truncate mt-0.5">{msg.email_subject}</p>
                       )}
 
-                      <p className="text-xs text-gray-500 truncate mt-0.5 leading-relaxed">
+                      <p className="text-xs text-muted-foreground truncate mt-0.5 leading-relaxed">
                         {msg.message_text?.slice(0, 120) || 'No content'}
                       </p>
 
                       <div className="mt-1.5 flex items-center gap-2 flex-wrap">
                         {msg.account_name && (
-                          <span className="inline-flex items-center gap-1 rounded-md bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
+                          <span className="inline-flex items-center gap-1 rounded-md bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600">
                             <ChannelIcon channel={msg.channel || 'email'} size={10} />
                             {msg.account_name.replace(/\s+Teams$/i, '')}
                           </span>
@@ -1358,7 +1358,7 @@ export default function DashboardPage() {
                         {msg.is_spam && <Badge variant="danger" size="sm">Spam</Badge>}
                         {!msg.replied && !msg.is_spam && <Badge variant="warning" size="sm">Pending</Badge>}
                         {msg.replied && <Badge variant="success" size="sm">Replied</Badge>}
-                        <span className="ml-auto text-xs text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <span className="ml-auto text-xs text-zinc-500 opacity-0 group-hover:opacity-100 transition-opacity">
                           View conversation →
                         </span>
                       </div>
@@ -1380,18 +1380,18 @@ export default function DashboardPage() {
               <div
                 key={stat.channel}
                 onClick={() => setChannelFilter(stat.channel as ChannelFilterValue)}
-                className="cursor-pointer rounded-lg border border-gray-100 p-4 text-center hover:shadow-md transition-shadow"
+                className="cursor-pointer rounded-lg border border-border p-4 text-center hover:shadow-md transition-shadow"
               >
                 <div className="flex items-center justify-center gap-2">
                   {getChannelColoredIcon(stat.channel)}
-                  <span className="font-semibold text-gray-900">
+                  <span className="font-semibold text-foreground">
                     {getChannelLabel(stat.channel)}
                   </span>
                 </div>
-                <p className="mt-2 text-3xl font-bold text-gray-900">
+                <p className="mt-2 text-3xl font-bold text-foreground">
                   {stat.messageCount}
                 </p>
-                <p className="text-xs text-gray-500">messages</p>
+                <p className="text-xs text-muted-foreground">messages</p>
                 <div className="mt-3 flex flex-col items-center space-y-1.5 text-xs">
                   <span className="text-orange-600">
                     {stat.pendingCount} pending
@@ -1412,25 +1412,25 @@ export default function DashboardPage() {
         {/* Category Breakdown - CSS bar chart */}
         <Card title="Category Breakdown" description="Messages by classification category">
           {categories.length === 0 ? (
-            <p className="py-8 text-center text-sm text-gray-400">No data yet</p>
+            <p className="py-8 text-center text-sm text-zinc-500">No data yet</p>
           ) : (
             <div className="space-y-3">
               {categories.map((cat) => (
-                <div key={cat.category} className="flex items-center gap-3 rounded px-1 hover:bg-gray-50 transition-colors">
-                  <span className="w-24 sm:w-32 flex-shrink-0 truncate text-sm text-gray-700">
+                <div key={cat.category} className="flex items-center gap-3 rounded px-1 hover:bg-zinc-50 transition-colors">
+                  <span className="w-24 sm:w-32 flex-shrink-0 truncate text-sm text-zinc-700">
                     {cat.category}
                   </span>
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <div className="h-6 flex-1 overflow-hidden rounded bg-gray-100">
+                      <div className="h-6 flex-1 overflow-hidden rounded bg-zinc-100">
                         <div
-                          className="h-full rounded bg-teal-500 transition-all"
+                          className="h-full rounded bg-[var(--brand-accent)] transition-all"
                           style={{
                             width: `${(cat.count / maxCategoryCount) * 100}%`,
                           }}
                         />
                       </div>
-                      <span className="w-8 text-right text-sm font-semibold text-gray-700">
+                      <span className="w-8 text-right text-sm font-semibold text-zinc-700">
                         {cat.count}
                       </span>
                     </div>
@@ -1449,7 +1449,7 @@ export default function DashboardPage() {
           description="Conversations requiring urgent attention"
           className="animate-slide-up stagger-3"
         >
-          <div className="divide-y divide-gray-100">
+          <div className="divide-y divide-border">
             {escalatedConversations.map((conv) => (
               <Link
                 key={conv.id}
@@ -1462,21 +1462,21 @@ export default function DashboardPage() {
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-gray-900 truncate">
+                      <span className="text-sm font-medium text-foreground truncate">
                         {conv.participant_name || conv.participant_email || 'Unknown'}
                       </span>
                       <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">Urgent</span>
-                      <span className="text-xs text-gray-400 capitalize">{conv.channel}</span>
+                      <span className="text-xs text-zinc-500 capitalize">{conv.channel}</span>
                     </div>
                     <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-xs text-gray-500">{conv.account_name}</span>
+                      <span className="text-xs text-muted-foreground">{conv.account_name}</span>
                       {conv.assigned_to_name && (
-                        <span className="text-xs text-teal-600">Assigned to {conv.assigned_to_name}</span>
+                        <span className="text-xs text-[var(--brand-accent)]">Assigned to {conv.assigned_to_name}</span>
                       )}
                     </div>
                   </div>
                 </div>
-                <span className="text-xs text-gray-400 shrink-0 whitespace-nowrap">
+                <span className="text-xs text-zinc-500 shrink-0 whitespace-nowrap">
                   {conv.last_message_at ? new Date(conv.last_message_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '--'}
                 </span>
               </Link>
@@ -1501,7 +1501,7 @@ export default function DashboardPage() {
         className="animate-slide-up stagger-4"
       >
         {filteredAccounts.length === 0 ? (
-          <p className="py-8 text-center text-sm text-gray-400">No accounts found</p>
+          <p className="py-8 text-center text-sm text-zinc-500">No accounts found</p>
         ) : (
           <AccountsTable accounts={filteredAccounts} filter={channelFilter} />
         )}

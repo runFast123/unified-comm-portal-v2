@@ -42,7 +42,7 @@ export function AdminOnboardingBanner({ show }: AdminOnboardingBannerProps) {
   return (
     <div
       role="status"
-      className="mx-4 mt-4 flex items-start gap-3 rounded-xl border border-teal-200 bg-gradient-to-r from-teal-50 to-emerald-50 px-4 py-3 shadow-sm md:mx-6 lg:mx-8"
+      className="mx-4 mt-4 flex items-start gap-3 rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 shadow-sm md:mx-6 lg:mx-8"
     >
       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-teal-600 text-white shadow">
         <Sparkles className="h-4 w-4" />

@@ -357,19 +357,19 @@ export function DashboardShell({
           <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-sm">
             <Link
               href="/dashboard"
-              className="text-muted-foreground hover:text-primary transition-colors"
+              className="text-muted-foreground hover:text-[var(--brand-accent)] transition-colors"
             >
               <Home className="h-4 w-4" />
             </Link>
             {breadcrumbs.map((crumb, i) => (
               <span key={crumb.href} className="flex items-center gap-1.5">
-                <ChevronRight className="h-3.5 w-3.5 text-gray-300" />
+                <ChevronRight className="h-3.5 w-3.5 text-border" />
                 {i === breadcrumbs.length - 1 ? (
                   <span className="font-medium text-foreground">{crumb.label}</span>
                 ) : (
                   <Link
                     href={crumb.href}
-                    className="text-muted-foreground hover:text-primary transition-colors"
+                    className="text-muted-foreground hover:text-[var(--brand-accent)] transition-colors"
                   >
                     {crumb.label}
                   </Link>

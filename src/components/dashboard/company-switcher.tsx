@@ -179,27 +179,27 @@ export function CompanySwitcher({ companies, currentCompanyId, activeCompanyId =
         ref={buttonRef}
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-700 shadow-sm hover:bg-gray-50 transition-colors max-w-[220px]"
+        className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-2.5 py-1.5 text-sm text-zinc-700 shadow-sm hover:bg-accent transition-colors max-w-[220px]"
         aria-haspopup="listbox"
         aria-expanded={open}
         title={`Switch company (currently: ${isCombined ? 'All companies' : current?.name ?? 'unknown'})`}
       >
         {isCombined ? (
-          <Globe className="h-4 w-4 text-teal-600" />
+          <Globe className="h-4 w-4 text-[var(--brand-accent)]" />
         ) : current?.logo_url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={current.logo_url}
             alt=""
-            className="h-5 w-5 rounded object-cover bg-gray-50"
+            className="h-5 w-5 rounded object-cover bg-muted"
           />
         ) : (
-          <Building2 className="h-4 w-4 text-gray-500" />
+          <Building2 className="h-4 w-4 text-muted-foreground" />
         )}
         <span className="truncate font-medium">
           {isCombined ? 'All companies' : current?.name ?? 'Select company'}
         </span>
-        <ChevronDown className="h-3.5 w-3.5 text-gray-400 shrink-0" />
+        <ChevronDown className="h-3.5 w-3.5 text-zinc-500 shrink-0" />
       </button>
 
       {open && mounted && coords && createPortal(
@@ -207,7 +207,7 @@ export function CompanySwitcher({ companies, currentCompanyId, activeCompanyId =
           id="company-switcher-panel"
           role="listbox"
           style={{ position: 'fixed', top: coords.top, right: coords.right, zIndex: 9999 }}
-          className="w-72 rounded-lg border border-gray-200 bg-white shadow-lg max-h-[60vh] overflow-y-auto"
+          className="w-72 rounded-lg border border-border bg-card shadow-lg max-h-[60vh] overflow-y-auto"
         >
           <div className="py-1">
             {canSeeAllCompanies && (
@@ -218,19 +218,19 @@ export function CompanySwitcher({ companies, currentCompanyId, activeCompanyId =
                   aria-selected={isCombined}
                   onClick={() => handleSelect(null)}
                   className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm transition-colors ${
-                    isCombined ? 'bg-teal-50 text-teal-800' : 'text-gray-700 hover:bg-gray-50'
+                    isCombined ? 'bg-[var(--brand-accent)]/10 text-[var(--brand-accent)]' : 'text-zinc-700 hover:bg-accent'
                   }`}
                 >
-                  <Globe className="h-4 w-4 text-teal-600 shrink-0" />
+                  <Globe className="h-4 w-4 text-[var(--brand-accent)] shrink-0" />
                   <div className="min-w-0 flex-1">
                     <p className="font-medium truncate">All companies</p>
-                    <p className="text-[11px] text-gray-500 truncate">
+                    <p className="text-[11px] text-muted-foreground truncate">
                       Combined view across every tenant
                     </p>
                   </div>
-                  {isCombined && <Check className="h-4 w-4 text-teal-700 shrink-0" />}
+                  {isCombined && <Check className="h-4 w-4 text-[var(--brand-accent)] shrink-0" />}
                 </button>
-                <div className="my-1 border-t border-gray-100" />
+                <div className="my-1 border-t border-border" />
               </>
             )}
             {companies.map((c) => {
@@ -243,7 +243,7 @@ export function CompanySwitcher({ companies, currentCompanyId, activeCompanyId =
                   aria-selected={isSelected}
                   onClick={() => handleSelect(c.id)}
                   className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm transition-colors ${
-                    isSelected ? 'bg-teal-50 text-teal-800' : 'text-gray-700 hover:bg-gray-50'
+                    isSelected ? 'bg-[var(--brand-accent)]/10 text-[var(--brand-accent)]' : 'text-zinc-700 hover:bg-accent'
                   }`}
                 >
                   {c.logo_url ? (
@@ -251,25 +251,25 @@ export function CompanySwitcher({ companies, currentCompanyId, activeCompanyId =
                     <img
                       src={c.logo_url}
                       alt=""
-                      className="h-5 w-5 rounded object-cover bg-gray-50 shrink-0"
+                      className="h-5 w-5 rounded object-cover bg-muted shrink-0"
                     />
                   ) : (
-                    <Building2 className="h-4 w-4 text-gray-500 shrink-0" />
+                    <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
                   )}
                   <div className="min-w-0 flex-1">
                     <p className="font-medium truncate">{c.name}</p>
                     {c.slug && (
-                      <p className="font-mono text-[11px] text-gray-500 truncate">{c.slug}</p>
+                      <p className="font-mono text-[11px] text-muted-foreground truncate">{c.slug}</p>
                     )}
                   </div>
                   {c.accent_color && (
                     <span
-                      className="inline-block h-3 w-3 rounded-full ring-1 ring-gray-200 shrink-0"
+                      className="inline-block h-3 w-3 rounded-full ring-1 ring-border shrink-0"
                       style={{ backgroundColor: c.accent_color }}
                       aria-hidden="true"
                     />
                   )}
-                  {isSelected && <Check className="h-4 w-4 text-teal-700 shrink-0" />}
+                  {isSelected && <Check className="h-4 w-4 text-[var(--brand-accent)] shrink-0" />}
                 </button>
               )
             })}

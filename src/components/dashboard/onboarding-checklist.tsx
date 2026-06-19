@@ -106,24 +106,24 @@ export function OnboardingChecklist() {
   return (
     <div
       className={cn(
-        'relative overflow-hidden rounded-2xl border border-gray-200/80 bg-white p-6',
+        'relative overflow-hidden rounded-2xl border border-border bg-card p-6',
         'shadow-[0_1px_2px_rgba(16,24,40,0.04),0_1px_3px_rgba(16,24,40,0.06)]'
       )}
     >
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-start gap-3 min-w-0">
-          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-violet-50 text-violet-700 ring-1 ring-violet-200">
+          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-700 ring-1 ring-teal-200">
             <Sparkles className="h-4.5 w-4.5" strokeWidth={2} />
           </div>
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
               Getting started
             </p>
-            <h3 className="mt-0.5 text-[15px] font-semibold leading-tight text-gray-900">
+            <h3 className="mt-0.5 text-[15px] font-semibold leading-tight text-foreground">
               Finish setting up your workspace
             </h3>
-            <p className="mt-0.5 text-xs text-gray-500">
+            <p className="mt-0.5 text-xs text-muted-foreground">
               Four quick steps to get your team replying.
             </p>
           </div>
@@ -132,7 +132,7 @@ export function OnboardingChecklist() {
           type="button"
           onClick={handleDismiss}
           aria-label="Dismiss onboarding checklist"
-          className="flex-shrink-0 rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+          className="flex-shrink-0 rounded-lg p-1.5 text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-600"
         >
           <X className="h-4 w-4" />
         </button>
@@ -140,13 +140,13 @@ export function OnboardingChecklist() {
 
       {/* Progress bar */}
       <div className="mt-4 flex items-center gap-3">
-        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-gray-100">
+        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-zinc-100">
           <div
             className="h-full rounded-full bg-emerald-500 transition-all duration-300"
             style={{ width: `${progressPct}%` }}
           />
         </div>
-        <span className="text-xs font-medium tabular-nums tracking-tight text-gray-500">
+        <span className="text-xs font-medium tabular-nums tracking-tight text-muted-foreground">
           {completedCount} of {STEPS.length} complete
         </span>
       </div>
@@ -160,8 +160,8 @@ export function OnboardingChecklist() {
             <li
               key={step.id}
               className={cn(
-                'flex items-center gap-3 rounded-xl border border-gray-100 bg-white px-4 py-3 transition-colors',
-                complete ? 'opacity-80' : 'hover:border-gray-200 hover:bg-gray-50/60'
+                'flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 transition-colors',
+                complete ? 'opacity-80' : 'hover:border-border hover:bg-zinc-50/60'
               )}
             >
               {/* Check icon */}
@@ -170,7 +170,7 @@ export function OnboardingChecklist() {
                   'flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full ring-1',
                   complete
                     ? 'bg-emerald-500 text-white ring-emerald-500'
-                    : 'bg-white text-gray-300 ring-gray-200'
+                    : 'bg-card text-zinc-300 ring-border'
                 )}
               >
                 <Check className="h-3.5 w-3.5" strokeWidth={3} />
@@ -178,10 +178,10 @@ export function OnboardingChecklist() {
 
               {/* Title + description */}
               <div className="min-w-0 flex-1">
-                <p className={cn('text-sm font-semibold', complete ? 'text-gray-500 line-through' : 'text-gray-900')}>
+                <p className={cn('text-sm font-semibold', complete ? 'text-muted-foreground line-through' : 'text-foreground')}>
                   {step.title}
                 </p>
-                <p className="mt-0.5 truncate text-xs text-gray-500">{step.description}</p>
+                <p className="mt-0.5 truncate text-xs text-muted-foreground">{step.description}</p>
               </div>
 
               {/* Right side */}

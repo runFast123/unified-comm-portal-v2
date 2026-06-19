@@ -407,7 +407,7 @@ export function Sidebar({
       {!collapsed && <span className="flex-1">{item.label}</span>}
       {item.badge && pendingCount > 0 && (
         <span
-          className={`flex items-center justify-center rounded-full bg-red-500 font-semibold text-white ${
+          className={`flex items-center justify-center rounded-full bg-[var(--color-danger)] font-semibold text-white ${
             collapsed
               ? 'absolute -top-1.5 -right-1.5 h-[18px] min-w-[18px] px-1 text-[10px]'
               : 'relative h-5 min-w-[20px] px-1.5 text-xs'
@@ -415,7 +415,7 @@ export function Sidebar({
           aria-label={`${pendingCount} pending messages`}
         >
           {hasNewMessages && (
-            <span className="absolute -inset-1 rounded-full bg-red-400 opacity-75 animate-ping" aria-hidden="true" />
+            <span className="absolute -inset-1 rounded-full bg-[var(--color-danger)]/80 opacity-75 animate-ping" aria-hidden="true" />
           )}
           <span className="relative">
             {collapsed ? (pendingCount > 9 ? '9+' : pendingCount) : (pendingCount > 99 ? '99+' : pendingCount)}
