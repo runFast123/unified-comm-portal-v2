@@ -48,15 +48,22 @@ export default async function DashboardLayout({
   const reqHeadersForMfa = await headers()
   const mfaPath = reqHeadersForMfa.get('x-pathname') ?? ''
   const onVerifyPage = mfaPath === '/account/verify-2fa' || mfaPath.startsWith('/account/verify-2fa/')
+  // Probe the session's AAL once and reuse the result for BOTH MFA gates (this
+  // enforce-for-enrolled gate AND the env-flagged admins-required gate further
+  // down) — avoids a second round-trip. `mfaAal` stays null on any error so
+  // every downstream check fails open.
+  let mfaAal: { currentLevel: string | null; nextLevel: string | null } | null = null
   if (!onVerifyPage) {
     let needsStepUp = false
     try {
       const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+      mfaAal = aal ?? null
       if (aal && aal.currentLevel === 'aal1' && aal.nextLevel === 'aal2') {
         needsStepUp = true
       }
     } catch {
       // Fail OPEN — do not redirect on error.
+      mfaAal = null
       needsStepUp = false
     }
     if (needsStepUp) {
@@ -79,6 +86,44 @@ export default async function DashboardLayout({
   }
 
   const userCompanyId = (profile?.company_id as string | null | undefined) ?? null
+
+  // ── MFA required-for-admins (Stage 2, env-gated, deploys INERT) ───────
+  // When MFA_REQUIRED_FOR_ADMINS === 'true', an admin-tier user (admin /
+  // company_admin / super_admin) who has NOT enrolled ANY factor is sent to
+  // /account/security to set one up. The flag defaults OFF (unset) → this
+  // whole branch is skipped, so the feature ships dormant until an operator
+  // flips the env var.
+  //
+  // "No factor at all" = aal1/aal1. We deliberately do NOT touch the
+  // aal1/aal2 case (factor enrolled but not stepped up) — that's the
+  // enforce-for-enrolled gate above, which already redirected to
+  // /account/verify-2fa, so it takes precedence by construction.
+  //
+  // FAIL-OPEN (critical): we reuse `mfaAal` from the single probe above, which
+  // is null on ANY error — so a GoTrue/network blip leaves `needsEnroll` false
+  // and never redirects. As with the gate above, redirect() is called OUTSIDE
+  // the computation so its internal NEXT_REDIRECT throw isn't swallowed.
+  //
+  // LOOP GUARD: never fire on the enroll page (/account/security) or the
+  // challenge page (/account/verify-2fa) — both must stay reachable, else the
+  // user can never get to the screen that clears the redirect.
+  if (
+    process.env.MFA_REQUIRED_FOR_ADMINS === 'true' &&
+    ['admin', 'company_admin', 'super_admin'].includes(user.role)
+  ) {
+    const onSecurityPage =
+      mfaPath === '/account/security' || mfaPath.startsWith('/account/security/')
+    let needsEnroll = false
+    if (!onVerifyPage && !onSecurityPage) {
+      // mfaAal is null on probe error (fail open) → no redirect.
+      if (mfaAal && mfaAal.currentLevel === 'aal1' && mfaAal.nextLevel === 'aal1') {
+        needsEnroll = true
+      }
+    }
+    if (needsEnroll) {
+      redirect('/account/security')
+    }
+  }
 
   // ── RBAC: resolve effective permissions + guard the requested route ──
   // Effective set = code baseline (mirrors today's gating) + sparse DB overrides.

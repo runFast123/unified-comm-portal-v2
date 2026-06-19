@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase-client'
 import { useUser } from '@/context/user-context'
-import { isSuperAdmin } from '@/lib/roles'
+import { isSuperAdmin, isCompanyAdmin } from '@/lib/roles'
 import { Card } from '@/components/ui/card'
 import { KPICard } from '@/components/dashboard/kpi-card'
 import { Button } from '@/components/ui/button'
@@ -15,6 +15,7 @@ import { Modal } from '@/components/ui/modal'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
 import { EmptyState } from '@/components/ui/empty-state'
 import { useToast } from '@/components/ui/toast'
+import { useConfirm } from '@/components/ui/confirm-dialog'
 import type { User, UserRole } from '@/types/database'
 import { timeAgo } from '@/lib/utils'
 import {
@@ -35,6 +36,7 @@ import {
   X,
   Trash2,
   KeyRound,
+  ShieldOff,
 } from 'lucide-react'
 
 interface Account {
@@ -169,6 +171,7 @@ function isDirty(u: User, draft: RowDraft): boolean {
 export default function UsersPage() {
   const supabase = createClient()
   const { toast } = useToast()
+  const confirm = useConfirm()
   const currentUser = useUser()
   // Active-tenant scope for the account-assignment dropdowns. `activeCompanyId`
   // null = super_admin combined view (show every account); otherwise restrict
@@ -275,6 +278,10 @@ export default function UsersPage() {
   // delete/revoke buttons disable while any one request is in flight.
   const [deleteTarget, setDeleteTarget] = useState<User | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+
+  // Reset-2FA flow. Tracks the in-flight reset request (a user id) so only the
+  // clicked row's button spins and all reset buttons disable meanwhile.
+  const [resettingMfaId, setResettingMfaId] = useState<string | null>(null)
 
   // Fetch users and accounts.
   //
@@ -438,6 +445,27 @@ export default function UsersPage() {
       return true
     },
     [currentUser.role, isSelf, superAdminCount]
+  )
+
+  // Whether the current viewer may reset a given user's 2FA. Mirrors the
+  // endpoint's permit set so the button only shows where the request would
+  // succeed:
+  //   - super_admin → any user (cross-tenant; endpoint allows it).
+  //   - company_admin / legacy admin → only their OWN company's users. The
+  //     GET /api/admin/users feed already excludes cross-company rows for them
+  //     (and super_admins, whose company_id is null, never appear in their
+  //     list), so no extra same-company check is needed here — same reasoning
+  //     as canDeleteUser. The endpoint re-checks the tenant boundary regardless.
+  const canResetMfa = useCallback(
+    (u: User): boolean => {
+      if (isSuperAdmin(currentUser.role)) return true
+      if (!isCompanyAdmin(currentUser.role)) return false
+      // A company_admin can't reset a super_admin or a legacy cross-tenant
+      // 'admin' (those would 403 cross-company anyway).
+      if (isSuperAdmin(u.role) || u.role === 'admin') return false
+      return true
+    },
+    [currentUser.role]
   )
 
   // Account options for the inline dropdown (active accounts + no-account)
@@ -642,6 +670,46 @@ export default function UsersPage() {
       setDeletingId(null)
     }
   }, [deleteTarget, toast, fetchData])
+
+  // Reset a user's 2FA — removes all their MFA factors so a locked-out user
+  // (lost authenticator) can re-enroll. Danger-confirmed. The server enforces
+  // the tenant/privilege boundary; we just relay the result.
+  const resetMfa = useCallback(
+    async (u: User) => {
+      const ok = await confirm({
+        title: 'Reset two-factor authentication?',
+        message: `This removes all two-factor (authenticator) methods for ${u.email}. They'll sign in with just their password until they set it up again. Use this only when they've lost access to their authenticator.`,
+        confirmText: 'Reset 2FA',
+        danger: true,
+      })
+      if (!ok) return
+      setResettingMfaId(u.id)
+      try {
+        const res = await fetch(`/api/admin/users/${u.id}/reset-mfa`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        })
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          toast.error(data?.error || 'Failed to reset two-factor authentication')
+          return
+        }
+        const removed = typeof data?.removed === 'number' ? data.removed : 0
+        toast.success(
+          removed > 0
+            ? `Reset 2FA for ${u.email} — they can now re-enroll.`
+            : `${u.email} had no 2FA set up.`
+        )
+      } catch (err) {
+        toast.error(
+          err instanceof Error ? err.message : 'Failed to reset two-factor authentication'
+        )
+      } finally {
+        setResettingMfaId(null)
+      }
+    },
+    [confirm, toast]
+  )
 
   // Revoke a pending pre-registration. Lighter than a real delete (the person
   // never signed up), so it skips the confirm modal and just acts + refetches.
@@ -1100,6 +1168,19 @@ export default function UsersPage() {
                         >
                           {linkingId === user.id ? null : <KeyRound className="h-3.5 w-3.5" />}
                         </Button>
+                        {canResetMfa(user) && (
+                          <Button
+                            variant="secondary"
+                            disabled={resettingMfaId !== null}
+                            loading={resettingMfaId === user.id}
+                            onClick={() => resetMfa(user)}
+                            className="!py-1.5 !px-2.5"
+                            aria-label={`Reset two-factor authentication for ${user.email}`}
+                            title={`Reset two-factor authentication for ${user.email} (use if they lost their authenticator)`}
+                          >
+                            {resettingMfaId === user.id ? null : <ShieldOff className="h-3.5 w-3.5" />}
+                          </Button>
+                        )}
                         <Button
                           variant={dirty ? 'primary' : 'secondary'}
                           disabled={!dirty || saving}

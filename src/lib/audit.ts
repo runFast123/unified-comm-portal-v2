@@ -9,6 +9,7 @@ type AuditAction =
   | 'account_updated'
   | 'user_created'
   | 'user_role_changed'
+  | 'user_mfa_reset'
   | 'ai_config_updated'
   | 'phase_toggled'
   | 'message_archived'
