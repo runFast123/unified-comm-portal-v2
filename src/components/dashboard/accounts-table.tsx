@@ -83,28 +83,28 @@ export function AccountsTable({ accounts, filter }: AccountsTableProps) {
           return (
             <Fragment key={group.baseName}>
               <TableRow
-                className="cursor-pointer hover:bg-gray-50 transition-colors"
+                className="cursor-pointer hover:bg-muted transition-colors"
                 onClick={() => setExpandedRow(isExpanded ? null : group.baseName)}
               >
                 <TableCell className="w-8 pr-0">
                   {isExpanded
-                    ? <ChevronDown className="h-4 w-4 text-gray-400" />
-                    : <ChevronRight className="h-4 w-4 text-gray-400" />}
+                    ? <ChevronDown className="h-4 w-4 text-zinc-500" />
+                    : <ChevronRight className="h-4 w-4 text-zinc-500" />}
                 </TableCell>
                 <TableCell>
-                  <span className="font-medium text-gray-900">{group.baseName}</span>
+                  <span className="font-medium text-foreground">{group.baseName}</span>
                 </TableCell>
                 <TableCell className="hidden md:table-cell">
                   <div className="flex items-center gap-1.5">
                     {group.email && (
-                      <span className="flex items-center gap-1 rounded-md bg-red-50 px-2 py-0.5 text-xs text-red-700" title="Email">
+                      <Badge variant="email" size="sm" className="gap-1">
                         <ChannelIcon channel="email" size={12} /> Email
-                      </span>
+                      </Badge>
                     )}
                     {group.teams && (
-                      <span className="flex items-center gap-1 rounded-md bg-indigo-50 px-2 py-0.5 text-xs text-indigo-700" title="Teams">
+                      <Badge variant="teams" size="sm" className="gap-1">
                         <ChannelIcon channel="teams" size={12} /> Teams
-                      </span>
+                      </Badge>
                     )}
                   </div>
                 </TableCell>
@@ -120,11 +120,11 @@ export function AccountsTable({ accounts, filter }: AccountsTableProps) {
                       {group.totalPending}
                     </Badge>
                   ) : (
-                    <span className="text-gray-400">0</span>
+                    <span className="text-muted-foreground">0</span>
                   )}
                 </TableCell>
                 <TableCell className="hidden sm:table-cell">
-                  <span className="text-sm text-gray-500">
+                  <span className="text-sm text-muted-foreground">
                     {group.lastMessageTime
                       ? `${timeAgo(group.lastMessageTime)} ago`
                       : 'No messages yet'}
@@ -134,7 +134,7 @@ export function AccountsTable({ accounts, filter }: AccountsTableProps) {
 
               {/* Expanded detail row */}
               {isExpanded && (
-                <TableRow key={`${group.baseName}-detail`} className="bg-gray-50/50">
+                <TableRow key={`${group.baseName}-detail`} className="bg-muted">
                   <TableCell />
                   {/* Span all remaining columns at every breakpoint */}
                   <TableCell colSpan={5}>
@@ -142,39 +142,39 @@ export function AccountsTable({ accounts, filter }: AccountsTableProps) {
                       {group.email && (
                         <Link
                           href={`/accounts/${group.email.id}`}
-                          className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 hover:border-teal-300 hover:shadow-sm transition-all group"
+                          className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 hover:border-teal-300 hover:shadow-sm transition-all group"
                           onClick={(e) => e.stopPropagation()}
                         >
                           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-red-50">
                             <ChannelIcon channel="email" size={18} />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-gray-800 group-hover:text-teal-700">Email Channel</p>
-                            <div className="flex items-center gap-3 text-xs text-gray-500 mt-0.5">
+                            <p className="text-sm font-medium text-zinc-700 group-hover:text-teal-700">Email Channel</p>
+                            <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
                               <span className="flex items-center gap-1"><MessageCircle size={10} /> {group.email.pendingCount} pending</span>
                               <span className="flex items-center gap-1"><Clock size={10} /> {group.email.lastMessageTime ? timeAgo(group.email.lastMessageTime) : 'No activity'}</span>
                             </div>
                           </div>
-                          <ExternalLink className="h-3.5 w-3.5 text-gray-300 group-hover:text-teal-500" />
+                          <ExternalLink className="h-3.5 w-3.5 text-zinc-400 group-hover:text-teal-500" />
                         </Link>
                       )}
                       {group.teams && (
                         <Link
                           href={`/accounts/${group.teams.id}`}
-                          className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 hover:border-teal-300 hover:shadow-sm transition-all group"
+                          className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 hover:border-teal-300 hover:shadow-sm transition-all group"
                           onClick={(e) => e.stopPropagation()}
                         >
                           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-50">
                             <ChannelIcon channel="teams" size={18} />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-gray-800 group-hover:text-teal-700">Teams Channel</p>
-                            <div className="flex items-center gap-3 text-xs text-gray-500 mt-0.5">
+                            <p className="text-sm font-medium text-zinc-700 group-hover:text-teal-700">Teams Channel</p>
+                            <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
                               <span className="flex items-center gap-1"><MessageCircle size={10} /> {group.teams.pendingCount} pending</span>
                               <span className="flex items-center gap-1"><Clock size={10} /> {group.teams.lastMessageTime ? timeAgo(group.teams.lastMessageTime) : 'No activity'}</span>
                             </div>
                           </div>
-                          <ExternalLink className="h-3.5 w-3.5 text-gray-300 group-hover:text-teal-500" />
+                          <ExternalLink className="h-3.5 w-3.5 text-zinc-400 group-hover:text-teal-500" />
                         </Link>
                       )}
                     </div>
@@ -186,7 +186,7 @@ export function AccountsTable({ accounts, filter }: AccountsTableProps) {
         })}
         {groups.length === 0 && (
           <TableRow>
-            <TableCell colSpan={6} className="py-8 text-center text-gray-400">
+            <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
               No accounts match the selected filter.
             </TableCell>
           </TableRow>

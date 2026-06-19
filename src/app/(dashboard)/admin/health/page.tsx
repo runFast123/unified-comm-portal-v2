@@ -124,7 +124,7 @@ function StatusDot({ status }: { status: HealthStatus }) {
       ? 'bg-yellow-500'
       : status === 'error'
       ? 'bg-red-500'
-      : 'bg-gray-300'
+      : 'bg-zinc-300'
   return <span className={`inline-block h-2.5 w-2.5 rounded-full ${cls}`} />
 }
 
@@ -132,7 +132,7 @@ function StatusIcon({ status }: { status: HealthStatus }) {
   if (status === 'healthy') return <CheckCircle className="h-4 w-4 text-green-500" />
   if (status === 'warning') return <AlertTriangle className="h-4 w-4 text-yellow-500" />
   if (status === 'error') return <XCircle className="h-4 w-4 text-red-500" />
-  return <span className="inline-block h-4 w-4 rounded-full bg-gray-200" />
+  return <span className="inline-block h-4 w-4 rounded-full bg-muted" />
 }
 
 function relativeTime(iso: string | null): string {
@@ -310,14 +310,14 @@ export default function HealthPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">System Health & Setup Wizard</h1>
-          <p className="mt-1 text-sm text-gray-500">
+          <h1 className="text-2xl font-semibold text-foreground">System Health & Setup Wizard</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             One page to verify env vars, OAuth wiring, cron schedules, polling health, and
             deployment configuration.
           </p>
         </div>
         <div className="flex items-center gap-4">
-          <span className="text-sm text-gray-500">
+          <span className="text-sm text-muted-foreground">
             Last refreshed: {lastRefresh ? lastRefresh.toLocaleTimeString() : 'Never'}
           </span>
           <Button variant="secondary" onClick={refreshAll} loading={refreshing} className="whitespace-nowrap">
@@ -360,23 +360,23 @@ export default function HealthPage() {
         const fullyLoading = !env && !oauth && !crons && !accounts && !protection
         const display = (n: number) => (fullyLoading ? '—' : n)
         return (
-          <div className="flex flex-wrap items-center gap-6 rounded-xl border border-gray-200 bg-white px-6 py-4 shadow-sm">
+          <div className="flex flex-wrap items-center gap-6 rounded-xl border border-border bg-card px-6 py-4 shadow-sm">
             <div className="flex items-center gap-2">
-              <Server className="h-5 w-5 text-gray-400" />
-              <span className="text-sm font-medium text-gray-700">7 sections</span>
+              <Server className="h-5 w-5 text-zinc-500" />
+              <span className="text-sm font-medium text-zinc-700">7 sections</span>
             </div>
-            <div className="h-6 w-px bg-gray-200" />
+            <div className="h-6 w-px bg-border" />
             <div className="flex items-center gap-2">
               <CheckCircle className="h-4 w-4 text-green-500" />
-              <span className="text-sm text-gray-700">{display(totals.pass)} passing</span>
+              <span className="text-sm text-zinc-700">{display(totals.pass)} passing</span>
             </div>
             <div className="flex items-center gap-2">
               <AlertTriangle className="h-4 w-4 text-yellow-500" />
-              <span className="text-sm text-gray-700">{display(totals.warn)} warnings</span>
+              <span className="text-sm text-zinc-700">{display(totals.warn)} warnings</span>
             </div>
             <div className="flex items-center gap-2">
               <XCircle className="h-4 w-4 text-red-500" />
-              <span className="text-sm text-gray-700">{display(totals.fail)} failing</span>
+              <span className="text-sm text-zinc-700">{display(totals.fail)} failing</span>
             </div>
           </div>
         )
@@ -402,7 +402,7 @@ export default function HealthPage() {
         ) : (
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <div>
-              <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+              <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Required (red if missing)
               </h4>
               <div className="space-y-1.5">
@@ -423,7 +423,7 @@ export default function HealthPage() {
               </div>
             </div>
             <div>
-              <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+              <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Optional (yellow if missing)
               </h4>
               <div className="space-y-1.5">
@@ -464,14 +464,14 @@ export default function HealthPage() {
               />
             </div>
 
-            <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+            <div className="rounded-lg border border-[var(--color-info)]/30 bg-[var(--color-info)]/10 p-4">
               <div className="flex items-center gap-2">
-                <ExternalLink className="h-4 w-4 text-blue-600" />
-                <h4 className="text-sm font-semibold text-blue-900">
+                <ExternalLink className="h-4 w-4 text-[var(--color-info)]" />
+                <h4 className="text-sm font-semibold text-foreground">
                   Register these EXACT redirect URIs in your OAuth provider
                 </h4>
               </div>
-              <p className="mt-1 text-xs text-blue-800">
+              <p className="mt-1 text-xs text-muted-foreground">
                 Detected origin: <code className="font-mono">{oauth.detected_origin}</code>. If
                 that's wrong, fix your <code>NEXT_PUBLIC_SITE_URL</code> or proxy headers — these
                 URIs are derived from the request host and must match what the OAuth provider
@@ -505,7 +505,7 @@ export default function HealthPage() {
             <Skeleton className="h-32 w-full rounded-lg" />
           </div>
         ) : crons.vercel_json_error ? (
-          <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">
+          <div className="rounded-lg bg-[var(--color-danger)]/10 p-3 text-sm text-[var(--color-danger)]">
             Failed to read vercel.json: {crons.vercel_json_error}
           </div>
         ) : (
@@ -517,20 +517,20 @@ export default function HealthPage() {
               return (
                 <div
                   key={channel}
-                  className="flex items-center justify-between rounded-lg border border-gray-100 bg-gray-50 px-3 py-2"
+                  className="flex items-center justify-between rounded-lg border border-border bg-muted px-3 py-2"
                 >
                   <div className="flex items-center gap-3">
                     <StatusDot status={status} />
                     <div>
-                      <div className="text-sm font-medium capitalize text-gray-800">
+                      <div className="text-sm font-medium capitalize text-foreground">
                         {channel} polling
                       </div>
-                      <div className="text-xs text-gray-500">
+                      <div className="text-xs text-muted-foreground">
                         {stat.account_count} active account{stat.account_count === 1 ? '' : 's'}
                       </div>
                     </div>
                   </div>
-                  <div className="text-right text-xs text-gray-600">
+                  <div className="text-right text-xs text-zinc-600">
                     <div>Most recent poll: {relativeTime(stat.max_last_polled_at)}</div>
                     {stat.account_count > 1 && stat.min_last_polled_at && (
                       <div>Oldest stranded: {relativeTime(stat.min_last_polled_at)}</div>
@@ -539,18 +539,18 @@ export default function HealthPage() {
                 </div>
               )
             })}
-            <div className="overflow-hidden rounded-lg border border-gray-200">
+            <div className="overflow-hidden rounded-lg border border-border">
               <table className="w-full text-sm">
-                <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
+                <thead className="bg-muted text-left text-xs uppercase tracking-wide text-muted-foreground">
                   <tr>
                     <th className="px-3 py-2 font-semibold">Path</th>
                     <th className="px-3 py-2 font-semibold">Schedule (UTC)</th>
                     <th className="px-3 py-2 font-semibold">Last run</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-border">
                   {crons.crons.map((c, i) => (
-                    <tr key={`${c.path}-${i}`} className="text-gray-700">
+                    <tr key={`${c.path}-${i}`} className="text-zinc-700">
                       <td className="px-3 py-1.5 font-mono text-xs">{c.path}</td>
                       <td className="px-3 py-1.5 font-mono text-xs">{c.schedule}</td>
                       <td className="px-3 py-1.5">
@@ -577,11 +577,11 @@ export default function HealthPage() {
             ))}
           </div>
         ) : accounts.length === 0 ? (
-          <div className="text-sm text-gray-500">No accounts configured.</div>
+          <div className="text-sm text-muted-foreground">No accounts configured.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
+              <thead className="bg-muted text-left text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
                   <th className="px-3 py-2 font-semibold">Account</th>
                   <th className="px-3 py-2 font-semibold">Channel</th>
@@ -591,7 +591,7 @@ export default function HealthPage() {
                   <th className="px-3 py-2 font-semibold">Last error</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-border">
                 {accounts.map((a) => {
                   const failuresStatus: HealthStatus =
                     a.consecutive_poll_failures >= 5
@@ -602,9 +602,9 @@ export default function HealthPage() {
                   return (
                     <tr key={a.id} className={a.is_active ? '' : 'opacity-50'}>
                       <td className="px-3 py-2">
-                        <div className="font-medium text-gray-900">{a.name}</div>
+                        <div className="font-medium text-foreground">{a.name}</div>
                         {!a.is_active && (
-                          <div className="text-xs text-gray-500">inactive</div>
+                          <div className="text-xs text-muted-foreground">inactive</div>
                         )}
                       </td>
                       <td className="px-3 py-2">
@@ -634,7 +634,7 @@ export default function HealthPage() {
                       <td className="px-3 py-2">
                         <div className="flex items-center gap-1.5">
                           <StatusDot status={pollRecencyStatus(a.last_polled_at)} />
-                          <span className="text-xs text-gray-600">
+                          <span className="text-xs text-zinc-600">
                             {relativeTime(a.last_polled_at)}
                           </span>
                         </div>
@@ -642,12 +642,12 @@ export default function HealthPage() {
                       <td className="px-3 py-2">
                         <div className="flex items-center gap-1.5">
                           <StatusDot status={failuresStatus} />
-                          <span className="text-xs text-gray-700">
+                          <span className="text-xs text-zinc-700">
                             {a.consecutive_poll_failures}
                           </span>
                         </div>
                       </td>
-                      <td className="px-3 py-2 text-xs text-gray-600">
+                      <td className="px-3 py-2 text-xs text-zinc-600">
                         <span title={a.last_poll_error ?? ''} className="block max-w-[280px] truncate">
                           {a.last_poll_error ?? '—'}
                         </span>
@@ -671,21 +671,21 @@ export default function HealthPage() {
             <Database className="h-5 w-5 text-emerald-600" />
             {latency ? (
               <div>
-                <div className="text-sm font-medium text-gray-900">
+                <div className="text-sm font-medium text-foreground">
                   Median {latency.median_ms} ms{' '}
-                  <span className="text-xs font-normal text-gray-500">
+                  <span className="text-xs font-normal text-muted-foreground">
                     (min {latency.min_ms}, max {latency.max_ms}, n=3)
                   </span>
                 </div>
-                <div className="text-xs text-gray-500">
+                <div className="text-xs text-muted-foreground">
                   Sampled {relativeTime(latency.sampled_at)}{' '}
                   {latency.error && (
-                    <span className="text-red-600"> — {latency.error}</span>
+                    <span className="text-[var(--color-danger)]"> — {latency.error}</span>
                   )}
                 </div>
               </div>
             ) : (
-              <div className="text-sm text-gray-500">Click "Run probe" to measure.</div>
+              <div className="text-sm text-muted-foreground">Click "Run probe" to measure.</div>
             )}
           </div>
           <Button variant="secondary" onClick={runDbLatency} loading={latencyLoading}>
@@ -714,10 +714,10 @@ export default function HealthPage() {
             ) : (
               <CheckCircle className="h-5 w-5 text-green-500" />
             )}
-            <div className="flex-1 text-sm text-gray-700">
+            <div className="flex-1 text-sm text-zinc-700">
               <div>
                 Probe URL:{' '}
-                <code className="rounded bg-gray-100 px-1 py-0.5 font-mono text-xs">
+                <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">
                   {protection.probe_url}
                 </code>
               </div>
@@ -729,7 +729,7 @@ export default function HealthPage() {
                 <div className="mt-1 text-yellow-700">Fetch error: {protection.fetch_error}</div>
               )}
               {protection.snippet && (
-                <pre className="mt-2 max-h-24 overflow-auto rounded bg-gray-50 p-2 text-[11px] text-gray-600">
+                <pre className="mt-2 max-h-24 overflow-auto rounded bg-muted p-2 text-[11px] text-zinc-600">
                   {protection.snippet}
                 </pre>
               )}
@@ -770,7 +770,7 @@ function CronRunChip({ cron }: { cron: CronEntry }) {
   const status = cronRunStatus(cron.last_run_at, cron.cadence_minutes)
   // Unparseable schedule — show the raw timestamp without a verdict.
   if (status === 'unknown') {
-    return <span className="text-xs text-gray-500">ran {relativeTime(cron.last_run_at)}</span>
+    return <span className="text-xs text-muted-foreground">ran {relativeTime(cron.last_run_at)}</span>
   }
   const label = !cron.last_run_at
     ? 'no data yet'
@@ -787,7 +787,7 @@ function CronRunChip({ cron }: { cron: CronEntry }) {
         {label}
       </Badge>
       {status === 'error' && (
-        <div className="mt-0.5 text-[11px] text-red-600">
+        <div className="mt-0.5 text-[11px] text-[var(--color-danger)]">
           {cron.last_run_at
             ? 'check WEBHOOK_SECRET / Vercel cron logs'
             : 'never reported a metric — fine right after a deploy, otherwise check WEBHOOK_SECRET / Vercel cron logs'}
@@ -800,12 +800,12 @@ function CronRunChip({ cron }: { cron: CronEntry }) {
 function EnvRow({ check, requiredVar }: { check: EnvCheck; requiredVar: boolean }) {
   const status: HealthStatus = check.set ? 'healthy' : requiredVar ? 'error' : 'warning'
   return (
-    <div className="flex items-center justify-between rounded border border-gray-100 px-3 py-1.5">
+    <div className="flex items-center justify-between rounded border border-border px-3 py-1.5">
       <div className="flex min-w-0 items-center gap-2">
         <StatusIcon status={status} />
-        <code className="truncate font-mono text-xs text-gray-800">{check.name}</code>
+        <code className="truncate font-mono text-xs text-zinc-800">{check.name}</code>
       </div>
-      <div className="ml-3 shrink-0 text-xs text-gray-500">
+      <div className="ml-3 shrink-0 text-xs text-muted-foreground">
         {check.set ? check.hint ?? 'set' : requiredVar ? 'MISSING' : 'not set'}
       </div>
     </div>
@@ -842,32 +842,32 @@ function IntegrationCard({
     ) : null
 
   return (
-    <div className="rounded-lg border border-gray-200 p-4">
+    <div className="rounded-lg border border-border p-4">
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-2">
-          <Plug className="h-5 w-5 text-gray-500" />
-          <h4 className="font-semibold text-gray-900">{provider}</h4>
+          <Plug className="h-5 w-5 text-zinc-500" />
+          <h4 className="font-semibold text-foreground">{provider}</h4>
         </div>
         {sourceBadge}
       </div>
-      <div className="mt-3 space-y-1 text-xs text-gray-600">
+      <div className="mt-3 space-y-1 text-xs text-zinc-600">
         <div className="flex items-center gap-2">
-          <KeyRound className="h-3.5 w-3.5 text-gray-400" />
+          <KeyRound className="h-3.5 w-3.5 text-zinc-500" />
           client_id ending: {status.client_id_last4 ? `…${status.client_id_last4}` : '—'}
         </div>
         <div className="flex items-center gap-2">
-          <Clock className="h-3.5 w-3.5 text-gray-400" />
+          <Clock className="h-3.5 w-3.5 text-zinc-500" />
           last tested: {relativeTime(status.last_tested_at)} {testStatusBadge}
         </div>
         {status.source === 'db_broken' && (
-          <div className="flex items-center gap-2 text-red-700">
+          <div className="flex items-center gap-2 text-[var(--color-danger)]">
             <AlertTriangle className="h-3.5 w-3.5" />
             Stored credentials cannot be decrypted — encryption key likely rotated. Re-save the
             credentials at <code>/admin/integrations</code>.
           </div>
         )}
         {status.source === 'none' && (
-          <div className="flex items-center gap-2 text-yellow-700">
+          <div className="flex items-center gap-2 text-[var(--color-warning)]">
             <Inbox className="h-3.5 w-3.5" />
             Not configured anywhere. Configure at <code>/admin/integrations</code>.
           </div>

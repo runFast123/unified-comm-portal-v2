@@ -295,7 +295,7 @@ function BarChart({
   return (
     <div className="space-y-1">
       {yLabel && (
-        <div className="flex items-center justify-between text-[10px] text-gray-500">
+        <div className="flex items-center justify-between text-[10px] text-muted-foreground">
           <span>peak {fmt(max)}</span>
           <span>{yLabel}</span>
         </div>
@@ -328,7 +328,7 @@ function BarChart({
           )
         })}
       </svg>
-      <div className="flex justify-between text-[10px] text-gray-500">
+      <div className="flex justify-between text-[10px] text-muted-foreground">
         <span>{new Date(startMs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
         <span>{new Date(endMs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
       </div>
@@ -356,7 +356,7 @@ function Kpi({
       ? 'ring-yellow-200 bg-yellow-50'
       : status === 'bad'
       ? 'ring-red-200 bg-red-50'
-      : 'ring-gray-200 bg-white'
+      : 'ring-border bg-card'
   const valueColor =
     status === 'good'
       ? 'text-emerald-700'
@@ -364,12 +364,12 @@ function Kpi({
       ? 'text-yellow-700'
       : status === 'bad'
       ? 'text-red-700'
-      : 'text-gray-900'
+      : 'text-foreground'
   return (
     <div className={`rounded-lg p-4 ring-1 ${ring}`}>
-      <div className="text-xs font-medium uppercase tracking-wide text-gray-500">{label}</div>
+      <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</div>
       <div className={`mt-1 text-2xl font-semibold ${valueColor}`}>{value}</div>
-      {sub && <div className="mt-0.5 text-xs text-gray-500">{sub}</div>}
+      {sub && <div className="mt-0.5 text-xs text-muted-foreground">{sub}</div>}
     </div>
   )
 }
@@ -487,10 +487,10 @@ export default async function ObservabilityPage() {
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Observability</h1>
-        <p className="mt-1 text-sm text-gray-500">
+        <h1 className="text-2xl font-semibold text-foreground">Observability</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
           Operational SLIs from the{' '}
-          <code className="rounded bg-gray-100 px-1 py-0.5 text-xs">metrics_events</code> stream.
+          <code className="rounded bg-muted px-1 py-0.5 text-xs">metrics_events</code> stream.
           Last hour KPIs at the top; rolling charts and tables below. All times UTC server-time.
         </p>
       </div>
@@ -500,7 +500,7 @@ export default async function ObservabilityPage() {
           a single 6-tile strip of mixed metrics. */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <section>
-          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
+          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             System Health
           </h2>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -519,7 +519,7 @@ export default async function ObservabilityPage() {
           </div>
         </section>
         <section>
-          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
+          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             AI Cost
           </h2>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -538,7 +538,7 @@ export default async function ObservabilityPage() {
           </div>
         </section>
         <section>
-          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
+          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             Reliability
           </h2>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -564,14 +564,14 @@ export default async function ObservabilityPage() {
         description="Per cron name. Each cron route emits a duration metric on completion; p50 and p95 are computed across the last hour."
       >
         {cronStats.length === 0 ? (
-          <div className="text-sm text-gray-500">
+          <div className="text-sm text-muted-foreground">
             No cron runs in the last hour. Once <code className="font-mono">recordMetric</code>{' '}
             calls fire from the cron routes, percentiles will appear here.
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
+              <thead className="bg-muted text-left text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
                   <th className="px-3 py-2 font-semibold">Cron</th>
                   <th className="px-3 py-2 font-semibold">Runs</th>
@@ -580,14 +580,14 @@ export default async function ObservabilityPage() {
                   <th className="px-3 py-2 font-semibold">p95</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-border">
                 {cronStats.map((c) => (
                   <tr key={c.name}>
-                    <td className="px-3 py-2 font-mono text-xs text-gray-800">{c.name}</td>
-                    <td className="px-3 py-2 text-gray-700">{c.total}</td>
-                    <td className={`px-3 py-2 ${c.err > 0 ? 'text-red-700' : 'text-gray-500'}`}>{c.err}</td>
-                    <td className="px-3 py-2 text-gray-700">{fmtMs(c.p50)}</td>
-                    <td className="px-3 py-2 text-gray-700">{fmtMs(c.p95)}</td>
+                    <td className="px-3 py-2 font-mono text-xs text-zinc-800">{c.name}</td>
+                    <td className="px-3 py-2 text-zinc-700">{c.total}</td>
+                    <td className={`px-3 py-2 ${c.err > 0 ? 'text-[var(--color-danger)]' : 'text-muted-foreground'}`}>{c.err}</td>
+                    <td className="px-3 py-2 text-zinc-700">{fmtMs(c.p50)}</td>
+                    <td className="px-3 py-2 text-zinc-700">{fmtMs(c.p95)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -642,20 +642,20 @@ export default async function ObservabilityPage() {
           description="audit_log rows where action ILIKE '%error%' OR '%failed%', grouped by action."
         >
           {topErrors.length === 0 ? (
-            <div className="text-sm text-gray-500">No error actions logged in the last 24 hours.</div>
+            <div className="text-sm text-muted-foreground">No error actions logged in the last 24 hours.</div>
           ) : (
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
+              <thead className="bg-muted text-left text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
                   <th className="px-3 py-2 font-semibold">Action</th>
                   <th className="px-3 py-2 font-semibold">Count</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-border">
                 {topErrors.map(([action, count]) => (
                   <tr key={action}>
-                    <td className="px-3 py-2 font-mono text-xs text-gray-800">{action}</td>
-                    <td className="px-3 py-2 text-gray-700">{count}</td>
+                    <td className="px-3 py-2 font-mono text-xs text-zinc-800">{action}</td>
+                    <td className="px-3 py-2 text-zinc-700">{count}</td>
                   </tr>
                 ))}
               </tbody>
@@ -667,24 +667,24 @@ export default async function ObservabilityPage() {
           description="Sum of estimated_cost_usd from ai_usage since 00:00 UTC."
         >
           {topSpendAccountIds.length === 0 ? (
-            <div className="text-sm text-gray-500">No AI usage recorded yet today.</div>
+            <div className="text-sm text-muted-foreground">No AI usage recorded yet today.</div>
           ) : (
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
+              <thead className="bg-muted text-left text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
                   <th className="px-3 py-2 font-semibold">Account</th>
                   <th className="px-3 py-2 font-semibold">Spend</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-border">
                 {topSpendAccountIds.map(([id, cost]) => (
                   <tr key={id}>
                     <td className="px-3 py-2">
-                      <div className="font-medium text-gray-900">
+                      <div className="font-medium text-foreground">
                         {accountNames.get(id) ?? <span className="font-mono text-xs">{id.slice(0, 8)}…</span>}
                       </div>
                     </td>
-                    <td className="px-3 py-2 text-gray-700">{fmtUsd(cost)}</td>
+                    <td className="px-3 py-2 text-zinc-700">{fmtUsd(cost)}</td>
                   </tr>
                 ))}
               </tbody>

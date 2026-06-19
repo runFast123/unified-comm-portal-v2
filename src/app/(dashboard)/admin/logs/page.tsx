@@ -108,8 +108,8 @@ export default function LogsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">System Logs</h1>
-          <p className="mt-1 text-sm text-gray-500">
+          <h1 className="text-2xl font-semibold text-foreground">System Logs</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             {totalCount} log entries — audit trail for all system actions
           </p>
         </div>
@@ -171,17 +171,17 @@ export default function LogsPage() {
       <Card>
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
-            <span className="ml-2 text-sm text-gray-500">Loading logs...</span>
+            <Loader2 className="h-6 w-6 animate-spin text-zinc-500" />
+            <span className="ml-2 text-sm text-muted-foreground">Loading logs...</span>
           </div>
         ) : logs.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 text-gray-400">
+          <div className="flex flex-col items-center justify-center py-12 text-zinc-500">
             <Trash2 className="h-10 w-10 mb-2" />
             <p className="font-medium">No log entries found</p>
             <p className="text-sm mt-1">Adjust your filters or check back later</p>
           </div>
         ) : (
-          <div className="divide-y divide-gray-100">
+          <div className="divide-y divide-border">
             {logs.map((entry) => {
               const level = parseLogLevel(entry.action)
               const category = parseCategory(entry.action)
@@ -192,9 +192,9 @@ export default function LogsPage() {
               return (
                 <div
                   key={entry.id}
-                  className={`px-4 py-3 hover:bg-gray-50 transition-colors ${
-                    level === 'error' ? 'border-l-3 border-l-red-400 bg-red-50/30' :
-                    level === 'warn' ? 'border-l-3 border-l-amber-400 bg-amber-50/20' : ''
+                  className={`px-4 py-3 hover:bg-muted transition-colors ${
+                    level === 'error' ? 'border-l-3 border-l-[var(--color-danger)] bg-[var(--color-danger)]/5' :
+                    level === 'warn' ? 'border-l-3 border-l-[var(--color-warning)] bg-[var(--color-warning)]/5' : ''
                   }`}
                 >
                   <div className="flex items-start gap-3">
@@ -203,15 +203,15 @@ export default function LogsPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-xs font-semibold text-gray-500 uppercase bg-gray-100 rounded px-1.5 py-0.5">
+                        <span className="text-xs font-semibold text-muted-foreground uppercase bg-muted rounded px-1.5 py-0.5">
                           {category}
                         </span>
-                        <span className="text-sm text-gray-800 font-medium truncate">
+                        <span className="text-sm text-foreground font-medium truncate">
                           {message}
                         </span>
                       </div>
                       {Object.keys(details).filter(k => k !== 'message' && k !== 'level' && k !== 'category').length > 0 && (
-                        <pre className="mt-1 text-[11px] text-gray-500 bg-gray-50 rounded p-2 overflow-x-auto max-h-24">
+                        <pre className="mt-1 text-[11px] text-muted-foreground bg-muted rounded p-2 overflow-x-auto max-h-24">
                           {JSON.stringify(
                             Object.fromEntries(Object.entries(details).filter(([k]) => k !== 'message' && k !== 'level' && k !== 'category')),
                             null, 2
@@ -220,8 +220,8 @@ export default function LogsPage() {
                       )}
                     </div>
                     <div className="shrink-0 text-right">
-                      <p className="text-xs text-gray-400">{timeAgo(entry.created_at)}</p>
-                      <p className="text-[10px] text-gray-300">
+                      <p className="text-xs text-zinc-500">{timeAgo(entry.created_at)}</p>
+                      <p className="text-[10px] text-zinc-500">
                         {new Date(entry.created_at).toLocaleTimeString()}
                       </p>
                     </div>

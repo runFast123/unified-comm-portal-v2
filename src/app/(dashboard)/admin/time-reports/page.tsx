@@ -110,17 +110,17 @@ export default async function TimeReportsPage() {
   // through an account view in future. Render an empty-state hint.
   if (!companyId) {
     return (
-      <div className="p-6 max-w-5xl mx-auto">
-        <h1 className="text-2xl font-semibold text-gray-900 mb-4">Time reports</h1>
+      <div className="max-w-5xl mx-auto">
+        <h1 className="text-2xl font-semibold text-foreground mb-4">Time reports</h1>
         <Card>
           <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
-            <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-teal-50 ring-1 ring-teal-100">
-              <Clock className="h-7 w-7 text-teal-600" />
+            <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--brand-accent)]/10 ring-1 ring-[var(--brand-accent)]/20">
+              <Clock className="h-7 w-7 text-[var(--brand-accent)]" />
             </div>
-            <h2 className="text-base font-semibold text-gray-900">
+            <h2 className="text-base font-semibold text-foreground">
               No company assigned
             </h2>
-            <p className="mt-2 max-w-md text-sm text-gray-600">
+            <p className="mt-2 max-w-md text-sm text-zinc-600">
               Your account isn&apos;t associated with a company yet, so there is
               no time data to roll up. Assign yourself to a company in
               <span className="font-medium"> Admin → Users</span> to see reports.
@@ -297,30 +297,30 @@ export default async function TimeReportsPage() {
   }
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-6">
+    <div className="max-w-6xl mx-auto space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-gray-900">Time reports</h1>
-        <p className="text-sm text-gray-600 mt-1">
+        <h1 className="text-2xl font-semibold text-foreground">Time reports</h1>
+        <p className="text-sm text-zinc-600 mt-1">
           Per-agent time tracking and conversation effort across your company.
         </p>
       </div>
 
       {/* Per-agent table */}
       <Card>
-        <div className="p-4 border-b border-gray-100">
-          <h2 className="text-base font-semibold text-gray-900">Per-agent totals</h2>
-          <p className="text-xs text-gray-500 mt-0.5">
+        <div className="p-4 border-b border-border">
+          <h2 className="text-base font-semibold text-foreground">Per-agent totals</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">
             Total tracked time per agent. Includes auto + manual entries.
           </p>
         </div>
         {agentRanking.length === 0 ? (
-          <div className="p-6 text-sm text-gray-500">
+          <div className="p-6 text-sm text-muted-foreground">
             No tracked time in the current month yet.
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+              <thead className="bg-muted text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
                   <th className="px-4 py-2 text-left">Agent</th>
                   <th className="px-4 py-2 text-right">Today</th>
@@ -328,17 +328,17 @@ export default async function TimeReportsPage() {
                   <th className="px-4 py-2 text-right">This month</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-border">
                 {agentRanking.map((row) => (
                   <tr key={row.user_id}>
-                    <td className="px-4 py-2 text-gray-900">{row.name}</td>
-                    <td className="px-4 py-2 text-right font-mono text-gray-700">
+                    <td className="px-4 py-2 text-foreground">{row.name}</td>
+                    <td className="px-4 py-2 text-right font-mono text-zinc-700">
                       {formatDuration(row.today)}
                     </td>
-                    <td className="px-4 py-2 text-right font-mono text-gray-700">
+                    <td className="px-4 py-2 text-right font-mono text-zinc-700">
                       {formatDuration(row.week)}
                     </td>
-                    <td className="px-4 py-2 text-right font-mono text-gray-900 font-semibold">
+                    <td className="px-4 py-2 text-right font-mono text-foreground font-semibold">
                       {formatDuration(row.month)}
                     </td>
                   </tr>
@@ -351,43 +351,43 @@ export default async function TimeReportsPage() {
 
       {/* Top conversations */}
       <Card>
-        <div className="p-4 border-b border-gray-100">
-          <h2 className="text-base font-semibold text-gray-900">
+        <div className="p-4 border-b border-border">
+          <h2 className="text-base font-semibold text-foreground">
             Top 10 conversations (last 30 days)
           </h2>
-          <p className="text-xs text-gray-500 mt-0.5">
+          <p className="text-xs text-muted-foreground mt-0.5">
             Conversations consuming the most agent effort across your accounts.
           </p>
         </div>
         {topConversations.length === 0 ? (
-          <div className="p-6 text-sm text-gray-500">
+          <div className="p-6 text-sm text-muted-foreground">
             No tracked time on any conversations in the last 30 days.
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+              <thead className="bg-muted text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
                   <th className="px-4 py-2 text-left">Conversation</th>
                   <th className="px-4 py-2 text-left">Status</th>
                   <th className="px-4 py-2 text-right">Total time</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-border">
                 {topConversations.map((row) => (
                   <tr key={row.conversation_id}>
                     <td className="px-4 py-2">
                       <a
                         href={`/conversations/${row.conversation_id}`}
-                        className="text-teal-700 hover:underline"
+                        className="text-[var(--brand-accent)] hover:underline"
                       >
                         {row.participant}
                       </a>
                     </td>
-                    <td className="px-4 py-2 text-gray-700">
+                    <td className="px-4 py-2 text-zinc-700">
                       {row.status ?? 'unknown'}
                     </td>
-                    <td className="px-4 py-2 text-right font-mono text-gray-900 font-semibold">
+                    <td className="px-4 py-2 text-right font-mono text-foreground font-semibold">
                       {formatDuration(row.total_seconds)}
                     </td>
                   </tr>
@@ -400,34 +400,34 @@ export default async function TimeReportsPage() {
 
       {/* Average by status */}
       <Card>
-        <div className="p-4 border-b border-gray-100">
-          <h2 className="text-base font-semibold text-gray-900">
+        <div className="p-4 border-b border-border">
+          <h2 className="text-base font-semibold text-foreground">
             Average time per conversation, by status
           </h2>
-          <p className="text-xs text-gray-500 mt-0.5">
+          <p className="text-xs text-muted-foreground mt-0.5">
             Last 30 days. Helps spot statuses where conversations linger.
           </p>
         </div>
         {avgByStatus.length === 0 ? (
-          <div className="p-6 text-sm text-gray-500">No data yet.</div>
+          <div className="p-6 text-sm text-muted-foreground">No data yet.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+              <thead className="bg-muted text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
                   <th className="px-4 py-2 text-left">Status</th>
                   <th className="px-4 py-2 text-right">Conversations</th>
                   <th className="px-4 py-2 text-right">Avg time</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-border">
                 {avgByStatus.map((row) => (
                   <tr key={row.status}>
-                    <td className="px-4 py-2 text-gray-900">{row.status}</td>
-                    <td className="px-4 py-2 text-right text-gray-700">
+                    <td className="px-4 py-2 text-foreground">{row.status}</td>
+                    <td className="px-4 py-2 text-right text-zinc-700">
                       {row.conversations}
                     </td>
-                    <td className="px-4 py-2 text-right font-mono text-gray-900 font-semibold">
+                    <td className="px-4 py-2 text-right font-mono text-foreground font-semibold">
                       {formatDuration(row.avg_seconds)}
                     </td>
                   </tr>

@@ -787,8 +787,8 @@ export default function UsersPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-24">
-        <Loader2 className="h-8 w-8 animate-spin text-teal-600" />
-        <span className="ml-3 text-gray-500">Loading users...</span>
+        <Loader2 className="h-8 w-8 animate-spin text-[var(--brand-accent)]" />
+        <span className="ml-3 text-muted-foreground">Loading users...</span>
       </div>
     )
   }
@@ -797,7 +797,7 @@ export default function UsersPage() {
     return (
       <div className="flex flex-col items-center justify-center py-24">
         <p className="text-red-600 font-medium">Failed to load users</p>
-        <p className="text-sm text-gray-500 mt-1">{error}</p>
+        <p className="text-sm text-muted-foreground mt-1">{error}</p>
         <Button variant="secondary" className="mt-4" onClick={() => window.location.reload()}>
           Retry
         </Button>
@@ -810,8 +810,8 @@ export default function UsersPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">User Management</h1>
-          <p className="mt-1 text-sm text-gray-500">
+          <h1 className="text-2xl font-semibold text-foreground">User Management</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             Manage portal users, roles, and account assignments
           </p>
         </div>
@@ -920,9 +920,9 @@ export default function UsersPage() {
                 key={inv.email}
                 className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5 text-sm"
               >
-                <span className="font-medium text-gray-800">{inv.email}</span>
+                <span className="font-medium text-zinc-800">{inv.email}</span>
                 {getRoleBadge(inv.role)}
-                <span className="text-gray-500">
+                <span className="text-muted-foreground">
                   {inv.account_id ? (accountMap[inv.account_id] ?? 'Account') : 'No account'}
                 </span>
                 <span className="ml-auto inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 ring-1 ring-amber-200">
@@ -1090,15 +1090,15 @@ export default function UsersPage() {
                 return (
                   <TableRow key={user.id}>
                     <TableCell>
-                      <div className="flex items-center gap-1.5 text-sm text-gray-600">
-                        <Mail className="h-3.5 w-3.5 text-gray-400" />
-                        <span className="font-medium text-gray-900">{user.email}</span>
+                      <div className="flex items-center gap-1.5 text-sm text-zinc-600">
+                        <Mail className="h-3.5 w-3.5 text-zinc-400" />
+                        <span className="font-medium text-foreground">{user.email}</span>
                       </div>
                       <div className="mt-1">{getRoleBadge(user.role)}</div>
                     </TableCell>
                     <TableCell className="hidden lg:table-cell">
-                      <span className="text-sm text-gray-700">
-                        {user.full_name || <span className="text-gray-400 italic">—</span>}
+                      <span className="text-sm text-zinc-700">
+                        {user.full_name || <span className="text-zinc-400 italic">—</span>}
                       </span>
                     </TableCell>
                     <TableCell>
@@ -1136,14 +1136,14 @@ export default function UsersPage() {
                       />
                     </TableCell>
                     <TableCell className="hidden xl:table-cell">
-                      <span className="text-sm text-gray-500">
+                      <span className="text-sm text-muted-foreground">
                         {user.last_login_at ? timeAgo(user.last_login_at) : (
-                          <span className="text-gray-400 italic">Never</span>
+                          <span className="text-zinc-400 italic">Never</span>
                         )}
                       </span>
                     </TableCell>
                     <TableCell className="hidden xl:table-cell">
-                      <span className="text-sm text-gray-500">
+                      <span className="text-sm text-muted-foreground">
                         {timeAgo(user.created_at)}
                       </span>
                     </TableCell>
@@ -1293,8 +1293,8 @@ export default function UsersPage() {
                 .map((a) => ({ value: a.id, label: a.name })),
             ]}
           />
-          <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
-            <p className="text-xs text-gray-500">
+          <div className="rounded-lg border border-border bg-muted p-3">
+            <p className="text-xs text-muted-foreground">
               This pre-registers the user with their role and account assignment.
               When they sign up via the login page with the same email, they will
               automatically inherit these settings.
@@ -1329,7 +1329,7 @@ export default function UsersPage() {
           </>
         }
       >
-        <p className="text-sm text-gray-700">
+        <p className="text-sm text-zinc-700">
           Delete <span className="font-semibold">{deleteTarget?.email}</span>? This
           removes their login and unassigns their conversations. This can&apos;t be undone.
         </p>

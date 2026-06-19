@@ -256,8 +256,8 @@ export default function TemplatesPage() {
             <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
           </div>
           <div className="text-center">
-            <p className="text-sm font-medium text-gray-700">Loading templates</p>
-            <p className="text-xs text-gray-400 mt-1">Fetching reply templates...</p>
+            <p className="text-sm font-medium text-zinc-700">Loading templates</p>
+            <p className="text-xs text-zinc-500 mt-1">Fetching reply templates...</p>
           </div>
         </div>
       </div>
@@ -271,7 +271,7 @@ export default function TemplatesPage() {
           <AlertTriangle className="h-6 w-6 text-red-600" />
         </div>
         <p className="text-red-700 font-medium">Failed to load templates</p>
-        <p className="text-sm text-gray-500 mt-1">{error}</p>
+        <p className="text-sm text-muted-foreground mt-1">{error}</p>
         <Button variant="secondary" className="mt-4" onClick={() => fetchTemplates()}>
           <RefreshCw className="h-4 w-4" />
           Try Again
@@ -286,8 +286,8 @@ export default function TemplatesPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Reply Templates</h1>
-            <p className="mt-1 text-sm text-gray-500">
+            <h1 className="text-2xl font-semibold text-foreground">Reply Templates</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
               Manage pre-written reply templates for quick customer responses
             </p>
           </div>
@@ -312,8 +312,8 @@ export default function TemplatesPage() {
               <MessageSquare className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-sm text-gray-500">Total Templates</p>
-              <p className="text-2xl font-bold text-gray-900">{totalTemplates}</p>
+              <p className="text-sm text-muted-foreground">Total Templates</p>
+              <p className="text-2xl font-bold text-foreground">{totalTemplates}</p>
             </div>
           </div>
         </Card>
@@ -323,8 +323,8 @@ export default function TemplatesPage() {
               <FolderOpen className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-sm text-gray-500">Categories</p>
-              <p className="text-2xl font-bold text-gray-900">{categoriesCount}</p>
+              <p className="text-sm text-muted-foreground">Categories</p>
+              <p className="text-2xl font-bold text-foreground">{categoriesCount}</p>
             </div>
           </div>
         </Card>
@@ -334,8 +334,8 @@ export default function TemplatesPage() {
               <TrendingUp className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-sm text-gray-500">Most Used</p>
-              <p className="text-2xl font-bold text-gray-900 truncate max-w-[140px]" title={mostUsed.title}>
+              <p className="text-sm text-muted-foreground">Most Used</p>
+              <p className="text-2xl font-bold text-foreground truncate max-w-[140px]" title={mostUsed.title}>
                 {truncate(mostUsed.title, 18)}
               </p>
             </div>
@@ -347,8 +347,8 @@ export default function TemplatesPage() {
               <ToggleLeft className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-sm text-gray-500">Active / Inactive</p>
-              <p className="text-2xl font-bold text-gray-900">
+              <p className="text-sm text-muted-foreground">Active / Inactive</p>
+              <p className="text-2xl font-bold text-foreground">
                 {activeCount} / {inactiveCount}
               </p>
             </div>
@@ -421,7 +421,7 @@ export default function TemplatesPage() {
                     <button
                       onClick={() => handleOpenTemplate(template)}
                       className={cn(
-                        'text-left font-medium text-teal-700 hover:text-teal-900 hover:underline'
+                        'text-left font-medium text-[var(--brand-accent)] hover:opacity-80 hover:underline'
                       )}
                     >
                       {template.title}
@@ -433,27 +433,27 @@ export default function TemplatesPage() {
                     </Badge>
                   </TableCell>
                   <TableCell className="hidden max-w-xs lg:table-cell">
-                    <span className="text-sm text-gray-500">
+                    <span className="text-sm text-muted-foreground">
                       {truncate(template.content, 150)}
                     </span>
                   </TableCell>
                   <TableCell className="hidden md:table-cell">
                     {template.shortcut ? (
-                      <span className="inline-flex items-center gap-1 rounded bg-gray-100 px-2 py-0.5 text-xs font-mono text-gray-600">
+                      <span className="inline-flex items-center gap-1 rounded bg-muted px-2 py-0.5 text-xs font-mono text-zinc-600">
                         <Hash className="h-3 w-3" />
                         {template.shortcut}
                       </span>
                     ) : (
-                      <span className="text-sm text-gray-400">--</span>
+                      <span className="text-sm text-zinc-500">--</span>
                     )}
                   </TableCell>
                   <TableCell className="hidden whitespace-nowrap md:table-cell">
-                    <span className="text-sm text-gray-700 font-medium">
+                    <span className="text-sm text-zinc-700 font-medium">
                       {template.usage_count}
                     </span>
                   </TableCell>
                   <TableCell className="hidden whitespace-nowrap lg:table-cell">
-                    <span className="text-sm text-gray-500">
+                    <span className="text-sm text-muted-foreground">
                       {timeAgo(template.updated_at)} ago
                     </span>
                   </TableCell>
@@ -467,14 +467,14 @@ export default function TemplatesPage() {
                     <div className="flex items-center gap-1">
                       <button
                         onClick={() => handleOpenEdit(template)}
-                        className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+                        className="rounded-lg p-1.5 text-zinc-500 hover:bg-muted hover:text-zinc-700 transition-colors"
                         title="Edit template"
                       >
                         <Pencil className="h-4 w-4" />
                       </button>
                       <button
                         onClick={() => handleDelete(template.id)}
-                        className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+                        className="rounded-lg p-1.5 text-zinc-500 hover:bg-red-50 hover:text-red-600 transition-colors"
                         title="Delete template"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -519,8 +519,8 @@ export default function TemplatesPage() {
 
             {selectedTemplate.shortcut && (
               <div>
-                <h4 className="mb-1 text-sm font-medium text-gray-500">Shortcut</h4>
-                <span className="inline-flex items-center gap-1 rounded bg-gray-100 px-2 py-1 text-sm font-mono text-gray-700">
+                <h4 className="mb-1 text-sm font-medium text-muted-foreground">Shortcut</h4>
+                <span className="inline-flex items-center gap-1 rounded bg-muted px-2 py-1 text-sm font-mono text-zinc-700">
                   <Hash className="h-3.5 w-3.5" />
                   {selectedTemplate.shortcut}
                 </span>
@@ -529,34 +529,34 @@ export default function TemplatesPage() {
 
             {selectedTemplate.subject && (
               <div>
-                <h4 className="mb-1 text-sm font-medium text-gray-500">Subject</h4>
-                <p className="text-sm text-gray-700">{selectedTemplate.subject}</p>
+                <h4 className="mb-1 text-sm font-medium text-muted-foreground">Subject</h4>
+                <p className="text-sm text-zinc-700">{selectedTemplate.subject}</p>
               </div>
             )}
 
             <div>
-              <h4 className="mb-1 text-sm font-medium text-gray-500">Content</h4>
-              <p className="text-sm leading-relaxed text-gray-700 whitespace-pre-wrap">
+              <h4 className="mb-1 text-sm font-medium text-muted-foreground">Content</h4>
+              <p className="text-sm leading-relaxed text-zinc-700 whitespace-pre-wrap">
                 {selectedTemplate.content}
               </p>
             </div>
 
-            <div className="grid grid-cols-3 gap-4 rounded-lg bg-gray-50 p-3">
+            <div className="grid grid-cols-3 gap-4 rounded-lg bg-muted p-3">
               <div>
-                <p className="text-xs text-gray-500">Created</p>
-                <p className="text-sm font-medium text-gray-700">
+                <p className="text-xs text-muted-foreground">Created</p>
+                <p className="text-sm font-medium text-zinc-700">
                   {timeAgo(selectedTemplate.created_at)} ago
                 </p>
               </div>
               <div>
-                <p className="text-xs text-gray-500">Updated</p>
-                <p className="text-sm font-medium text-gray-700">
+                <p className="text-xs text-muted-foreground">Updated</p>
+                <p className="text-sm font-medium text-zinc-700">
                   {timeAgo(selectedTemplate.updated_at)} ago
                 </p>
               </div>
               <div>
-                <p className="text-xs text-gray-500">Usage Count</p>
-                <p className="text-sm font-medium text-gray-700">
+                <p className="text-xs text-muted-foreground">Usage Count</p>
+                <p className="text-sm font-medium text-zinc-700">
                   {selectedTemplate.usage_count}
                 </p>
               </div>
@@ -596,33 +596,33 @@ export default function TemplatesPage() {
               </div>
             )}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
+              <label className="block text-sm font-medium text-zinc-700 mb-1">Title *</label>
               <input
                 type="text"
                 value={editForm.title}
                 onChange={(e) => setEditForm((prev) => ({ ...prev, title: e.target.value }))}
                 placeholder="e.g., Thank you for contacting us"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-[var(--brand-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--brand-accent)]"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Subject <span className="text-gray-400 font-normal">(email only)</span>
+              <label className="block text-sm font-medium text-zinc-700 mb-1">
+                Subject <span className="text-zinc-500 font-normal">(email only)</span>
               </label>
               <input
                 type="text"
                 value={editForm.subject}
                 onChange={(e) => setEditForm((prev) => ({ ...prev, subject: e.target.value }))}
                 placeholder="Re: {{conversation.subject}}"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-[var(--brand-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--brand-accent)]"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
+              <label className="block text-sm font-medium text-zinc-700 mb-1">Category *</label>
               <select
                 value={editForm.category}
                 onChange={(e) => setEditForm((prev) => ({ ...prev, category: e.target.value }))}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-[var(--brand-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--brand-accent)]"
               >
                 {CATEGORIES.map((c) => (
                   <option key={c} value={c}>
@@ -632,29 +632,29 @@ export default function TemplatesPage() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Body *</label>
+              <label className="block text-sm font-medium text-zinc-700 mb-1">Body *</label>
               <textarea
                 value={editForm.content}
                 onChange={(e) => setEditForm((prev) => ({ ...prev, content: e.target.value }))}
                 placeholder="Hi {{customer.name}},&#10;&#10;Thanks for reaching out..."
                 rows={10}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500 resize-y min-h-[200px] font-mono"
+                className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-[var(--brand-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--brand-accent)] resize-y min-h-[200px] font-mono"
               />
-              <p className="mt-1 text-xs text-gray-400">
+              <p className="mt-1 text-xs text-zinc-500">
                 {editForm.content.split(/\s+/).filter(Boolean).length} words. Available variables:{' '}
                 {TEMPLATE_VARIABLES.map((v) => `{{${v}}}`).join(', ')}
               </p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Shortcut</label>
+              <label className="block text-sm font-medium text-zinc-700 mb-1">Shortcut</label>
               <input
                 type="text"
                 value={editForm.shortcut}
                 onChange={(e) => setEditForm((prev) => ({ ...prev, shortcut: e.target.value }))}
                 placeholder="e.g., welcome, rates, hours"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-[var(--brand-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--brand-accent)]"
               />
-              <p className="mt-1 text-xs text-gray-400">
+              <p className="mt-1 text-xs text-zinc-500">
                 Optional. Agents type <span className="font-mono">/{editForm.shortcut || 'shortcut'}</span> in
                 the composer to insert this template.
               </p>
@@ -664,25 +664,25 @@ export default function TemplatesPage() {
           {/* Live preview column */}
           <div className="space-y-3">
             <div>
-              <h4 className="text-sm font-medium text-gray-700">Preview</h4>
-              <p className="text-xs text-gray-400">
+              <h4 className="text-sm font-medium text-zinc-700">Preview</h4>
+              <p className="text-xs text-zinc-500">
                 Sample values: customer.name = &quot;Sample Customer&quot;, user.full_name = &quot;Agent Smith&quot;.
               </p>
             </div>
-            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 min-h-[280px]">
+            <div className="rounded-lg border border-border bg-muted p-4 min-h-[280px]">
               {editForm.subject && (
                 <div className="mb-3">
-                  <p className="text-xs uppercase tracking-wide text-gray-400 mb-1">Subject</p>
-                  <p className="text-sm font-medium text-gray-900">{previewSubject}</p>
+                  <p className="text-xs uppercase tracking-wide text-zinc-500 mb-1">Subject</p>
+                  <p className="text-sm font-medium text-foreground">{previewSubject}</p>
                 </div>
               )}
               <div>
                 {editForm.subject && (
-                  <p className="text-xs uppercase tracking-wide text-gray-400 mb-1">Body</p>
+                  <p className="text-xs uppercase tracking-wide text-zinc-500 mb-1">Body</p>
                 )}
-                <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                <p className="text-sm text-zinc-700 whitespace-pre-wrap">
                   {previewBody || (
-                    <span className="text-gray-400 italic">
+                    <span className="text-zinc-500 italic">
                       Type a template body to see the preview.
                     </span>
                   )}

@@ -628,7 +628,7 @@ export function AIProvidersManager({ companyId }: AIProvidersManagerProps) {
 
         {/* List header + add button */}
         <div className="flex items-center justify-between">
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-muted-foreground">
             {loading
               ? 'Loading providers…'
               : `${providers.length} provider${providers.length === 1 ? '' : 's'} configured`}
@@ -678,7 +678,7 @@ export function AIProvidersManager({ companyId }: AIProvidersManagerProps) {
 
         {/* Loading skeleton */}
         {loading && (
-          <div className="flex items-center gap-2 rounded-lg border border-gray-200 p-4 text-sm text-gray-500">
+          <div className="flex items-center gap-2 rounded-lg border border-border p-4 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
             Loading providers…
           </div>
@@ -686,14 +686,14 @@ export function AIProvidersManager({ companyId }: AIProvidersManagerProps) {
 
         {/* Empty state */}
         {!loading && !loadError && providers.length === 0 && mode === null && (
-          <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-gray-300 bg-gray-50/60 px-6 py-10 text-center">
+          <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border bg-muted px-6 py-10 text-center">
             <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-teal-50 text-teal-600 ring-1 ring-teal-200">
               <Cpu className="h-6 w-6" />
             </div>
-            <h4 className="text-sm font-semibold text-gray-800">
+            <h4 className="text-sm font-semibold text-zinc-700">
               Add your first AI provider
             </h4>
-            <p className="mt-1 max-w-sm text-sm text-gray-500">
+            <p className="mt-1 max-w-sm text-sm text-muted-foreground">
               Connect NVIDIA NIM, OpenAI, Groq, OpenRouter, or any
               OpenAI-compatible endpoint to power AI classification and replies.
             </p>
@@ -720,14 +720,14 @@ export function AIProvidersManager({ companyId }: AIProvidersManagerProps) {
                   className={`rounded-lg border p-4 transition-colors ${
                     p.is_active
                       ? 'border-teal-300 bg-teal-50/40'
-                      : 'border-gray-200 bg-white hover:bg-gray-50'
+                      : 'border-border bg-card hover:bg-muted'
                   } ${isEditingThis ? 'ring-2 ring-teal-500/30' : ''}`}
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <Cpu className="h-4 w-4 shrink-0 text-gray-400" />
-                        <span className="truncate text-sm font-semibold text-gray-900">
+                        <Cpu className="h-4 w-4 shrink-0 text-zinc-500" />
+                        <span className="truncate text-sm font-semibold text-foreground">
                           {p.name}
                         </span>
                         <Badge variant="default" size="sm">
@@ -739,38 +739,46 @@ export function AIProvidersManager({ companyId }: AIProvidersManagerProps) {
                           </Badge>
                         ) : null}
                         {p.last_test_ok === true ? (
-                          <span
-                            title={
-                              p.last_tested_at
-                                ? `Verified ${timeAgo(p.last_tested_at)}`
-                                : 'Connection verified'
-                            }
-                            className="inline-flex items-center gap-1 rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-[11px] font-medium text-green-700"
+                          <Badge
+                            variant="success"
+                            size="sm"
+                            className="gap-1"
                           >
-                            <CheckCircle2 className="h-3 w-3" /> Verified
-                          </span>
+                            <span
+                              title={
+                                p.last_tested_at
+                                  ? `Verified ${timeAgo(p.last_tested_at)}`
+                                  : 'Connection verified'
+                              }
+                              className="inline-flex items-center gap-1"
+                            >
+                              <CheckCircle2 className="h-3 w-3" /> Verified
+                            </span>
+                          </Badge>
                         ) : p.last_test_ok === false ? (
-                          <span
-                            title={p.last_test_error ?? 'Connection failed'}
-                            className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700"
-                          >
-                            <AlertCircle className="h-3 w-3" /> Failed
-                          </span>
+                          <Badge variant="danger" size="sm" className="gap-1">
+                            <span
+                              title={p.last_test_error ?? 'Connection failed'}
+                              className="inline-flex items-center gap-1"
+                            >
+                              <AlertCircle className="h-3 w-3" /> Failed
+                            </span>
+                          </Badge>
                         ) : null}
                       </div>
-                      <dl className="mt-2 grid grid-cols-1 gap-x-6 gap-y-1 text-xs text-gray-600 sm:grid-cols-2">
+                      <dl className="mt-2 grid grid-cols-1 gap-x-6 gap-y-1 text-xs text-zinc-600 sm:grid-cols-2">
                         <div className="flex gap-1.5">
-                          <dt className="font-medium text-gray-500">Model:</dt>
+                          <dt className="font-medium text-muted-foreground">Model:</dt>
                           <dd className="truncate font-mono">{p.model || '—'}</dd>
                         </div>
                         <div className="flex gap-1.5">
-                          <dt className="font-medium text-gray-500">API key:</dt>
+                          <dt className="font-medium text-muted-foreground">API key:</dt>
                           <dd className="truncate font-mono">
                             {formatMaskedKey(p.has_api_key, p.api_key_masked)}
                           </dd>
                         </div>
                         <div className="flex min-w-0 gap-1.5 sm:col-span-2">
-                          <dt className="font-medium text-gray-500">
+                          <dt className="font-medium text-muted-foreground">
                             Base URL:
                           </dt>
                           <dd className="truncate font-mono">
@@ -816,7 +824,7 @@ export function AIProvidersManager({ companyId }: AIProvidersManagerProps) {
                         disabled={isBusy}
                         aria-label={`Edit ${p.name}`}
                         title="Edit"
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 ring-1 ring-gray-200 transition-colors hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground ring-1 ring-border transition-colors hover:bg-muted hover:text-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         <Pencil className="h-4 w-4" />
                       </button>
@@ -826,7 +834,7 @@ export function AIProvidersManager({ companyId }: AIProvidersManagerProps) {
                         disabled={isBusy}
                         aria-label={`Duplicate ${p.name}`}
                         title="Duplicate"
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 ring-1 ring-gray-200 transition-colors hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground ring-1 ring-border transition-colors hover:bg-muted hover:text-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         <Copy className="h-4 w-4" />
                       </button>
@@ -836,7 +844,7 @@ export function AIProvidersManager({ companyId }: AIProvidersManagerProps) {
                         disabled={isBusy}
                         aria-label={`Delete ${p.name}`}
                         title="Delete"
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 ring-1 ring-gray-200 transition-colors hover:bg-red-50 hover:text-red-600 hover:ring-red-200 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground ring-1 ring-border transition-colors hover:bg-red-50 hover:text-red-600 hover:ring-red-200 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {isBusy ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
@@ -854,9 +862,9 @@ export function AIProvidersManager({ companyId }: AIProvidersManagerProps) {
 
         {/* Add / edit form */}
         {mode !== null && (
-          <div className="rounded-lg border border-gray-200 bg-gray-50/60 p-4">
+          <div className="rounded-lg border border-border bg-muted p-4">
             <div className="mb-4 flex items-center justify-between">
-              <h4 className="text-sm font-semibold text-gray-800">
+              <h4 className="text-sm font-semibold text-zinc-700">
                 {mode.type === 'edit'
                   ? `Edit "${mode.row.name}"`
                   : 'Add AI provider'}
@@ -865,7 +873,7 @@ export function AIProvidersManager({ companyId }: AIProvidersManagerProps) {
                 type="button"
                 onClick={closeForm}
                 aria-label="Close form"
-                className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-200 hover:text-gray-600"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-zinc-600"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -877,7 +885,7 @@ export function AIProvidersManager({ companyId }: AIProvidersManagerProps) {
                 <div>
                   <label
                     htmlFor="ai-provider-preset"
-                    className="mb-1.5 block text-sm font-medium text-gray-700"
+                    className="mb-1.5 block text-sm font-medium text-zinc-700"
                   >
                     Provider
                   </label>
@@ -887,7 +895,7 @@ export function AIProvidersManager({ companyId }: AIProvidersManagerProps) {
                     onChange={(e) =>
                       onPresetChange(e.target.value as AiProviderKey)
                     }
-                    className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 transition-colors focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+                    className="block w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground transition-colors focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
                   >
                     {AI_PROVIDER_PRESETS.map((preset) => (
                       <option key={preset.key} value={preset.key}>
@@ -937,7 +945,7 @@ export function AIProvidersManager({ companyId }: AIProvidersManagerProps) {
               <div>
                 <label
                   htmlFor="ai-provider-api-key"
-                  className="mb-1.5 block text-sm font-medium text-gray-700"
+                  className="mb-1.5 block text-sm font-medium text-zinc-700"
                 >
                   API Key
                 </label>
@@ -961,7 +969,7 @@ export function AIProvidersManager({ companyId }: AIProvidersManagerProps) {
                   <button
                     type="button"
                     onClick={() => setShowApiKey((v) => !v)}
-                    className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-lg border border-gray-300 text-gray-500 transition-colors hover:bg-gray-100"
+                    className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-muted"
                     aria-label={showApiKey ? 'Hide API key' : 'Show API key'}
                     aria-pressed={showApiKey}
                   >
@@ -973,7 +981,7 @@ export function AIProvidersManager({ companyId }: AIProvidersManagerProps) {
                   </button>
                 </div>
                 {keepExistingKey && (
-                  <p className="mt-1.5 text-xs text-gray-500">
+                  <p className="mt-1.5 text-xs text-muted-foreground">
                     A key is already saved. Leave this blank to keep it, or enter
                     a new key to replace it.
                   </p>
@@ -985,7 +993,7 @@ export function AIProvidersManager({ companyId }: AIProvidersManagerProps) {
                 <div className="mb-1.5 flex items-center justify-between gap-2">
                   <label
                     htmlFor="ai-provider-model"
-                    className="block text-sm font-medium text-gray-700"
+                    className="block text-sm font-medium text-zinc-700"
                   >
                     Model
                   </label>
@@ -998,7 +1006,7 @@ export function AIProvidersManager({ companyId }: AIProvidersManagerProps) {
                       (!form.apiKey.trim() && !editingRow?.has_api_key)
                     }
                     title="Fetch the available models from this provider using your API key"
-                    className="inline-flex items-center gap-1 text-xs font-medium text-teal-700 transition-colors hover:underline disabled:cursor-not-allowed disabled:text-gray-400 disabled:no-underline"
+                    className="inline-flex items-center gap-1 text-xs font-medium text-teal-700 transition-colors hover:underline disabled:cursor-not-allowed disabled:text-zinc-500 disabled:no-underline"
                   >
                     {loadingModels ? (
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -1017,7 +1025,7 @@ export function AIProvidersManager({ companyId }: AIProvidersManagerProps) {
                       onChange={(e) =>
                         setForm((p) => ({ ...p, model: e.target.value }))
                       }
-                      className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 transition-colors focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+                      className="block w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground transition-colors focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
                     >
                       {/* Preserve a current value that isn't in the fetched list. */}
                       {form.model && !fetchedModels.includes(form.model) && (
@@ -1030,7 +1038,7 @@ export function AIProvidersManager({ companyId }: AIProvidersManagerProps) {
                       ))}
                     </select>
                     <div className="mt-1.5 flex items-center justify-between gap-2">
-                      <p className="text-xs text-gray-500">
+                      <p className="text-xs text-muted-foreground">
                         {fetchedModels.length} model{fetchedModels.length === 1 ? '' : 's'} loaded from this provider.
                       </p>
                       <button
@@ -1053,7 +1061,7 @@ export function AIProvidersManager({ companyId }: AIProvidersManagerProps) {
                       }
                       placeholder="Type a model name, or click “Load models”"
                       autoComplete="off"
-                      className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 transition-colors focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+                      className="block w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground placeholder-zinc-400 transition-colors focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
                     />
                     <datalist id="ai-provider-model-options">
                       {(fetchedModels ?? modelSuggestions).map((m) => (
@@ -1061,7 +1069,7 @@ export function AIProvidersManager({ companyId }: AIProvidersManagerProps) {
                       ))}
                     </datalist>
                     <div className="mt-1.5 flex items-center justify-between gap-2">
-                      <p className="text-xs text-gray-500">
+                      <p className="text-xs text-muted-foreground">
                         Click <span className="font-medium">Load models</span> to pick from your provider&apos;s list — or type any model name.
                       </p>
                       {fetchedModels && fetchedModels.length > 0 && (
@@ -1171,7 +1179,7 @@ export function AIProvidersManager({ companyId }: AIProvidersManagerProps) {
                   Cancel
                 </Button>
                 {mode.type === 'create' && providers.length === 0 && (
-                  <span className="inline-flex items-center gap-1.5 text-xs text-gray-500">
+                  <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
                     <Check className="h-3.5 w-3.5 text-teal-600" />
                     This first provider will be set active automatically.
                   </span>

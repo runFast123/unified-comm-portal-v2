@@ -347,8 +347,8 @@ export default function RoutingRulesPage() {
       <div className="space-y-6 animate-fade-in">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Routing Rules</h1>
-            <p className="mt-1 text-sm text-gray-500">
+            <h1 className="text-2xl font-semibold text-foreground">Routing Rules</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
               Auto-tag, prioritize, and assign inbound conversations based on conditions.
             </p>
           </div>
@@ -363,13 +363,13 @@ export default function RoutingRulesPage() {
         </div>
 
         {/* Rules table */}
-        <div className="rounded-2xl border border-gray-200/80 bg-white p-1 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_1px_3px_rgba(16,24,40,0.06)]">
-          <div className="flex items-center gap-4 border-b border-gray-100 px-4 py-3">
+        <div className="rounded-2xl border border-border bg-card p-1 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_1px_3px_rgba(16,24,40,0.06)]">
+          <div className="flex items-center gap-4 border-b border-border px-4 py-3">
             <Skeleton className="h-3 w-32 rounded" />
             <Skeleton className="ml-auto h-3 w-12 rounded" />
           </div>
           {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="flex items-center gap-4 border-b border-gray-50 px-4 py-3 last:border-b-0">
+            <div key={i} className="flex items-center gap-4 border-b border-border px-4 py-3 last:border-b-0">
               <Skeleton className="h-4 w-4 rounded" />
               <Skeleton className="h-4 w-40 rounded" />
               <Skeleton className="h-5 w-12 rounded-full" />
@@ -385,8 +385,8 @@ export default function RoutingRulesPage() {
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Routing Rules</h1>
-          <p className="mt-1 text-sm text-gray-500">
+          <h1 className="text-2xl font-semibold text-foreground">Routing Rules</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             Auto-tag, prioritize, and assign inbound conversations based on conditions.
           </p>
         </div>
@@ -397,7 +397,7 @@ export default function RoutingRulesPage() {
 
       {/* Summary chips */}
       <div className="flex flex-wrap gap-2">
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-teal-50 px-2.5 py-1 text-xs font-medium text-teal-700 ring-1 ring-teal-200">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--brand-accent)]/10 px-2.5 py-1 text-xs font-medium text-[var(--brand-accent)] ring-1 ring-[var(--brand-accent)]/20">
           <GitBranch className="h-3.5 w-3.5" />
           {rules.length} total
         </span>
@@ -410,11 +410,11 @@ export default function RoutingRulesPage() {
       </div>
 
       {/* Rules table */}
-      <div className="rounded-2xl border border-gray-200/80 bg-white p-1 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_1px_3px_rgba(16,24,40,0.06)]">
+      <div className="rounded-2xl border border-border bg-card p-1 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_1px_3px_rgba(16,24,40,0.06)]">
         {rules.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-gray-500">
-            <GitBranch className="h-8 w-8 text-gray-300 mb-2" />
-            <p className="font-medium text-gray-700">No routing rules yet</p>
+          <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+            <GitBranch className="h-8 w-8 text-zinc-300 mb-2" />
+            <p className="font-medium text-zinc-700">No routing rules yet</p>
             <p className="text-sm mt-1">Inbound messages will use system defaults until you add a rule.</p>
           </div>
         ) : (
@@ -434,8 +434,8 @@ export default function RoutingRulesPage() {
                 <TableRow key={rule.id}>
                   <TableCell>
                     <div className="flex items-center gap-2">
-                      <GitBranch className="h-4 w-4 text-gray-400" />
-                      <span className="font-medium text-gray-900">{rule.name}</span>
+                      <GitBranch className="h-4 w-4 text-zinc-400" />
+                      <span className="font-medium text-foreground">{rule.name}</span>
                       {rule.account_id && (
                         <span className="rounded-full bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 ring-1 ring-blue-200">
                           scoped
@@ -449,31 +449,31 @@ export default function RoutingRulesPage() {
                       className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors ${
                         rule.is_active
                           ? 'bg-emerald-100 text-emerald-700'
-                          : 'bg-gray-100 text-gray-500'
+                          : 'bg-muted text-muted-foreground'
                       }`}
                     >
                       {rule.is_active ? 'On' : 'Off'}
                     </button>
                   </TableCell>
-                  <TableCell className="font-mono text-xs text-gray-700">{rule.priority}</TableCell>
-                  <TableCell className="max-w-md text-xs text-gray-600">
+                  <TableCell className="font-mono text-xs text-zinc-700">{rule.priority}</TableCell>
+                  <TableCell className="max-w-md text-xs text-zinc-600">
                     <span className="line-clamp-2">{summarizeConditions(rule)}</span>
                   </TableCell>
-                  <TableCell className="max-w-md text-xs text-gray-600">
+                  <TableCell className="max-w-md text-xs text-zinc-600">
                     <span className="line-clamp-2">{summarizeActions(rule)}</span>
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="inline-flex items-center gap-1">
                       <button
                         onClick={() => openEdit(rule)}
-                        className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                        className="rounded p-1 text-zinc-400 hover:bg-muted hover:text-zinc-600"
                         title="Edit"
                       >
                         <Edit2 className="h-4 w-4" />
                       </button>
                       <button
                         onClick={() => handleDelete(rule.id)}
-                        className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600"
+                        className="rounded p-1 text-zinc-400 hover:bg-red-50 hover:text-red-600"
                         title="Delete"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -544,9 +544,9 @@ export default function RoutingRulesPage() {
           />
 
           {/* Conditions */}
-          <div className="rounded-2xl border border-gray-200/80 bg-gray-50/50 p-4">
+          <div className="rounded-2xl border border-border bg-muted/50 p-4">
             <div className="mb-3 flex items-center justify-between">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Conditions
               </p>
               <div className="flex items-center gap-3 text-xs">
@@ -555,7 +555,7 @@ export default function RoutingRulesPage() {
                     type="radio"
                     checked={form.match_mode === 'all'}
                     onChange={() => setForm({ ...form, match_mode: 'all' })}
-                    className="h-3.5 w-3.5 text-teal-600"
+                    className="h-3.5 w-3.5 text-[var(--brand-accent)]"
                   />
                   Match all
                 </label>
@@ -564,7 +564,7 @@ export default function RoutingRulesPage() {
                     type="radio"
                     checked={form.match_mode === 'any'}
                     onChange={() => setForm({ ...form, match_mode: 'any' })}
-                    className="h-3.5 w-3.5 text-teal-600"
+                    className="h-3.5 w-3.5 text-[var(--brand-accent)]"
                   />
                   Match any
                 </label>
@@ -575,7 +575,7 @@ export default function RoutingRulesPage() {
               {form.conditions.map((c, idx) => (
                 <div
                   key={idx}
-                  className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white p-2 ring-1 ring-gray-100"
+                  className="flex items-center gap-2 rounded-xl border border-border bg-card p-2 ring-1 ring-border"
                 >
                   <div className="flex-1">
                     <Select
@@ -600,7 +600,7 @@ export default function RoutingRulesPage() {
                   </div>
                   <button
                     onClick={() => removeCondition(idx)}
-                    className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600"
+                    className="rounded p-1 text-zinc-400 hover:bg-red-50 hover:text-red-600"
                     title="Remove"
                   >
                     <X className="h-4 w-4" />
@@ -611,15 +611,15 @@ export default function RoutingRulesPage() {
 
             <button
               onClick={addCondition}
-              className="mt-2 inline-flex items-center gap-1 rounded-full bg-teal-50 px-2.5 py-1 text-xs font-medium text-teal-700 ring-1 ring-teal-200 transition-colors hover:bg-teal-100"
+              className="mt-2 inline-flex items-center gap-1 rounded-full bg-[var(--brand-accent)]/10 px-2.5 py-1 text-xs font-medium text-[var(--brand-accent)] ring-1 ring-[var(--brand-accent)]/20 transition-colors hover:bg-[var(--brand-accent)]/20"
             >
               <Plus className="h-3.5 w-3.5" /> Add condition
             </button>
           </div>
 
           {/* Actions */}
-          <div className="rounded-2xl border border-gray-200/80 bg-gray-50/50 p-4 space-y-3">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+          <div className="rounded-2xl border border-border bg-muted/50 p-4 space-y-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
               Actions
             </p>
 
@@ -639,7 +639,7 @@ export default function RoutingRulesPage() {
             </div>
 
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-gray-700">
+              <label className="mb-1.5 block text-sm font-medium text-zinc-700">
                 <Tag className="mr-1 inline h-3.5 w-3.5" />
                 Add tags (comma-separated)
               </label>
@@ -674,7 +674,7 @@ export default function RoutingRulesPage() {
             </div>
 
             <div className="flex items-start gap-2">
-              <UserCheck className="mt-1 h-4 w-4 text-gray-500" />
+              <UserCheck className="mt-1 h-4 w-4 text-muted-foreground" />
               <Toggle
                 checked={form.use_round_robin}
                 onChange={(v) => setForm({ ...form, use_round_robin: v })}

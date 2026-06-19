@@ -680,7 +680,7 @@ export default function AccountsPage() {
     return (
       <div className="flex items-center justify-center py-24">
         <Loader2 className="h-8 w-8 animate-spin text-teal-600" />
-        <span className="ml-3 text-gray-500">Loading accounts...</span>
+        <span className="ml-3 text-muted-foreground">Loading accounts...</span>
       </div>
     )
   }
@@ -689,7 +689,7 @@ export default function AccountsPage() {
     return (
       <div className="flex flex-col items-center justify-center py-24">
         <p className="text-red-600 font-medium">Failed to load accounts</p>
-        <p className="text-sm text-gray-500 mt-1">{error}</p>
+        <p className="text-sm text-muted-foreground mt-1">{error}</p>
         <Button variant="secondary" className="mt-4" onClick={() => window.location.reload()}>
           Retry
         </Button>
@@ -701,8 +701,8 @@ export default function AccountsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Account Management</h1>
-          <p className="mt-1 text-sm text-gray-500">
+          <h1 className="text-2xl font-semibold text-foreground">Account Management</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             Manage all {accounts.length} connected accounts and their automation settings
           </p>
         </div>
@@ -732,7 +732,7 @@ export default function AccountsPage() {
             />
           </div>
           <div className="flex items-center gap-2">
-            <Filter className="h-4 w-4 text-gray-400" />
+            <Filter className="h-4 w-4 text-zinc-500" />
             {(['all', 'teams', 'email', 'whatsapp'] as const).map((ch) => (
               <button
                 key={ch}
@@ -740,7 +740,7 @@ export default function AccountsPage() {
                 className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
                   channelFilter === ch
                     ? 'bg-teal-100 text-teal-700'
-                    : 'text-gray-600 hover:bg-gray-100'
+                    : 'text-zinc-600 hover:bg-muted'
                 }`}
               >
                 {ch === 'all' ? 'All' : getChannelLabel(ch)}
@@ -805,9 +805,9 @@ export default function AccountsPage() {
               })
 
               return Object.entries(groups).map(([companyName, channelAccounts]) => (
-                <div key={companyName} className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+                <div key={companyName} className="rounded-xl border border-border bg-card overflow-hidden">
                   {/* Company header */}
-                  <div className="flex items-center justify-between px-5 py-3 bg-gray-50 border-b border-gray-100">
+                  <div className="flex items-center justify-between px-5 py-3 bg-muted border-b border-border">
                     <div className="flex items-center gap-3">
                       <input
                         type="checkbox"
@@ -820,25 +820,25 @@ export default function AccountsPage() {
                             return next
                           })
                         }}
-                        className="h-4 w-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+                        className="h-4 w-4 rounded border-border text-teal-600 focus:ring-teal-500"
                       />
-                      <span className="text-sm font-bold text-gray-900">{companyName}</span>
+                      <span className="text-sm font-bold text-foreground">{companyName}</span>
                       <div className="flex items-center gap-1.5">
                         {channelAccounts.map(a => (
-                          <span key={a.id} className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">
+                          <span key={a.id} className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-zinc-600">
                             <ChannelIcon channel={a.channel_type} size={12} />
                             {getChannelLabel(a.channel_type)}
                           </span>
                         ))}
                       </div>
                     </div>
-                    <span className="text-xs text-gray-400">
+                    <span className="text-xs text-zinc-500">
                       {timeAgo(channelAccounts.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())[0]?.updated_at)}
                     </span>
                   </div>
 
                   {/* Channel rows */}
-                  <div className="divide-y divide-gray-100">
+                  <div className="divide-y divide-border">
                     {channelAccounts.map((account) => (
                       <div
                         key={account.id}
@@ -848,7 +848,7 @@ export default function AccountsPage() {
                         <div className="flex items-center gap-2 w-32 shrink-0">
                           <span className={`h-2 w-2 rounded-full shrink-0 ${getStatusDot(account)}`} />
                           <ChannelIcon channel={account.channel_type} size={16} />
-                          <span className="text-xs font-medium text-gray-700">{getChannelLabel(account.channel_type)}</span>
+                          <span className="text-xs font-medium text-zinc-700">{getChannelLabel(account.channel_type)}</span>
                           {isAccountOOOActive(account) && (
                             <span
                               className="inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700"
@@ -860,21 +860,21 @@ export default function AccountsPage() {
                         </div>
 
                         <div className="w-44 min-w-0 shrink-0">
-                          <span className="text-xs text-gray-500 truncate block" title={account.gmail_address || ''}>
-                            {account.gmail_address || <span className="text-gray-300 italic">No email</span>}
+                          <span className="text-xs text-muted-foreground truncate block" title={account.gmail_address || ''}>
+                            {account.gmail_address || <span className="text-zinc-500 italic">No email</span>}
                           </span>
                         </div>
 
                         <div className="flex items-center gap-6 flex-1" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center gap-2">
-                            <span className="text-[11px] text-gray-400 w-16">Monitor:</span>
+                            <span className="text-[11px] text-zinc-500 w-16">Monitor:</span>
                             <Toggle
                               checked={account.phase1_enabled}
                               onChange={(val) => togglePhase1(account.id, val)}
                             />
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="text-[11px] text-gray-400 w-16">AI Reply:</span>
+                            <span className="text-[11px] text-zinc-500 w-16">AI Reply:</span>
                             <Toggle
                               checked={account.phase2_enabled}
                               onChange={(val) => togglePhase2(account.id, val)}
@@ -888,7 +888,7 @@ export default function AccountsPage() {
                           phase2_enabled={account.phase2_enabled}
                         />
 
-                        <ChevronRight className="h-4 w-4 text-gray-300 shrink-0" />
+                        <ChevronRight className="h-4 w-4 text-zinc-500 shrink-0" />
                       </div>
                     ))}
                   </div>
@@ -911,29 +911,30 @@ export default function AccountsPage() {
             <div className="flex items-center gap-3">
               <ChannelIcon channel={detailAccount.channel_type} size={24} />
               <div>
-                <p className="font-semibold text-gray-900">{detailAccount.name}</p>
-                <p className="text-sm text-gray-500">
+                <p className="font-semibold text-foreground">{detailAccount.name}</p>
+                <p className="text-sm text-muted-foreground">
                   {getChannelLabel(detailAccount.channel_type)} Account
                 </p>
                 {detailAccount.gmail_address && (
-                  <p className="text-xs text-teal-600 mt-0.5">
-                    📧 {detailAccount.gmail_address}
+                  <p className="inline-flex items-center gap-1 text-xs text-teal-600 mt-0.5">
+                    <ChannelIcon channel="email" size={12} />
+                    {detailAccount.gmail_address}
                   </p>
                 )}
               </div>
             </div>
 
             {/* Company / Identity */}
-            <div className="rounded-lg border border-gray-200 p-4 space-y-3">
+            <div className="rounded-lg border border-border p-4 space-y-3">
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-gray-900">Company</h3>
+                <h3 className="text-sm font-semibold text-foreground">Company</h3>
                 {modalForm.company_id === null && !showNewCompanyInput && (
                   <span className="inline-flex items-center rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[11px] font-medium text-amber-700">
                     Legacy: company derived from name
                   </span>
                 )}
               </div>
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-muted-foreground">
                 Sibling channel accounts (e.g. an Email + Teams account for the same tenant)
                 are grouped by this. Required for new accounts; existing rows fall back to a
                 name-prefix match until set.
@@ -957,7 +958,7 @@ export default function AccountsPage() {
                     prev ? { ...prev, company_id: v === '' ? null : v } : prev
                   )
                 }}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-teal-500 focus:ring-1 focus:ring-teal-500 focus:outline-none bg-white"
+                className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-teal-500 focus:ring-1 focus:ring-teal-500 focus:outline-none bg-card"
               >
                 <option value="">— Unassigned (legacy) —</option>
                 {companies.map((c) => (
@@ -975,7 +976,7 @@ export default function AccountsPage() {
                     value={newCompanyDraft}
                     onChange={(e) => setNewCompanyDraft(e.target.value)}
                     placeholder="New company name (e.g. Acme Corp)"
-                    className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-teal-500 focus:ring-1 focus:ring-teal-500 focus:outline-none"
+                    className="flex-1 rounded-lg border border-border px-3 py-2 text-sm focus:border-teal-500 focus:ring-1 focus:ring-teal-500 focus:outline-none"
                     autoFocus
                   />
                   <Button
@@ -992,11 +993,11 @@ export default function AccountsPage() {
             </div>
 
             {/* Phase Toggles (existing functionality) */}
-            <div className="rounded-lg border border-gray-200 p-4 space-y-3">
+            <div className="rounded-lg border border-border p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex-1 mr-4">
-                  <span className="text-sm font-medium text-gray-700">Monitor inbox</span>
-                  <p className="text-xs text-gray-500 mt-0.5">
+                  <span className="text-sm font-medium text-zinc-700">Monitor inbox</span>
+                  <p className="text-xs text-muted-foreground mt-0.5">
                     Ingest and classify incoming messages.
                   </p>
                 </div>
@@ -1014,8 +1015,8 @@ export default function AccountsPage() {
               </div>
               <div className="flex items-center justify-between">
                 <div className="flex-1 mr-4">
-                  <span className="text-sm font-medium text-gray-700">AI auto-reply</span>
-                  <p className="text-xs text-gray-500 mt-0.5">
+                  <span className="text-sm font-medium text-zinc-700">AI auto-reply</span>
+                  <p className="text-xs text-muted-foreground mt-0.5">
                     Let AI draft/send replies (requires trust mode). Master switch for AI replies.
                   </p>
                 </div>
@@ -1033,14 +1034,14 @@ export default function AccountsPage() {
             </div>
 
             {/* AI Settings */}
-            <div className="rounded-lg border border-gray-200 p-4 space-y-4">
-              <h3 className="text-sm font-semibold text-gray-900">AI Settings</h3>
+            <div className="rounded-lg border border-border p-4 space-y-4">
+              <h3 className="text-sm font-semibold text-foreground">AI Settings</h3>
 
               {/* Auto Reply Toggle */}
               <div className="flex items-center justify-between">
                 <div className="flex-1 mr-4">
-                  <span className="text-sm font-medium text-gray-700">Auto Reply</span>
-                  <p className="text-xs text-gray-500 mt-0.5">
+                  <span className="text-sm font-medium text-zinc-700">Auto Reply</span>
+                  <p className="text-xs text-muted-foreground mt-0.5">
                     When enabled, AI will automatically generate reply drafts for incoming messages
                   </p>
                 </div>
@@ -1053,8 +1054,8 @@ export default function AccountsPage() {
               {/* Trust Mode Toggle */}
               <div className="flex items-center justify-between">
                 <div className="flex-1 mr-4">
-                  <span className="text-sm font-medium text-gray-700">Trust Mode</span>
-                  <p className="text-xs text-gray-500 mt-0.5">
+                  <span className="text-sm font-medium text-zinc-700">Trust Mode</span>
+                  <p className="text-xs text-muted-foreground mt-0.5">
                     When enabled, AI replies are sent directly without human approval (use with caution)
                   </p>
                 </div>
@@ -1067,12 +1068,12 @@ export default function AccountsPage() {
               {/* Confidence Threshold Slider */}
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-sm font-medium text-gray-700">Confidence Threshold</span>
+                  <span className="text-sm font-medium text-zinc-700">Confidence Threshold</span>
                   <span className="text-sm font-semibold text-teal-700">
                     {(modalForm.ai_confidence_threshold * 100).toFixed(0)}%
                   </span>
                 </div>
-                <p className="text-xs text-gray-500 mb-2">
+                <p className="text-xs text-muted-foreground mb-2">
                   Minimum AI confidence score required for auto-sending replies
                 </p>
                 <input
@@ -1086,9 +1087,9 @@ export default function AccountsPage() {
                       prev ? { ...prev, ai_confidence_threshold: Number(e.target.value) / 100 } : prev
                     )
                   }
-                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-teal-700"
+                  className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-teal-700"
                 />
-                <div className="flex justify-between text-xs text-gray-400 mt-1">
+                <div className="flex justify-between text-xs text-zinc-500 mt-1">
                   <span>0%</span>
                   <span>50%</span>
                   <span>100%</span>
@@ -1097,11 +1098,11 @@ export default function AccountsPage() {
             </div>
 
             {/* Working Hours */}
-            <div className="rounded-lg border border-gray-200 p-4 space-y-4">
-              <h3 className="text-sm font-semibold text-gray-900">Working Hours</h3>
+            <div className="rounded-lg border border-border p-4 space-y-4">
+              <h3 className="text-sm font-semibold text-foreground">Working Hours</h3>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Start Time</label>
+                  <label className="block text-sm font-medium text-zinc-700 mb-1">Start Time</label>
                   <input
                     type="time"
                     value={modalForm.working_hours_start.slice(0, 5)}
@@ -1110,11 +1111,11 @@ export default function AccountsPage() {
                         prev ? { ...prev, working_hours_start: e.target.value + ':00' } : prev
                       )
                     }
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-teal-500 focus:ring-1 focus:ring-teal-500 focus:outline-none"
+                    className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-teal-500 focus:ring-1 focus:ring-teal-500 focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">End Time</label>
+                  <label className="block text-sm font-medium text-zinc-700 mb-1">End Time</label>
                   <input
                     type="time"
                     value={modalForm.working_hours_end.slice(0, 5)}
@@ -1123,12 +1124,12 @@ export default function AccountsPage() {
                         prev ? { ...prev, working_hours_end: e.target.value + ':00' } : prev
                       )
                     }
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-teal-500 focus:ring-1 focus:ring-teal-500 focus:outline-none"
+                    className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-teal-500 focus:ring-1 focus:ring-teal-500 focus:outline-none"
                   />
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Timezone</label>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">Timezone</label>
                 <select
                   value={modalForm.working_timezone}
                   onChange={(e) =>
@@ -1136,7 +1137,7 @@ export default function AccountsPage() {
                       prev ? { ...prev, working_timezone: e.target.value } : prev
                     )
                   }
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-teal-500 focus:ring-1 focus:ring-teal-500 focus:outline-none bg-white"
+                  className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-teal-500 focus:ring-1 focus:ring-teal-500 focus:outline-none bg-card"
                 >
                   {COMMON_TIMEZONES.map((tz) => (
                     <option key={tz} value={tz}>
@@ -1148,15 +1149,15 @@ export default function AccountsPage() {
             </div>
 
             {/* AI System Prompt */}
-            <div className="rounded-lg border border-gray-200 p-4 space-y-2">
-              <h3 className="text-sm font-semibold text-gray-900">AI System Prompt</h3>
-              <p className="text-xs text-gray-500">
+            <div className="rounded-lg border border-border p-4 space-y-2">
+              <h3 className="text-sm font-semibold text-foreground">AI System Prompt</h3>
+              <p className="text-xs text-muted-foreground">
                 Pick a tone preset to start from, or write your own. The text below is what the AI sees before every reply.
               </p>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Tone preset</label>
+                <label className="block text-xs font-medium text-zinc-600 mb-1">Tone preset</label>
                 <select
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-teal-500 focus:ring-1 focus:ring-teal-500 focus:outline-none"
+                  className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-teal-500 focus:ring-1 focus:ring-teal-500 focus:outline-none"
                   onChange={(e) => {
                     const key = e.target.value as keyof typeof AI_TONE_PRESETS | ''
                     if (!key) return
@@ -1186,7 +1187,7 @@ export default function AccountsPage() {
                 }
                 rows={4}
                 placeholder="e.g. You are a customer support agent for Acme Corp. Always be polite and professional..."
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-teal-500 focus:ring-1 focus:ring-teal-500 focus:outline-none resize-y"
+                className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-teal-500 focus:ring-1 focus:ring-teal-500 focus:outline-none resize-y"
               />
             </div>
 
@@ -1211,10 +1212,10 @@ export default function AccountsPage() {
                 ? 'text-amber-700'
                 : 'text-green-700'
               return (
-                <div className="rounded-lg border border-gray-200 p-4 space-y-4">
+                <div className="rounded-lg border border-border p-4 space-y-4">
                   <div>
-                    <h3 className="text-sm font-semibold text-gray-900">AI Cost Budget</h3>
-                    <p className="text-xs text-gray-500 mt-0.5">
+                    <h3 className="text-sm font-semibold text-foreground">AI Cost Budget</h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">
                       Monthly hard cap on AI spend for this account. Calls are blocked once
                       the cap is hit. Cost is estimated from token counts — coarse but useful
                       for runaway-cost detection.
@@ -1222,23 +1223,23 @@ export default function AccountsPage() {
                   </div>
 
                   {/* Live readout */}
-                  <div className="rounded-md bg-gray-50 border border-gray-100 p-3">
+                  <div className="rounded-md bg-muted border border-border p-3">
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-600">Spent this month</span>
+                      <span className="text-zinc-600">Spent this month</span>
                       <span className={`font-semibold ${pctTextClass}`}>
                         {aiSpendThisMonth === null ? (
-                          <span className="text-gray-400 italic">loading…</span>
+                          <span className="text-zinc-500 italic">loading…</span>
                         ) : (
                           <>
                             ${spent.toFixed(4)} / ${budget.toFixed(2)}{' '}
-                            <span className="text-xs font-normal text-gray-500">
+                            <span className="text-xs font-normal text-muted-foreground">
                               ({pct.toFixed(1)}%)
                             </span>
                           </>
                         )}
                       </span>
                     </div>
-                    <div className="mt-2 h-2 w-full rounded-full bg-gray-200 overflow-hidden">
+                    <div className="mt-2 h-2 w-full rounded-full bg-muted overflow-hidden">
                       <div
                         className={`h-full ${barClass} transition-all`}
                         style={{ width: `${pctClamped}%` }}
@@ -1258,10 +1259,10 @@ export default function AccountsPage() {
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-sm font-medium text-zinc-700 mb-1">
                         Monthly budget (USD)
                       </label>
-                      <p className="text-xs text-gray-500 mb-1.5">
+                      <p className="text-xs text-muted-foreground mb-1.5">
                         Default $50. Set to 0 to disable the cap.
                       </p>
                       <input
@@ -1279,14 +1280,14 @@ export default function AccountsPage() {
                               : prev
                           )
                         }
-                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-teal-500 focus:ring-1 focus:ring-teal-500 focus:outline-none"
+                        className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-teal-500 focus:ring-1 focus:ring-teal-500 focus:outline-none"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-sm font-medium text-zinc-700 mb-1">
                         Alert threshold (%)
                       </label>
-                      <p className="text-xs text-gray-500 mb-1.5">
+                      <p className="text-xs text-muted-foreground mb-1.5">
                         Audit alert fires when spend crosses this % of budget.
                       </p>
                       <input
@@ -1308,7 +1309,7 @@ export default function AccountsPage() {
                               : prev
                           )
                         }
-                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-teal-500 focus:ring-1 focus:ring-teal-500 focus:outline-none"
+                        className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-teal-500 focus:ring-1 focus:ring-teal-500 focus:outline-none"
                       />
                     </div>
                   </div>
@@ -1317,14 +1318,14 @@ export default function AccountsPage() {
             })()}
 
             {/* SLA Settings */}
-            <div className="rounded-lg border border-gray-200 p-4 space-y-4">
-              <h3 className="text-sm font-semibold text-gray-900">SLA Settings</h3>
+            <div className="rounded-lg border border-border p-4 space-y-4">
+              <h3 className="text-sm font-semibold text-foreground">SLA Settings</h3>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-zinc-700 mb-1">
                     Warning Threshold (hours)
                   </label>
-                  <p className="text-xs text-gray-500 mb-1.5">
+                  <p className="text-xs text-muted-foreground mb-1.5">
                     Messages waiting longer turn amber
                   </p>
                   <input
@@ -1337,14 +1338,14 @@ export default function AccountsPage() {
                         prev ? { ...prev, sla_warning_hours: Math.max(1, Number(e.target.value)) } : prev
                       )
                     }
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-teal-500 focus:ring-1 focus:ring-teal-500 focus:outline-none"
+                    className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-teal-500 focus:ring-1 focus:ring-teal-500 focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-zinc-700 mb-1">
                     Critical Threshold (hours)
                   </label>
-                  <p className="text-xs text-gray-500 mb-1.5">
+                  <p className="text-xs text-muted-foreground mb-1.5">
                     Messages waiting longer turn red (SLA breached)
                   </p>
                   <input
@@ -1357,14 +1358,14 @@ export default function AccountsPage() {
                         prev ? { ...prev, sla_critical_hours: Math.max(1, Number(e.target.value)) } : prev
                       )
                     }
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-teal-500 focus:ring-1 focus:ring-teal-500 focus:outline-none"
+                    className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-teal-500 focus:ring-1 focus:ring-teal-500 focus:outline-none"
                   />
                 </div>
               </div>
               <div className="flex items-center justify-between">
                 <div className="flex-1 mr-4">
-                  <span className="text-sm font-medium text-gray-700">Auto-Escalate</span>
-                  <p className="text-xs text-gray-500 mt-0.5">
+                  <span className="text-sm font-medium text-zinc-700">Auto-Escalate</span>
+                  <p className="text-xs text-muted-foreground mt-0.5">
                     Automatically escalate conversations that breach the SLA critical threshold
                   </p>
                 </div>
@@ -1376,11 +1377,11 @@ export default function AccountsPage() {
             </div>
 
             {/* Out of Office */}
-            <div className="rounded-lg border border-gray-200 p-4 space-y-4">
+            <div className="rounded-lg border border-border p-4 space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-sm font-semibold text-gray-900">Out of Office</h3>
-                  <p className="text-xs text-gray-500 mt-0.5">
+                  <h3 className="text-sm font-semibold text-foreground">Out of Office</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
                     When enabled and inside the window, every new conversation receives an
                     automatic reply (once per OOO window). The original message still routes
                     normally so you see it when you're back.
@@ -1403,7 +1404,7 @@ export default function AccountsPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Start</label>
+                  <label className="block text-sm font-medium text-zinc-700 mb-1">Start</label>
                   <input
                     type="datetime-local"
                     value={modalForm.ooo_starts_at}
@@ -1412,12 +1413,12 @@ export default function AccountsPage() {
                         prev ? { ...prev, ooo_starts_at: e.target.value } : prev
                       )
                     }
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-teal-500 focus:ring-1 focus:ring-teal-500 focus:outline-none"
+                    className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-teal-500 focus:ring-1 focus:ring-teal-500 focus:outline-none"
                   />
-                  <p className="text-[11px] text-gray-400 mt-1">Leave blank to start immediately.</p>
+                  <p className="text-[11px] text-zinc-500 mt-1">Leave blank to start immediately.</p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">End</label>
+                  <label className="block text-sm font-medium text-zinc-700 mb-1">End</label>
                   <input
                     type="datetime-local"
                     value={modalForm.ooo_ends_at}
@@ -1426,14 +1427,14 @@ export default function AccountsPage() {
                         prev ? { ...prev, ooo_ends_at: e.target.value } : prev
                       )
                     }
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-teal-500 focus:ring-1 focus:ring-teal-500 focus:outline-none"
+                    className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-teal-500 focus:ring-1 focus:ring-teal-500 focus:outline-none"
                   />
-                  <p className="text-[11px] text-gray-400 mt-1">Leave blank for no scheduled return.</p>
+                  <p className="text-[11px] text-zinc-500 mt-1">Leave blank for no scheduled return.</p>
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Subject</label>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">Subject</label>
                 <Input
                   value={modalForm.ooo_subject}
                   onChange={(e) =>
@@ -1446,7 +1447,7 @@ export default function AccountsPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Body</label>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">Body</label>
                 <textarea
                   value={modalForm.ooo_body}
                   onChange={(e) =>
@@ -1456,12 +1457,12 @@ export default function AccountsPage() {
                   }
                   rows={5}
                   placeholder="Hi {{customer.name}}, I'm currently out of office and will respond when I return on {{ooo.return_date}}. — {{company.name}}"
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-teal-500 focus:ring-1 focus:ring-teal-500 focus:outline-none resize-y font-mono"
+                  className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-teal-500 focus:ring-1 focus:ring-teal-500 focus:outline-none resize-y font-mono"
                 />
-                <p className="text-[11px] text-gray-500 mt-1">
-                  Variables: <code className="rounded bg-gray-100 px-1">{`{{customer.name}}`}</code>{' '}
-                  <code className="rounded bg-gray-100 px-1">{`{{ooo.return_date}}`}</code>{' '}
-                  <code className="rounded bg-gray-100 px-1">{`{{company.name}}`}</code>
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Variables: <code className="rounded bg-muted px-1">{`{{customer.name}}`}</code>{' '}
+                  <code className="rounded bg-muted px-1">{`{{ooo.return_date}}`}</code>{' '}
+                  <code className="rounded bg-muted px-1">{`{{company.name}}`}</code>
                 </p>
               </div>
 
@@ -1478,12 +1479,12 @@ export default function AccountsPage() {
             </div>
 
             {/* Spam Detection */}
-            <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-4 shadow-sm">
+            <div className="rounded-lg border border-border p-4 space-y-4">
               <div>
-                <h3 className="text-[11px] uppercase tracking-wider font-semibold text-gray-500">
+                <h3 className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">
                   Spam detection
                 </h3>
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-muted-foreground mt-1">
                   Per-account overrides for the global spam filter. Useful for accounts whose
                   customers legitimately email from noreply/notifications addresses.
                 </p>
@@ -1492,8 +1493,8 @@ export default function AccountsPage() {
               {/* Enable toggle */}
               <div className="flex items-center justify-between">
                 <div className="flex-1 mr-4">
-                  <span className="text-sm font-medium text-gray-700">Enable spam detection</span>
-                  <p className="text-xs text-gray-500 mt-0.5">
+                  <span className="text-sm font-medium text-zinc-700">Enable spam detection</span>
+                  <p className="text-xs text-muted-foreground mt-0.5">
                     When off, every inbound is treated as real mail for this account. Turn off for
                     accounts whose customers legitimately send from noreply/notifications addresses
                     (banks, carriers, automated platforms).
@@ -1511,12 +1512,12 @@ export default function AccountsPage() {
 
               {/* Sender allowlist */}
               <div>
-                <label className="block text-[11px] uppercase tracking-wider font-semibold text-gray-500 mb-1">
+                <label className="block text-[11px] uppercase tracking-wider font-semibold text-muted-foreground mb-1">
                   Sender allowlist
                 </label>
-                <p className="text-xs text-gray-500 mb-2">
+                <p className="text-xs text-muted-foreground mb-2">
                   Senders containing any of these substrings will NEVER be flagged as spam, even
-                  if other rules match. Case-insensitive. e.g. <code className="rounded bg-gray-100 px-1 py-0.5 text-[11px]">notifications@mybank.com</code>, <code className="rounded bg-gray-100 px-1 py-0.5 text-[11px]">@carriersupport.com</code>
+                  if other rules match. Case-insensitive. e.g. <code className="rounded bg-muted px-1 py-0.5 text-[11px]">notifications@mybank.com</code>, <code className="rounded bg-muted px-1 py-0.5 text-[11px]">@carriersupport.com</code>
                 </p>
 
                 {/* Chip list */}
@@ -1540,7 +1541,7 @@ export default function AccountsPage() {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-xs text-gray-400 italic mb-2">No allowlist entries.</p>
+                  <p className="text-xs text-zinc-500 italic mb-2">No allowlist entries.</p>
                 )}
 
                 {/* Add input */}
@@ -1556,7 +1557,7 @@ export default function AccountsPage() {
                       }
                     }}
                     placeholder="e.g. notifications@mybank.com"
-                    className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-teal-500 focus:ring-1 focus:ring-teal-500 focus:outline-none"
+                    className="flex-1 rounded-lg border border-border px-3 py-2 text-sm focus:border-teal-500 focus:ring-1 focus:ring-teal-500 focus:outline-none"
                   />
                   <Button
                     variant="secondary"
@@ -1569,19 +1570,19 @@ export default function AccountsPage() {
                     Add
                   </Button>
                 </div>
-                <p className="text-[11px] text-gray-400 mt-1.5">
+                <p className="text-[11px] text-zinc-500 mt-1.5">
                   {modalForm.spam_allowlist.length} / {SPAM_ALLOWLIST_MAX} entries
                 </p>
               </div>
             </div>
 
             {/* Info row */}
-            <div className="flex items-center justify-between text-xs text-gray-400">
+            <div className="flex items-center justify-between text-xs text-zinc-500">
               <span>Last updated: {timeAgo(detailAccount.updated_at)}</span>
             </div>
 
             {/* Save Button */}
-            <div className="pt-2 border-t border-gray-100">
+            <div className="pt-2 border-t border-border">
               <Button
                 variant="primary"
                 className="w-full"

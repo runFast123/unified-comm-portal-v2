@@ -275,8 +275,8 @@ export default function LiveChatAdminPage() {
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-gray-900">Live Chat</h1>
-        <p className="mt-1 text-sm text-gray-500">
+        <h1 className="text-2xl font-semibold text-foreground">Live Chat</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
           Add a chat bubble to your website. Conversations land in your inbox as a Live Chat channel.
         </p>
       </div>
@@ -303,12 +303,12 @@ export default function LiveChatAdminPage() {
           <Skeleton className="h-64 w-full rounded-2xl" />
         </div>
       ) : widgets.length === 0 ? (
-        <div className="animate-slide-up rounded-xl border bg-white p-8 text-center">
+        <div className="animate-slide-up rounded-xl border border-border bg-card p-8 text-center">
           <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
             <MessagesSquare className="h-6 w-6 text-green-600" />
           </div>
-          <h2 className="text-lg font-semibold text-gray-900">Add your first chat widget</h2>
-          <p className="mx-auto mt-1 max-w-md text-sm text-gray-500">
+          <h2 className="text-lg font-semibold text-foreground">Add your first chat widget</h2>
+          <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
             Create a widget and get a one-line snippet to paste on your site. You can add more later — one per site or page.
           </p>
           <button
@@ -327,16 +327,16 @@ export default function LiveChatAdminPage() {
               <button
                 key={w.id}
                 onClick={() => selectWidget(w)}
-                className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium transition ${w.id === selectedId ? 'border-green-300 bg-green-50 text-green-800' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'}`}
+                className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium transition ${w.id === selectedId ? 'border-green-300 bg-green-50 text-green-800' : 'border-border bg-card text-zinc-600 hover:border-zinc-300'}`}
               >
-                <span className={`h-1.5 w-1.5 rounded-full ${w.is_enabled ? 'bg-green-500' : 'bg-gray-300'}`} />
+                <span className={`h-1.5 w-1.5 rounded-full ${w.is_enabled ? 'bg-green-500' : 'bg-zinc-300'}`} />
                 <span className="max-w-[180px] truncate">{w.name}</span>
               </button>
             ))}
             <button
               onClick={createWidget}
               disabled={saving}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-500 hover:border-green-400 hover:text-green-600 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-border px-3 py-1.5 text-sm font-medium text-muted-foreground hover:border-green-400 hover:text-green-600 disabled:opacity-50"
             >
               <Plus className="h-4 w-4" /> New widget
             </button>
@@ -346,7 +346,7 @@ export default function LiveChatAdminPage() {
             <div className="space-y-6">
               {/* widget name (rename) + delete */}
               <div>
-                <label htmlFor="widget-name" className="mb-1 block text-xs font-medium text-gray-500">Widget name</label>
+                <label htmlFor="widget-name" className="mb-1 block text-xs font-medium text-muted-foreground">Widget name</label>
                 <div className="flex items-center justify-between gap-3">
                   <div className="relative w-full max-w-lg">
                     <input
@@ -357,28 +357,28 @@ export default function LiveChatAdminPage() {
                       onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
                       maxLength={60}
                       placeholder="e.g. Main site, Pricing page"
-                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 pr-9 text-lg font-semibold text-gray-900 transition focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-100"
+                      className="w-full rounded-lg border border-border bg-card px-3 py-2 pr-9 text-lg font-semibold text-foreground transition focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-100"
                     />
-                    <Pencil className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                    <Pencil className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
                   </div>
                   <button
                     onClick={() => widget && del(widget)}
                     disabled={saving}
-                    className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-500 hover:border-red-300 hover:text-red-600 disabled:opacity-50"
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-medium text-muted-foreground hover:border-red-300 hover:text-red-600 disabled:opacity-50"
                   >
                     <Trash2 className="h-3.5 w-3.5" /> Delete
                   </button>
                 </div>
-                <p className="mt-1.5 text-xs text-gray-400">Rename this widget — shown in the switcher above and labels its chats in your inbox · saves automatically.</p>
+                <p className="mt-1.5 text-xs text-zinc-500">Rename this widget — shown in the switcher above and labels its chats in your inbox · saves automatically.</p>
               </div>
 
           {/* ── Report / chat activity ── */}
           {stats && (
-            <section className="animate-slide-up overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-              <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+            <section className="animate-slide-up overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+              <div className="flex items-center justify-between border-b border-border px-5 py-4">
                 <div>
-                  <h2 className="text-sm font-semibold text-gray-900">Chat activity</h2>
-                  <p className="text-xs text-gray-500">Your live-chat performance at a glance.</p>
+                  <h2 className="text-sm font-semibold text-foreground">Chat activity</h2>
+                  <p className="text-xs text-muted-foreground">Your live-chat performance at a glance.</p>
                 </div>
                 <a
                   href="/inbox"
@@ -397,8 +397,8 @@ export default function LiveChatAdminPage() {
               </div>
 
               {/* 14-day sparkline */}
-              <div className="border-t border-gray-100 px-5 py-4">
-                <div className="mb-2 flex items-center justify-between text-xs text-gray-500">
+              <div className="border-t border-border px-5 py-4">
+                <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
                   <span>New chats · last 14 days</span>
                   <span className="tabular-nums">{stats.dailyVolume.reduce((s, d) => s + d.count, 0)} total</span>
                 </div>
@@ -416,22 +416,22 @@ export default function LiveChatAdminPage() {
 
               {/* recent chats */}
               {stats.recent.length > 0 && (
-                <div className="border-t border-gray-100 px-5 py-4">
-                  <p className="mb-2 text-xs font-medium text-gray-500">Recent chats</p>
+                <div className="border-t border-border px-5 py-4">
+                  <p className="mb-2 text-xs font-medium text-muted-foreground">Recent chats</p>
                   <ul className="space-y-1">
                     {stats.recent.map((c) => (
                       <li key={c.id}>
                         <a
                           href={`/conversations/${c.id}`}
-                          className="-mx-2 flex items-center justify-between gap-3 rounded-lg px-2 py-1.5 hover:bg-gray-50"
+                          className="-mx-2 flex items-center justify-between gap-3 rounded-lg px-2 py-1.5 hover:bg-muted"
                         >
                           <span className="flex min-w-0 items-center gap-2">
                             <span
-                              className={`h-1.5 w-1.5 shrink-0 rounded-full ${OPEN_STATUSES.has(c.status) ? 'bg-green-500' : 'bg-gray-300'}`}
+                              className={`h-1.5 w-1.5 shrink-0 rounded-full ${OPEN_STATUSES.has(c.status) ? 'bg-green-500' : 'bg-zinc-300'}`}
                             />
-                            <span className="truncate text-sm text-gray-700">{c.name}</span>
+                            <span className="truncate text-sm text-zinc-700">{c.name}</span>
                           </span>
-                          <span className="shrink-0 text-xs tabular-nums text-gray-400">{timeAgo(c.at)}</span>
+                          <span className="shrink-0 text-xs tabular-nums text-zinc-400">{timeAgo(c.at)}</span>
                         </a>
                       </li>
                     ))}
@@ -445,17 +445,17 @@ export default function LiveChatAdminPage() {
           <div className="grid gap-6 lg:grid-cols-5">
             <div className="space-y-6 lg:col-span-3">
               {/* Embed snippet */}
-              <section className="animate-slide-up overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-                <div className="flex items-center justify-between gap-4 border-b border-gray-100 px-5 py-4">
+              <section className="animate-slide-up overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+                <div className="flex items-center justify-between gap-4 border-b border-border px-5 py-4">
                   <div className="flex items-center gap-3">
                     <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-green-50 text-green-600 ring-1 ring-green-100">
                       <Code2 className="h-[18px] w-[18px]" />
                     </span>
                     <div>
-                      <h2 className="text-sm font-semibold text-gray-900">Embed code</h2>
-                      <p className="text-xs text-gray-500">
+                      <h2 className="text-sm font-semibold text-foreground">Embed code</h2>
+                      <p className="text-xs text-muted-foreground">
                         Paste once, just before{' '}
-                        <code className="rounded bg-gray-100 px-1 py-0.5 font-mono text-[11px] text-gray-700">&lt;/body&gt;</code>
+                        <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px] text-zinc-700">&lt;/body&gt;</code>
                       </p>
                     </div>
                   </div>
@@ -467,7 +467,7 @@ export default function LiveChatAdminPage() {
                     onClick={() => save({ is_enabled: !widget.is_enabled })}
                     disabled={saving}
                     title={widget.is_enabled ? 'Live — click to disable' : 'Disabled — click to go live'}
-                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${widget.is_enabled ? 'bg-green-500' : 'bg-gray-300'}`}
+                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${widget.is_enabled ? 'bg-green-500' : 'bg-zinc-300'}`}
                   >
                     <span
                       className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${widget.is_enabled ? 'translate-x-[22px]' : 'translate-x-0.5'}`}
@@ -507,8 +507,8 @@ export default function LiveChatAdminPage() {
 
                 {/* status footer */}
                 <div className="flex items-center gap-2 px-5 py-3 text-xs">
-                  <span className={`inline-flex h-2 w-2 rounded-full ${widget.is_enabled ? 'bg-green-500' : 'bg-gray-300'}`} />
-                  <span className="text-gray-500">
+                  <span className={`inline-flex h-2 w-2 rounded-full ${widget.is_enabled ? 'bg-green-500' : 'bg-zinc-300'}`} />
+                  <span className="text-muted-foreground">
                     {widget.is_enabled
                       ? 'Your widget is live and accepting chats.'
                       : 'Your widget is disabled — toggle it on to go live.'}
@@ -517,34 +517,34 @@ export default function LiveChatAdminPage() {
               </section>
 
               {/* Appearance */}
-              <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-                <h2 className="text-sm font-semibold text-gray-900">Appearance</h2>
-                <p className="text-xs text-gray-500">Make the widget match your brand — changes show in the live preview.</p>
+              <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+                <h2 className="text-sm font-semibold text-foreground">Appearance</h2>
+                <p className="text-xs text-muted-foreground">Make the widget match your brand — changes show in the live preview.</p>
                 <div className="mt-4 space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Header title</label>
+                    <label className="block text-sm font-medium text-zinc-700">Header title</label>
                     <input
                       value={title}
                       onChange={(e) => setTitle(e.target.value)}
                       maxLength={80}
                       placeholder="Chat with us"
-                      className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                      className="mt-1 w-full rounded-lg border border-border px-3 py-2 text-sm"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">
-                      Subtitle <span className="font-normal text-gray-400">· optional</span>
+                    <label className="block text-sm font-medium text-zinc-700">
+                      Subtitle <span className="font-normal text-zinc-500">· optional</span>
                     </label>
                     <input
                       value={subtitle}
                       onChange={(e) => setSubtitle(e.target.value)}
                       maxLength={120}
                       placeholder="We typically reply in a few minutes"
-                      className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                      className="mt-1 w-full rounded-lg border border-border px-3 py-2 text-sm"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Accent color</label>
+                    <label className="block text-sm font-medium text-zinc-700">Accent color</label>
                     <div className="mt-1.5 flex flex-wrap items-center gap-2">
                       {PRESETS.map((p) => (
                         <button
@@ -553,42 +553,42 @@ export default function LiveChatAdminPage() {
                           onClick={() => setColor(p)}
                           title={p}
                           aria-label={`Use ${p}`}
-                          className={`h-7 w-7 rounded-full ring-2 ring-offset-1 transition ${color.toLowerCase() === p ? 'ring-gray-900' : 'ring-transparent hover:ring-gray-300'}`}
+                          className={`h-7 w-7 rounded-full ring-2 ring-offset-1 transition ${color.toLowerCase() === p ? 'ring-foreground' : 'ring-transparent hover:ring-zinc-300'}`}
                           style={{ backgroundColor: p }}
                         />
                       ))}
                     </div>
                     <div className="mt-2.5 flex items-center gap-3">
-                      <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="h-9 w-12 rounded border" />
+                      <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="h-9 w-12 rounded border border-border" />
                       <input
                         value={color}
                         onChange={(e) => setColor(e.target.value)}
-                        className="w-32 rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm uppercase"
+                        className="w-32 rounded-lg border border-border px-3 py-2 font-mono text-sm uppercase"
                       />
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">
-                      Launcher label <span className="font-normal text-gray-400">· optional</span>
+                    <label className="block text-sm font-medium text-zinc-700">
+                      Launcher label <span className="font-normal text-zinc-500">· optional</span>
                     </label>
                     <input
                       value={launcherText}
                       onChange={(e) => setLauncherText(e.target.value)}
                       maxLength={40}
                       placeholder="Need help?"
-                      className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                      className="mt-1 w-full rounded-lg border border-border px-3 py-2 text-sm"
                     />
-                    <p className="mt-1 text-xs text-gray-400">A small label shown next to the chat bubble.</p>
+                    <p className="mt-1 text-xs text-zinc-500">A small label shown next to the chat bubble.</p>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Position</label>
-                    <div className="mt-1.5 inline-flex rounded-lg border border-gray-200 bg-gray-50 p-0.5">
+                    <label className="block text-sm font-medium text-zinc-700">Position</label>
+                    <div className="mt-1.5 inline-flex rounded-lg border border-border bg-muted p-0.5">
                       {(['left', 'right'] as const).map((p) => (
                         <button
                           key={p}
                           type="button"
                           onClick={() => setPosition(p)}
-                          className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${position === p ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                          className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${position === p ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-zinc-700'}`}
                         >
                           Bottom {p}
                         </button>
@@ -596,14 +596,14 @@ export default function LiveChatAdminPage() {
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Welcome message</label>
+                    <label className="block text-sm font-medium text-zinc-700">Welcome message</label>
                     <textarea
                       value={welcome}
                       onChange={(e) => setWelcome(e.target.value)}
                       maxLength={500}
                       rows={2}
                       placeholder="Hi! How can we help you today?"
-                      className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                      className="mt-1 w-full rounded-lg border border-border px-3 py-2 text-sm"
                     />
                   </div>
                   <button
@@ -617,11 +617,11 @@ export default function LiveChatAdminPage() {
               </section>
 
               {/* Pre-chat form (lead capture) */}
-              <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+              <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
                 <div className="flex items-center justify-between gap-4">
                   <div>
-                    <h2 className="text-sm font-semibold text-gray-900">Pre-chat form</h2>
-                    <p className="mt-0.5 text-xs text-gray-500">
+                    <h2 className="text-sm font-semibold text-foreground">Pre-chat form</h2>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
                       Ask visitors for their name &amp; email before they start chatting — captures leads and lets you follow up by email.
                     </p>
                   </div>
@@ -632,7 +632,7 @@ export default function LiveChatAdminPage() {
                     onClick={() => { setPrechat(!prechat); void save({ prechat_enabled: !prechat }) }}
                     disabled={saving}
                     title={prechat ? 'On — click to turn off' : 'Off — click to turn on'}
-                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${prechat ? 'bg-green-500' : 'bg-gray-300'}`}
+                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${prechat ? 'bg-green-500' : 'bg-zinc-300'}`}
                   >
                     <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${prechat ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
                   </button>
@@ -640,17 +640,17 @@ export default function LiveChatAdminPage() {
               </section>
 
               {/* Proactive chat */}
-              <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+              <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
                 <div className="flex items-center justify-between gap-4">
                   <div>
-                    <h2 className="text-sm font-semibold text-gray-900">Proactive chat</h2>
-                    <p className="mt-0.5 text-xs text-gray-500">Auto-open the chat after a delay to invite visitors. Fires once per visit.</p>
+                    <h2 className="text-sm font-semibold text-foreground">Proactive chat</h2>
+                    <p className="mt-0.5 text-xs text-muted-foreground">Auto-open the chat after a delay to invite visitors. Fires once per visit.</p>
                   </div>
                   <select
                     value={proactiveDelay}
                     onChange={(e) => { const v = Number(e.target.value); setProactiveDelay(v); void save({ proactive_delay: v }) }}
                     disabled={saving}
-                    className="shrink-0 rounded-lg border border-gray-300 px-3 py-2 text-sm disabled:opacity-50"
+                    className="shrink-0 rounded-lg border border-border px-3 py-2 text-sm disabled:opacity-50"
                   >
                     <option value={0}>Off</option>
                     <option value={5}>After 5s</option>
@@ -663,11 +663,11 @@ export default function LiveChatAdminPage() {
               </section>
 
               {/* Business hours / offline mode */}
-              <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+              <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
                 <div className="flex items-center justify-between gap-4">
                   <div>
-                    <h2 className="text-sm font-semibold text-gray-900">Business hours</h2>
-                    <p className="mt-0.5 text-xs text-gray-500">
+                    <h2 className="text-sm font-semibold text-foreground">Business hours</h2>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
                       Outside your hours the widget shows an away message — visitors can still leave a message you can reply to by email.
                     </p>
                   </div>
@@ -676,25 +676,25 @@ export default function LiveChatAdminPage() {
                     role="switch"
                     aria-checked={bhEnabled}
                     onClick={() => setBhEnabled(!bhEnabled)}
-                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${bhEnabled ? 'bg-green-500' : 'bg-gray-300'}`}
+                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${bhEnabled ? 'bg-green-500' : 'bg-zinc-300'}`}
                   >
                     <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${bhEnabled ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
                   </button>
                 </div>
 
                 {bhEnabled && (
-                  <div className="mt-4 space-y-4 border-t border-gray-100 pt-4">
+                  <div className="mt-4 space-y-4 border-t border-border pt-4">
                     <div className="flex items-center gap-2">
-                      <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ring-1 ${currentlyOnline ? 'bg-green-50 text-green-700 ring-green-200' : 'bg-gray-100 text-gray-600 ring-gray-200'}`}>
-                        <span className={`h-1.5 w-1.5 rounded-full ${currentlyOnline ? 'bg-green-500' : 'bg-gray-400'}`} />
+                      <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ring-1 ${currentlyOnline ? 'bg-green-50 text-green-700 ring-green-200' : 'bg-muted text-zinc-600 ring-border'}`}>
+                        <span className={`h-1.5 w-1.5 rounded-full ${currentlyOnline ? 'bg-green-500' : 'bg-zinc-400'}`} />
                         {currentlyOnline ? 'Open now' : 'Closed now'}
                       </span>
-                      <span className="text-xs text-gray-400">based on the schedule below</span>
+                      <span className="text-xs text-zinc-500">based on the schedule below</span>
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700">Timezone</label>
-                      <select value={bhTz} onChange={(e) => setBhTz(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
+                      <label className="block text-sm font-medium text-zinc-700">Timezone</label>
+                      <select value={bhTz} onChange={(e) => setBhTz(e.target.value)} className="mt-1 w-full rounded-lg border border-border px-3 py-2 text-sm">
                         {(COMMON_TZ.includes(bhTz) ? COMMON_TZ : [bhTz, ...COMMON_TZ]).map((tz) => (
                           <option key={tz} value={tz}>{tz}</option>
                         ))}
@@ -702,7 +702,7 @@ export default function LiveChatAdminPage() {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700">Open days</label>
+                      <label className="block text-sm font-medium text-zinc-700">Open days</label>
                       <div className="mt-1.5 flex flex-wrap gap-1.5">
                         {DAY_LIST.map(([k, label]) => {
                           const on = bhDays.includes(k)
@@ -711,7 +711,7 @@ export default function LiveChatAdminPage() {
                               key={k}
                               type="button"
                               onClick={() => setBhDays(on ? bhDays.filter((d) => d !== k) : [...bhDays, k])}
-                              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${on ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${on ? 'bg-green-600 text-white' : 'bg-muted text-zinc-600 hover:bg-zinc-200'}`}
                             >
                               {label}
                             </button>
@@ -722,25 +722,25 @@ export default function LiveChatAdminPage() {
 
                     <div className="flex items-end gap-3">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700">Open</label>
-                        <input type="time" value={bhOpen} onChange={(e) => setBhOpen(e.target.value)} className="mt-1 rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+                        <label className="block text-sm font-medium text-zinc-700">Open</label>
+                        <input type="time" value={bhOpen} onChange={(e) => setBhOpen(e.target.value)} className="mt-1 rounded-lg border border-border px-3 py-2 text-sm" />
                       </div>
-                      <div className="pb-2.5 text-gray-400">—</div>
+                      <div className="pb-2.5 text-zinc-400">—</div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700">Close</label>
-                        <input type="time" value={bhClose} onChange={(e) => setBhClose(e.target.value)} className="mt-1 rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+                        <label className="block text-sm font-medium text-zinc-700">Close</label>
+                        <input type="time" value={bhClose} onChange={(e) => setBhClose(e.target.value)} className="mt-1 rounded-lg border border-border px-3 py-2 text-sm" />
                       </div>
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700">Away message</label>
+                      <label className="block text-sm font-medium text-zinc-700">Away message</label>
                       <textarea
                         value={offlineMessage}
                         onChange={(e) => setOfflineMessage(e.target.value)}
                         maxLength={500}
                         rows={2}
                         placeholder="Thanks for reaching out! We're away right now — leave your message and we'll reply by email."
-                        className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                        className="mt-1 w-full rounded-lg border border-border px-3 py-2 text-sm"
                       />
                     </div>
                   </div>
@@ -760,9 +760,9 @@ export default function LiveChatAdminPage() {
 
             {/* Live preview */}
             <div className="lg:col-span-2">
-              <section className="lg:sticky lg:top-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-                <h2 className="text-sm font-semibold text-gray-900">Live preview</h2>
-                <p className="text-xs text-gray-500">Updates as you edit — this is what visitors see.</p>
+              <section className="lg:sticky lg:top-6 rounded-2xl border border-border bg-card p-5 shadow-sm">
+                <h2 className="text-sm font-semibold text-foreground">Live preview</h2>
+                <p className="text-xs text-muted-foreground">Updates as you edit — this is what visitors see.</p>
                 <div className="mt-4 rounded-xl border border-gray-200 bg-gradient-to-b from-gray-50 to-gray-100 p-4">
                   {/* mock chat window */}
                   <div className="mx-auto max-w-[260px] overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-lg">
@@ -831,9 +831,9 @@ export default function LiveChatAdminPage() {
 
 function Stat({ label, value, accent }: { label: string; value: number; accent?: 'amber' }) {
   return (
-    <div className="border-b border-r border-gray-100 px-5 py-4 last:border-r-0">
-      <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">{label}</p>
-      <p className={`mt-1 text-2xl font-semibold tabular-nums tracking-tight ${accent === 'amber' && value > 0 ? 'text-amber-600' : 'text-gray-900'}`}>
+    <div className="border-b border-r border-border px-5 py-4 last:border-r-0">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className={`mt-1 text-2xl font-semibold tabular-nums tracking-tight ${accent === 'amber' && value > 0 ? 'text-amber-600' : 'text-foreground'}`}>
         {value.toLocaleString()}
       </p>
     </div>

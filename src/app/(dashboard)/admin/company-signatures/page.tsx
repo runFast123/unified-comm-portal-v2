@@ -107,8 +107,8 @@ export default function CompanySignaturesPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-24">
-        <Loader2 className="h-8 w-8 animate-spin text-teal-600" />
-        <span className="ml-3 text-gray-500">Loading companies...</span>
+        <Loader2 className="h-8 w-8 animate-spin text-[var(--brand-accent)]" />
+        <span className="ml-3 text-muted-foreground">Loading companies...</span>
       </div>
     )
   }
@@ -116,46 +116,46 @@ export default function CompanySignaturesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Company Signatures</h1>
-        <p className="mt-1 text-sm text-gray-500">
+        <h1 className="text-2xl font-semibold text-foreground">Company Signatures</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
           Set the default email signature each company falls back to when a
           user hasn&apos;t configured their own. Variables like{' '}
-          <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">{'{{user.full_name}}'}</code>{' '}
-          and <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">{'{{company.name}}'}</code>{' '}
+          <code className="bg-muted px-1 py-0.5 rounded text-xs">{'{{user.full_name}}'}</code>{' '}
+          and <code className="bg-muted px-1 py-0.5 rounded text-xs">{'{{company.name}}'}</code>{' '}
           are substituted at send time.
         </p>
       </div>
 
       <Card>
         {companies.length === 0 ? (
-          <div className="py-12 text-center text-gray-500">
-            <Building2 className="h-8 w-8 mx-auto text-gray-300 mb-2" />
-            <p className="font-medium text-gray-700">No companies configured yet</p>
+          <div className="py-12 text-center text-muted-foreground">
+            <Building2 className="h-8 w-8 mx-auto text-zinc-500 mb-2" />
+            <p className="font-medium text-zinc-700">No companies configured yet</p>
             <p className="text-sm mt-1">
               Add companies via the Account Settings page first.
             </p>
           </div>
         ) : (
-          <div className="divide-y divide-gray-100">
+          <div className="divide-y divide-border">
             {companies.map((c) => (
               <button
                 key={c.id}
                 type="button"
                 onClick={() => openEditor(c)}
-                className="w-full text-left flex items-center justify-between gap-4 px-3 py-3 hover:bg-gray-50 transition-colors"
+                className="w-full text-left flex items-center justify-between gap-4 px-3 py-3 hover:bg-muted transition-colors"
               >
                 <div className="flex items-center gap-3 min-w-0">
-                  <Building2 className="h-4 w-4 text-gray-400 shrink-0" />
+                  <Building2 className="h-4 w-4 text-zinc-500 shrink-0" />
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold text-gray-900 truncate">{c.name}</p>
-                    <p className="text-xs text-gray-500 truncate">
+                    <p className="text-sm font-semibold text-foreground truncate">{c.name}</p>
+                    <p className="text-xs text-muted-foreground truncate">
                       {c.default_email_signature?.trim()
                         ? c.default_email_signature.split('\n')[0].slice(0, 100)
                         : <span className="italic">No default signature</span>}
                     </p>
                   </div>
                 </div>
-                <span className="text-xs text-teal-600 font-medium shrink-0">Edit →</span>
+                <span className="text-xs text-[var(--brand-accent)] font-medium shrink-0">Edit →</span>
               </button>
             ))}
           </div>
@@ -172,7 +172,7 @@ export default function CompanySignaturesPage() {
           <div className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                <label className="block text-sm font-medium text-zinc-700 mb-1.5">
                   Signature template (markdown)
                 </label>
                 <textarea
@@ -180,19 +180,19 @@ export default function CompanySignaturesPage() {
                   onChange={(e) => setEditText(e.target.value)}
                   rows={12}
                   placeholder={`e.g.\n${TEMPLATE_EXAMPLE}`}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm focus:border-teal-500 focus:ring-1 focus:ring-teal-500 focus:outline-none resize-y"
+                  className="w-full rounded-lg border border-border px-3 py-2 font-mono text-sm focus:border-[var(--brand-accent)] focus:ring-1 focus:ring-[var(--brand-accent)] focus:outline-none resize-y"
                 />
-                <p className="mt-2 text-xs text-gray-500">
+                <p className="mt-2 text-xs text-muted-foreground">
                   Variables:{' '}
-                  <code className="bg-gray-100 px-1 py-0.5 rounded">{'{{user.full_name}}'}</code>{' '}
-                  <code className="bg-gray-100 px-1 py-0.5 rounded">{'{{user.email}}'}</code>{' '}
-                  <code className="bg-gray-100 px-1 py-0.5 rounded">{'{{company.name}}'}</code>{' '}
-                  <code className="bg-gray-100 px-1 py-0.5 rounded">{'{{date}}'}</code>
+                  <code className="bg-muted px-1 py-0.5 rounded">{'{{user.full_name}}'}</code>{' '}
+                  <code className="bg-muted px-1 py-0.5 rounded">{'{{user.email}}'}</code>{' '}
+                  <code className="bg-muted px-1 py-0.5 rounded">{'{{company.name}}'}</code>{' '}
+                  <code className="bg-muted px-1 py-0.5 rounded">{'{{date}}'}</code>
                 </p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Live preview</label>
-                <div className="rounded-lg border border-gray-200 bg-white p-4 min-h-[200px]">
+                <label className="block text-sm font-medium text-zinc-700 mb-1.5">Live preview</label>
+                <div className="rounded-lg border border-border bg-card p-4 min-h-[200px]">
                   <SignaturePreview
                     template={editText}
                     context={{
@@ -206,14 +206,14 @@ export default function CompanySignaturesPage() {
                     showDelimiter
                   />
                 </div>
-                <p className="mt-2 text-[11px] text-gray-400">
+                <p className="mt-2 text-[11px] text-zinc-500">
                   User-specific variables shown with sample values. Real sends
                   use the actual sender&apos;s name/email.
                 </p>
               </div>
             </div>
 
-            <div className="flex justify-end gap-2 pt-3 border-t border-gray-100">
+            <div className="flex justify-end gap-2 pt-3 border-t border-border">
               <Button variant="ghost" onClick={closeEditor} disabled={saving}>
                 Cancel
               </Button>

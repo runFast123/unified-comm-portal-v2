@@ -265,12 +265,12 @@ export default function TaxonomyPage() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="space-y-6">
       <header className="flex items-center gap-3">
         <TagsIcon className="h-6 w-6 text-teal-700" />
         <div>
-          <h1 className="text-xl font-semibold text-gray-900">Statuses & Tags</h1>
-          <p className="text-sm text-gray-500">
+          <h1 className="text-2xl font-semibold text-foreground">Statuses & Tags</h1>
+          <p className="text-sm text-muted-foreground">
             Custom labels for your team. Built-in lifecycle statuses (Active, In Progress, Resolved
             …) stay the same — these are extra sub-statuses and tags you can attach to a conversation.
           </p>
@@ -278,11 +278,11 @@ export default function TaxonomyPage() {
       </header>
 
       {/* ── Statuses ─────────────────────────────────────────────── */}
-      <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-        <div className="flex items-center justify-between p-4 border-b border-gray-100">
+      <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
+        <div className="flex items-center justify-between p-4 border-b border-border">
           <div>
-            <h2 className="font-semibold text-gray-900">Custom statuses</h2>
-            <p className="text-xs text-gray-500 mt-0.5">
+            <h2 className="font-semibold text-foreground">Custom statuses</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
               Shown as a secondary status pill on conversations. Use up/down arrows to reorder.
             </p>
           </div>
@@ -291,11 +291,11 @@ export default function TaxonomyPage() {
           </Button>
         </div>
         {loading ? (
-          <div className="p-8 flex items-center justify-center text-gray-400 text-sm">
+          <div className="p-8 flex items-center justify-center text-muted-foreground text-sm">
             <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading…
           </div>
         ) : sortedStatuses.length === 0 ? (
-          <div className="p-8 text-center text-sm text-gray-400">
+          <div className="p-8 text-center text-sm text-muted-foreground">
             No custom statuses yet. Click <span className="font-medium">Add status</span> to create
             your first one.
           </div>
@@ -319,7 +319,7 @@ export default function TaxonomyPage() {
                         type="button"
                         disabled={idx === 0 || busyId === s.id}
                         onClick={() => moveStatus(s, 'up')}
-                        className="text-gray-400 hover:text-teal-700 disabled:opacity-30"
+                        className="text-zinc-500 hover:text-teal-700 disabled:opacity-30"
                         aria-label="Move up"
                       >
                         <ArrowUp className="h-3.5 w-3.5" />
@@ -328,7 +328,7 @@ export default function TaxonomyPage() {
                         type="button"
                         disabled={idx === sortedStatuses.length - 1 || busyId === s.id}
                         onClick={() => moveStatus(s, 'down')}
-                        className="text-gray-400 hover:text-teal-700 disabled:opacity-30"
+                        className="text-zinc-500 hover:text-teal-700 disabled:opacity-30"
                         aria-label="Move down"
                       >
                         <ArrowDown className="h-3.5 w-3.5" />
@@ -341,14 +341,14 @@ export default function TaxonomyPage() {
                         className="inline-block h-2.5 w-2.5 rounded-full border border-black/5"
                         style={{ background: s.color }}
                       />
-                      <span className="font-medium text-gray-900">{s.name}</span>
+                      <span className="font-medium text-foreground">{s.name}</span>
                     </span>
                   </TableCell>
                   <TableCell>
-                    <code className="text-xs text-gray-500">{s.color}</code>
+                    <code className="text-xs text-muted-foreground">{s.color}</code>
                   </TableCell>
-                  <TableCell className="text-sm text-gray-500 max-w-md truncate">
-                    {s.description || <span className="text-gray-300">—</span>}
+                  <TableCell className="text-sm text-muted-foreground max-w-md truncate">
+                    {s.description || <span className="text-zinc-500">—</span>}
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="inline-flex gap-1">
@@ -378,11 +378,11 @@ export default function TaxonomyPage() {
       </div>
 
       {/* ── Tags ─────────────────────────────────────────────────── */}
-      <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-        <div className="flex items-center justify-between p-4 border-b border-gray-100">
+      <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
+        <div className="flex items-center justify-between p-4 border-b border-border">
           <div>
-            <h2 className="font-semibold text-gray-900">Tags</h2>
-            <p className="text-xs text-gray-500 mt-0.5">
+            <h2 className="font-semibold text-foreground">Tags</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
               Used by the conversation tag picker for autocomplete and chip colors.
             </p>
           </div>
@@ -391,11 +391,11 @@ export default function TaxonomyPage() {
           </Button>
         </div>
         {loading ? (
-          <div className="p-8 flex items-center justify-center text-gray-400 text-sm">
+          <div className="p-8 flex items-center justify-center text-muted-foreground text-sm">
             <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading…
           </div>
         ) : sortedTags.length === 0 ? (
-          <div className="p-8 text-center text-sm text-gray-400">
+          <div className="p-8 text-center text-sm text-muted-foreground">
             No tags yet. Click <span className="font-medium">Add tag</span> to create your first one.
           </div>
         ) : (
@@ -428,10 +428,10 @@ export default function TaxonomyPage() {
                     </span>
                   </TableCell>
                   <TableCell>
-                    <code className="text-xs text-gray-500">{t.color}</code>
+                    <code className="text-xs text-muted-foreground">{t.color}</code>
                   </TableCell>
-                  <TableCell className="text-sm text-gray-500 max-w-md truncate">
-                    {t.description || <span className="text-gray-300">—</span>}
+                  <TableCell className="text-sm text-muted-foreground max-w-md truncate">
+                    {t.description || <span className="text-zinc-500">—</span>}
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="inline-flex gap-1">
@@ -478,7 +478,7 @@ export default function TaxonomyPage() {
         }
       >
         <div className="space-y-3">
-          <label className="block text-sm font-medium text-gray-700">
+          <label className="block text-sm font-medium text-zinc-700">
             Name
             <Input
               value={statusForm.name}
@@ -490,14 +490,14 @@ export default function TaxonomyPage() {
               autoFocus
             />
           </label>
-          <label className="block text-sm font-medium text-gray-700">
+          <label className="block text-sm font-medium text-zinc-700">
             Color
             <div className="mt-1 flex items-center gap-2">
               <input
                 type="color"
                 value={statusForm.color}
                 onChange={(e) => setStatusForm((f) => ({ ...f, color: e.target.value }))}
-                className="h-9 w-16 rounded border border-gray-200 cursor-pointer"
+                className="h-9 w-16 rounded border border-border cursor-pointer"
                 aria-label="Status color"
               />
               <Input
@@ -510,7 +510,7 @@ export default function TaxonomyPage() {
               />
             </div>
           </label>
-          <label className="block text-sm font-medium text-gray-700">
+          <label className="block text-sm font-medium text-zinc-700">
             Description (optional)
             <Input
               value={statusForm.description}
@@ -545,7 +545,7 @@ export default function TaxonomyPage() {
         }
       >
         <div className="space-y-3">
-          <label className="block text-sm font-medium text-gray-700">
+          <label className="block text-sm font-medium text-zinc-700">
             Name
             <Input
               value={tagForm.name}
@@ -557,14 +557,14 @@ export default function TaxonomyPage() {
               autoFocus
             />
           </label>
-          <label className="block text-sm font-medium text-gray-700">
+          <label className="block text-sm font-medium text-zinc-700">
             Color
             <div className="mt-1 flex items-center gap-2">
               <input
                 type="color"
                 value={tagForm.color}
                 onChange={(e) => setTagForm((f) => ({ ...f, color: e.target.value }))}
-                className="h-9 w-16 rounded border border-gray-200 cursor-pointer"
+                className="h-9 w-16 rounded border border-border cursor-pointer"
                 aria-label="Tag color"
               />
               <Input
@@ -577,7 +577,7 @@ export default function TaxonomyPage() {
               />
             </div>
           </label>
-          <label className="block text-sm font-medium text-gray-700">
+          <label className="block text-sm font-medium text-zinc-700">
             Description (optional)
             <Input
               value={tagForm.description}

@@ -218,23 +218,23 @@ export default function RolesPage() {
         <div className="flex items-center gap-3">
           <ShieldCheck className="h-6 w-6 text-teal-700" />
           <div>
-            <h1 className="text-xl font-semibold text-gray-900">Roles &amp; Permissions</h1>
-            <p className="text-sm text-gray-500">
+            <h1 className="text-2xl font-semibold text-foreground">Roles &amp; Permissions</h1>
+            <p className="text-sm text-muted-foreground">
               Control which sections, channels, and actions each role — and individual users — can access.
             </p>
           </div>
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-3 border-b border-gray-200 pb-2">
+        <div className="flex gap-3 border-b border-border pb-2">
           <Skeleton className="h-5 w-16 rounded" />
           <Skeleton className="h-5 w-16 rounded" />
           <Skeleton className="h-5 w-20 rounded" />
         </div>
 
         {/* Permission matrix */}
-        <div className="overflow-hidden rounded-lg border border-gray-200">
-          <div className="flex items-center gap-3 border-b border-gray-200 bg-gray-50 px-4 py-2.5">
+        <div className="overflow-hidden rounded-lg border border-border">
+          <div className="flex items-center gap-3 border-b border-border bg-muted px-4 py-2.5">
             <Skeleton className="h-3 w-28 rounded" />
             <div className="ml-auto flex gap-6">
               {Array.from({ length: 5 }).map((_, i) => (
@@ -243,7 +243,7 @@ export default function RolesPage() {
             </div>
           </div>
           {Array.from({ length: 7 }).map((_, i) => (
-            <div key={i} className="flex items-center gap-3 border-b border-gray-100 px-4 py-2.5 last:border-b-0">
+            <div key={i} className="flex items-center gap-3 border-b border-border px-4 py-2.5 last:border-b-0">
               <Skeleton className="h-4 w-40 rounded" />
               <div className="ml-auto flex gap-6">
                 {Array.from({ length: 5 }).map((_, j) => (
@@ -262,8 +262,8 @@ export default function RolesPage() {
       <div className="flex items-center gap-3">
         <ShieldCheck className="h-6 w-6 text-teal-700" />
         <div>
-          <h1 className="text-xl font-semibold text-gray-900">Roles &amp; Permissions</h1>
-          <p className="text-sm text-gray-500">
+          <h1 className="text-2xl font-semibold text-foreground">Roles &amp; Permissions</h1>
+          <p className="text-sm text-muted-foreground">
             Control which sections, channels, and actions each role — and individual users — can access.
           </p>
         </div>
@@ -279,7 +279,7 @@ export default function RolesPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-gray-200">
+      <div className="flex gap-1 border-b border-border">
         {(['roles', 'users', 'models'] as const).map((t) => (
           <button
             key={t}
@@ -288,7 +288,7 @@ export default function RolesPage() {
               'px-4 py-2 text-sm font-medium -mb-px border-b-2 ' +
               (tab === t
                 ? 'border-teal-600 text-teal-700'
-                : 'border-transparent text-gray-500 hover:text-gray-700')
+                : 'border-transparent text-muted-foreground hover:text-zinc-700')
             }
           >
             {t === 'roles' ? 'By role' : t === 'users' ? 'By user' : 'AI models'}
@@ -306,15 +306,15 @@ export default function RolesPage() {
           onSet={setModel}
         />
       ) : tab === 'roles' ? (
-        <div className="overflow-x-auto rounded-lg border border-gray-200">
+        <div className="overflow-x-auto rounded-lg border border-border">
           <table className="min-w-full border-collapse text-sm">
             <thead>
-              <tr className="bg-gray-50">
-                <th className="sticky left-0 z-10 bg-gray-50 px-4 py-2 text-left font-semibold text-gray-700">
+              <tr className="bg-muted">
+                <th className="sticky left-0 z-10 bg-muted px-4 py-2 text-left font-semibold text-zinc-700">
                   Permission
                 </th>
                 {ROLE_COLUMNS.map((c) => (
-                  <th key={c.role} className="px-3 py-2 text-center font-semibold text-gray-700 whitespace-nowrap">
+                  <th key={c.role} className="px-3 py-2 text-center font-semibold text-zinc-700 whitespace-nowrap">
                     {c.label}
                   </th>
                 ))}
@@ -337,55 +337,55 @@ export default function RolesPage() {
       ) : (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-[260px_1fr]">
           {/* User list */}
-          <div className="rounded-lg border border-gray-200 divide-y max-h-[70vh] overflow-y-auto">
+          <div className="rounded-lg border border-border divide-y max-h-[70vh] overflow-y-auto">
             {users.length === 0 && (
-              <div className="px-4 py-6 text-center text-sm text-gray-400">No users in this company.</div>
+              <div className="px-4 py-6 text-center text-sm text-muted-foreground">No users in this company.</div>
             )}
             {users.map((u) => (
               <button
                 key={u.id}
                 onClick={() => openUser(u)}
                 className={
-                  'flex w-full flex-col items-start px-4 py-2.5 text-left hover:bg-gray-50 ' +
+                  'flex w-full flex-col items-start px-4 py-2.5 text-left hover:bg-muted ' +
                   (selectedUser?.id === u.id ? 'bg-teal-50' : '')
                 }
               >
-                <span className="font-medium text-gray-900 truncate max-w-full">{u.full_name || u.email}</span>
-                <span className="text-xs text-gray-500">{u.role}</span>
+                <span className="font-medium text-foreground truncate max-w-full">{u.full_name || u.email}</span>
+                <span className="text-xs text-muted-foreground">{u.role}</span>
               </button>
             ))}
           </div>
 
           {/* Override panel */}
-          <div className="rounded-lg border border-gray-200 p-4">
+          <div className="rounded-lg border border-border p-4">
             {!selectedUser ? (
-              <div className="flex h-40 items-center justify-center text-sm text-gray-400">
+              <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
                 Select a user to manage their individual overrides.
               </div>
             ) : userLoading ? (
-              <div className="flex h-40 items-center justify-center text-gray-400">
+              <div className="flex h-40 items-center justify-center text-muted-foreground">
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading…
               </div>
             ) : selectedUser.role === 'super_admin' ? (
-              <div className="text-sm text-gray-500">Super Admin always has full access; no overrides apply.</div>
+              <div className="text-sm text-muted-foreground">Super Admin always has full access; no overrides apply.</div>
             ) : (
               <div className="space-y-5">
-                <div className="text-sm text-gray-600">
+                <div className="text-sm text-zinc-600">
                   Overrides for <strong>{selectedUser.full_name || selectedUser.email}</strong>{' '}
-                  <span className="text-gray-400">({selectedUser.role})</span> — these win over the role defaults.
+                  <span className="text-zinc-500">({selectedUser.role})</span> — these win over the role defaults.
                 </div>
                 {GROUPS.map((group) => (
                   <div key={group.label}>
-                    <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">{group.label}</div>
+                    <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">{group.label}</div>
                     <div className="divide-y">
                       {group.perms.map(([key, label]) => {
                         const ov = overrides.get(key) ?? null
                         const eff = userEffective(selectedUser.role, key)
                         return (
                           <div key={key} className="flex items-center justify-between gap-3 py-1.5">
-                            <span className="text-sm text-gray-700">
+                            <span className="text-sm text-zinc-700">
                               {label}
-                              <span className={'ml-2 text-xs ' + (eff ? 'text-emerald-600' : 'text-gray-400')}>
+                              <span className={'ml-2 text-xs ' + (eff ? 'text-emerald-600' : 'text-zinc-500')}>
                                 {eff ? 'allowed' : 'denied'}
                               </span>
                             </span>
@@ -403,8 +403,8 @@ export default function RolesPage() {
                                           ? 'bg-emerald-600 text-white ring-emerald-600'
                                           : opt === 'deny'
                                             ? 'bg-red-600 text-white ring-red-600'
-                                            : 'bg-gray-700 text-white ring-gray-700'
-                                        : 'bg-white text-gray-600 ring-gray-200 hover:bg-gray-50')
+                                            : 'bg-zinc-700 text-white ring-zinc-700'
+                                        : 'bg-card text-zinc-600 ring-border hover:bg-muted')
                                     }
                                   >
                                     {opt === 'default' ? 'Default' : opt === 'allow' ? 'Allow' : 'Deny'}
@@ -444,14 +444,14 @@ function GroupRows({
   return (
     <>
       <tr>
-        <td colSpan={ROLE_COLUMNS.length + 1} className="bg-gray-100/70 px-4 py-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
+        <td colSpan={ROLE_COLUMNS.length + 1} className="bg-muted/70 px-4 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           {group.label}
-          {!group.enforced && <span className="ml-2 font-normal normal-case text-gray-400">(enforcement rolling out)</span>}
+          {!group.enforced && <span className="ml-2 font-normal normal-case text-zinc-500">(enforcement rolling out)</span>}
         </td>
       </tr>
       {group.perms.map(([key, label]) => (
-        <tr key={key} className="border-t border-gray-100 hover:bg-gray-50/50">
-          <td className="sticky left-0 z-10 bg-white px-4 py-1.5 text-gray-700 whitespace-nowrap">{label}</td>
+        <tr key={key} className="border-t border-border hover:bg-muted/50">
+          <td className="sticky left-0 z-10 bg-card px-4 py-1.5 text-zinc-700 whitespace-nowrap">{label}</td>
           {ROLE_COLUMNS.map((c) => {
             const on = effective(c.role, key)
             const modified = !c.locked && isModified(c.role, key)
@@ -463,10 +463,10 @@ function GroupRows({
                   onClick={() => onToggle(c.role, key)}
                   title={c.locked ? 'Super Admin always has full access' : modified ? 'Customized from default' : 'Default'}
                   className={
-                    'relative inline-flex h-6 w-6 items-center justify-center rounded-md ring-1 transition ' +
+                    'relative inline-flex h-8 w-8 items-center justify-center rounded-md ring-1 transition ' +
                     (on
                       ? 'bg-emerald-50 text-emerald-600 ring-emerald-200'
-                      : 'bg-gray-50 text-gray-300 ring-gray-200') +
+                      : 'bg-muted text-zinc-500 ring-border') +
                     (c.locked ? ' opacity-60 cursor-not-allowed' : ' hover:ring-teal-300 cursor-pointer')
                   }
                 >
@@ -506,14 +506,14 @@ function ModelsTab({
 }) {
   if (loading) {
     return (
-      <div className="flex h-32 items-center justify-center text-gray-400">
+      <div className="flex h-32 items-center justify-center text-muted-foreground">
         <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading models…
       </div>
     )
   }
   if (providers.length === 0) {
     return (
-      <div className="rounded-lg border border-gray-200 p-6 text-center text-sm text-gray-500">
+      <div className="rounded-lg border border-border p-6 text-center text-sm text-muted-foreground">
         No AI providers configured for this company yet. Add one in <strong>AI Settings</strong> first.
       </div>
     )
@@ -522,7 +522,7 @@ function ModelsTab({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value || null)}
-      className="rounded-md border border-gray-300 bg-white px-2 py-1 text-sm text-gray-700"
+      className="rounded-md border border-border bg-card px-2 py-1 text-sm text-zinc-700"
     >
       <option value="">Company default</option>
       {providers.map((p) => (
@@ -541,27 +541,27 @@ function ModelsTab({
           A user assignment wins over their role. Applies to user-triggered AI (e.g. Summarize).
         </span>
       </div>
-      <div className="rounded-lg border border-gray-200">
-        <div className="border-b bg-gray-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">By role</div>
+      <div className="rounded-lg border border-border">
+        <div className="border-b bg-muted px-4 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">By role</div>
         <div className="divide-y">
           {ROLE_COLUMNS.filter((r) => !r.locked).map((r) => (
             <div key={r.role} className="flex items-center justify-between px-4 py-2">
-              <span className="text-sm text-gray-700">{r.label}</span>
+              <span className="text-sm text-zinc-700">{r.label}</span>
               <Dropdown value={roleModel.get(r.role) ?? ''} onChange={(v) => onSet('role', r.role, v)} />
             </div>
           ))}
         </div>
       </div>
-      <div className="rounded-lg border border-gray-200">
-        <div className="border-b bg-gray-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">By user</div>
+      <div className="rounded-lg border border-border">
+        <div className="border-b bg-muted px-4 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">By user</div>
         <div className="max-h-[50vh] divide-y overflow-y-auto">
           {users.length === 0 && (
-            <div className="px-4 py-6 text-center text-sm text-gray-400">No users in this company.</div>
+            <div className="px-4 py-6 text-center text-sm text-muted-foreground">No users in this company.</div>
           )}
           {users.map((u) => (
             <div key={u.id} className="flex items-center justify-between px-4 py-2">
-              <span className="text-sm text-gray-700">
-                {u.full_name || u.email} <span className="text-xs text-gray-400">({u.role})</span>
+              <span className="text-sm text-zinc-700">
+                {u.full_name || u.email} <span className="text-xs text-zinc-500">({u.role})</span>
               </span>
               <Dropdown value={userModel.get(u.id) ?? ''} onChange={(v) => onSet('user', u.id, v)} />
             </div>

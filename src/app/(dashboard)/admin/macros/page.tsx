@@ -316,11 +316,11 @@ export default function MacrosPage() {
 
   if (loading) {
     return (
-      <div className="space-y-6 animate-fade-in p-6">
+      <div className="space-y-6 animate-fade-in">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Workflow Macros</h1>
-            <p className="mt-1 text-sm text-gray-500">
+            <h1 className="text-2xl font-semibold text-foreground">Workflow Macros</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
               Reusable bundles of one-click conversation actions. Agents apply them
               from the conversation actions — a macro never sends a message.
             </p>
@@ -335,13 +335,13 @@ export default function MacrosPage() {
         </div>
 
         {/* Macros table */}
-        <div className="rounded-2xl border border-gray-200/80 bg-white p-1 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_1px_3px_rgba(16,24,40,0.06)]">
-          <div className="flex items-center gap-4 border-b border-gray-100 px-4 py-3">
+        <div className="rounded-2xl border border-border bg-card p-1 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_1px_3px_rgba(16,24,40,0.06)]">
+          <div className="flex items-center gap-4 border-b border-border px-4 py-3">
             <Skeleton className="h-3 w-32 rounded" />
             <Skeleton className="ml-auto h-3 w-12 rounded" />
           </div>
           {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="flex items-center gap-4 border-b border-gray-50 px-4 py-3 last:border-b-0">
+            <div key={i} className="flex items-center gap-4 border-b border-border px-4 py-3 last:border-b-0">
               <Skeleton className="h-4 w-4 rounded" />
               <Skeleton className="h-4 w-48 rounded" />
               <Skeleton className="h-5 w-12 rounded-full" />
@@ -354,11 +354,11 @@ export default function MacrosPage() {
   }
 
   return (
-    <div className="space-y-6 animate-fade-in p-6">
+    <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Workflow Macros</h1>
-          <p className="mt-1 text-sm text-gray-500">
+          <h1 className="text-2xl font-semibold text-foreground">Workflow Macros</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             Reusable bundles of one-click conversation actions. Agents apply them
             from the conversation actions — a macro never sends a message.
           </p>
@@ -380,11 +380,11 @@ export default function MacrosPage() {
       </div>
 
       {/* Macros table */}
-      <div className="rounded-2xl border border-gray-200/80 bg-white p-1 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_1px_3px_rgba(16,24,40,0.06)]">
+      <div className="rounded-2xl border border-border bg-card p-1 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_1px_3px_rgba(16,24,40,0.06)]">
         {macros.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-gray-500">
-            <Zap className="h-8 w-8 text-gray-300 mb-2" />
-            <p className="font-medium text-gray-700">No macros yet</p>
+          <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+            <Zap className="h-8 w-8 text-zinc-500 mb-2" />
+            <p className="font-medium text-zinc-700">No macros yet</p>
             <p className="text-sm mt-1">
               Create a macro to let agents apply common actions in one click.
             </p>
@@ -406,9 +406,9 @@ export default function MacrosPage() {
                     <div className="flex items-center gap-2">
                       <Zap className="h-4 w-4 text-teal-500" />
                       <div className="min-w-0">
-                        <span className="font-medium text-gray-900">{macro.name}</span>
+                        <span className="font-medium text-foreground">{macro.name}</span>
                         {macro.description && (
-                          <p className="line-clamp-1 text-xs text-gray-500">
+                          <p className="line-clamp-1 text-xs text-muted-foreground">
                             {macro.description}
                           </p>
                         )}
@@ -421,13 +421,13 @@ export default function MacrosPage() {
                       className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors ${
                         macro.is_active
                           ? 'bg-emerald-100 text-emerald-700'
-                          : 'bg-gray-100 text-gray-500'
+                          : 'bg-muted text-muted-foreground'
                       }`}
                     >
                       {macro.is_active ? 'On' : 'Off'}
                     </button>
                   </TableCell>
-                  <TableCell className="max-w-md text-xs text-gray-600">
+                  <TableCell className="max-w-md text-xs text-zinc-600">
                     <span className="line-clamp-2">
                       {summarizeMacroActions(macro.actions, summaryLabels)}
                     </span>
@@ -436,14 +436,14 @@ export default function MacrosPage() {
                     <div className="inline-flex items-center gap-1">
                       <button
                         onClick={() => openEdit(macro)}
-                        className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                        className="rounded p-1 text-zinc-500 hover:bg-muted hover:text-zinc-700"
                         title="Edit"
                       >
                         <Edit2 className="h-4 w-4" />
                       </button>
                       <button
                         onClick={() => handleDelete(macro)}
-                        className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600"
+                        className="rounded p-1 text-zinc-500 hover:bg-red-50 hover:text-red-600"
                         title="Delete"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -505,8 +505,8 @@ export default function MacrosPage() {
           />
 
           {/* Actions */}
-          <div className="rounded-2xl border border-gray-200/80 bg-gray-50/50 p-4 space-y-4">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+          <div className="rounded-2xl border border-border bg-muted/50 p-4 space-y-4">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
               Actions
             </p>
 
@@ -557,12 +557,12 @@ export default function MacrosPage() {
 
             {/* Tags multi-select */}
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-gray-700">
+              <label className="mb-1.5 block text-sm font-medium text-zinc-700">
                 <Tag className="mr-1 inline h-3.5 w-3.5" />
                 Add tags
               </label>
               {tagChoices.length === 0 ? (
-                <p className="text-xs text-gray-400">
+                <p className="text-xs text-zinc-500">
                   No tags defined yet. Add some under{' '}
                   <span className="font-medium">Statuses &amp; Tags</span>.
                 </p>
@@ -579,7 +579,7 @@ export default function MacrosPage() {
                         className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
                           selected
                             ? 'border-teal-300 bg-teal-50 text-teal-700'
-                            : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                            : 'border-border bg-card text-zinc-600 hover:bg-muted'
                         }`}
                       >
                         {selected ? (
@@ -599,7 +599,7 @@ export default function MacrosPage() {
             </div>
           </div>
 
-          <p className="text-[11px] leading-snug text-gray-400">
+          <p className="text-[11px] leading-snug text-zinc-500">
             Macros update the conversation only — status, tags, assignee, and
             priority. They never send a message; a reply template is only queued
             for the agent to review and send.

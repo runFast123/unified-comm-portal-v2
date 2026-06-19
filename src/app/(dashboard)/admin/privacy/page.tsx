@@ -191,22 +191,22 @@ export default function PrivacyPage() {
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Privacy &amp; data requests</h1>
-        <p className="mt-1 text-sm text-gray-500">
+        <h1 className="text-2xl font-semibold text-foreground">Privacy &amp; data requests</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
           Handle GDPR/CCPA data-subject requests: export everything you hold on a customer, or
           erase it for good. Both actions are recorded in the audit log.
         </p>
       </div>
 
       {/* Plain-English explainer */}
-      <div className="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 p-4">
-        <Clock className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" />
-        <div className="text-sm text-blue-900">
+      <div className="flex items-start gap-3 rounded-lg border border-[var(--color-info)]/30 bg-[var(--color-info)]/10 p-4">
+        <Clock className="mt-0.5 h-5 w-5 shrink-0 text-[var(--color-info)]" />
+        <div className="text-sm text-foreground">
           <p className="font-medium">
             A customer can ask for a copy of their data (right of access) or for it to be deleted
             (right to erasure).
           </p>
-          <p className="mt-0.5 text-blue-800">
+          <p className="mt-0.5 text-muted-foreground">
             Under GDPR you have <span className="font-semibold">30 days</span> from the request to
             respond. Everything here is scoped to your company&apos;s accounts only.
           </p>
@@ -258,12 +258,12 @@ export default function PrivacyPage() {
               Erase data
             </Button>
             {!hasIdentifier && (
-              <span className="text-sm text-gray-400">Enter an email or phone to begin.</span>
+              <span className="text-sm text-zinc-500">Enter an email or phone to begin.</span>
             )}
           </div>
           {lastExportCounts && (
-            <div className="flex items-start gap-2 rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
-              <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-green-600" />
+            <div className="flex items-start gap-2 rounded-lg border border-border bg-muted p-3 text-sm text-zinc-700">
+              <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-success)]" />
               <p>
                 Last export matched{' '}
                 <span className="font-medium">{lastExportCounts.conversations}</span> conversation
@@ -289,9 +289,9 @@ export default function PrivacyPage() {
             eraseResult.data_subject.email || eraseResult.data_subject.phone || 'the data subject'
           }.`}
         >
-          <div className="space-y-3 text-sm text-gray-700">
+          <div className="space-y-3 text-sm text-zinc-700">
             <div className="flex items-start gap-2">
-              <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-green-600" />
+              <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-success)]" />
               <p>
                 Anonymized <span className="font-medium">{eraseResult.erased.conversations}</span>{' '}
                 conversation{eraseResult.erased.conversations === 1 ? '' : 's'},{' '}
@@ -301,7 +301,7 @@ export default function PrivacyPage() {
                 {eraseResult.erased.csat === 1 ? '' : 's'}.
               </p>
             </div>
-            {eraseResult.note && <p className="text-gray-500">{eraseResult.note}</p>}
+            {eraseResult.note && <p className="text-muted-foreground">{eraseResult.note}</p>}
           </div>
         </Card>
       )}
@@ -329,9 +329,9 @@ export default function PrivacyPage() {
         }
       >
         <div className="space-y-4">
-          <div className="flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-3">
-            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-600" />
-            <div className="space-y-1 text-sm text-red-800">
+          <div className="flex items-start gap-3 rounded-lg border border-[var(--color-danger)]/30 bg-[var(--color-danger)]/10 p-3">
+            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-[var(--color-danger)]" />
+            <div className="space-y-1 text-sm text-[var(--color-danger)]">
               <p className="font-semibold">This is permanent and cannot be undone.</p>
               <p>
                 Across all conversations matching{' '}
@@ -359,7 +359,7 @@ export default function PrivacyPage() {
           </div>
 
           {eraseError && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+            <div className="rounded-lg border border-[var(--color-warning)]/30 bg-[var(--color-warning)]/10 p-3 text-sm text-[var(--color-warning)]">
               {eraseError}
             </div>
           )}

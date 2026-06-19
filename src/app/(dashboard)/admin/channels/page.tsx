@@ -785,7 +785,7 @@ export default function ChannelsPage() {
 
   if (loading) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="space-y-6">
         <div className="space-y-2">
           <Skeleton className="h-7 w-56" />
           <Skeleton className="h-4 w-96" />
@@ -793,9 +793,9 @@ export default function ChannelsPage() {
         {Array.from({ length: 3 }).map((_, i) => (
           <div
             key={i}
-            className="overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)]"
+            className="overflow-hidden rounded-2xl border border-border bg-card shadow-[0_1px_2px_rgba(16,24,40,0.04)]"
           >
-            <div className="flex items-center gap-3 border-b border-gray-100 bg-gradient-to-b from-gray-50/50 to-transparent px-4 py-3">
+            <div className="flex items-center gap-3 border-b border-border bg-gradient-to-b from-zinc-50/50 to-transparent px-4 py-3">
               <Skeleton className="h-5 w-5 rounded" />
               <Skeleton className="h-5 w-40 rounded" />
               <div className="ml-auto">
@@ -871,10 +871,10 @@ export default function ChannelsPage() {
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Channel Configuration</h1>
+          <h1 className="text-2xl font-semibold text-foreground">Channel Configuration</h1>
           <p className="mt-1 text-sm text-slate-600">
             Connect the channels your team uses: add an account, save its credentials, and messages
             start flowing into your inbox. Secrets are encrypted at rest. Accounts without saved
@@ -1195,7 +1195,7 @@ export default function ChannelsPage() {
                           "Next:" action hint (only while there is one). */}
                       <div className="flex min-w-0 flex-1 flex-col gap-1">
                       <div className="flex min-w-0 items-center gap-2">
-                        <span className="truncate font-medium text-gray-900">{account.name}</span>
+                        <span className="truncate font-medium text-foreground">{account.name}</span>
                         {statusLabel && (
                           <span
                             className={
@@ -1307,7 +1307,7 @@ export default function ChannelsPage() {
                                 ? `${lastSeenLabel}: ${new Date(lastSeen).toLocaleString()}`
                                 : 'No inbound messages received yet — send one to your number/bot/page to verify the webhook'
                             }
-                            className="hidden min-w-0 truncate text-[11px] text-gray-400 md:block"
+                            className="hidden min-w-0 truncate text-[11px] text-zinc-500 md:block"
                           >
                             {lastSeen ? `${lastSeenLabel} ${timeAgo(lastSeen)} ago` : 'No messages yet'}
                           </span>
@@ -1354,7 +1354,7 @@ export default function ChannelsPage() {
                               window.location.href = `/api/auth/gmail/start?account_id=${account.id}`
                             }}
                             title="Connect this account to Gmail via Google OAuth (no app password needed)"
-                            className="inline-flex h-9 items-center gap-2 whitespace-nowrap rounded-md border border-gray-300 bg-white px-3 text-sm font-medium text-slate-700 shadow-sm hover:bg-gray-50"
+                            className="inline-flex h-9 items-center gap-2 whitespace-nowrap rounded-md border border-border bg-card px-3 text-sm font-medium text-slate-700 shadow-sm hover:bg-muted"
                           >
                             <svg aria-hidden="true" viewBox="0 0 18 18" className="h-4 w-4">
                               <path
@@ -1384,7 +1384,7 @@ export default function ChannelsPage() {
                               window.location.href = `/api/auth/teams/start?account_id=${account.id}`
                             }}
                             title="Connect via delegated OAuth (bypasses Protected API Access)"
-                            className="inline-flex h-9 items-center gap-2 whitespace-nowrap rounded-lg bg-gray-100 px-3 text-sm font-medium text-gray-700 hover:bg-gray-200"
+                            className="inline-flex h-9 items-center gap-2 whitespace-nowrap rounded-lg bg-muted px-3 text-sm font-medium text-zinc-700 hover:bg-zinc-200"
                           >
                             <LinkIcon className="h-3.5 w-3.5" />
                             Connect Teams
@@ -1411,7 +1411,7 @@ export default function ChannelsPage() {
                             type="button"
                             onClick={() => copyInboundUrl(account, channel)}
                             title="Copy this account's inbound webhook URL — paste it into your provider's webhook settings (Meta / Twilio) to receive messages"
-                            className="inline-flex h-9 items-center gap-2 whitespace-nowrap rounded-lg bg-gray-100 px-3 text-sm font-medium text-gray-700 hover:bg-gray-200"
+                            className="inline-flex h-9 items-center gap-2 whitespace-nowrap rounded-lg bg-muted px-3 text-sm font-medium text-zinc-700 hover:bg-zinc-200"
                           >
                             <Copy className="h-3.5 w-3.5" />
                             Inbound URL
@@ -1438,7 +1438,7 @@ export default function ChannelsPage() {
                             if (menuOpen) menuTriggerRef.current = el
                           }}
                           onClick={() => setOpenMenuId(menuOpen ? null : key)}
-                          className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition"
+                          className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-zinc-700 transition"
                         >
                           <MoreVertical className="h-4 w-4" />
                         </button>
@@ -1468,9 +1468,9 @@ export default function ChannelsPage() {
                 setOpenMenuId(null)
                 handleDuplicate(menuContext!.account, menuContext!.channel)
               }}
-              className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+              className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-left text-sm text-zinc-700 hover:bg-muted"
             >
-              <Copy className="h-4 w-4 text-gray-500" />
+              <Copy className="h-4 w-4 text-muted-foreground" />
               Duplicate account
             </button>
           )}
@@ -1481,9 +1481,9 @@ export default function ChannelsPage() {
                 setOpenMenuId(null)
                 handleTestSaved(menuContext!.account, menuContext!.channel)
               }}
-              className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+              className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-left text-sm text-zinc-700 hover:bg-muted"
             >
-              <CheckCircle className="h-4 w-4 text-gray-500" />
+              <CheckCircle className="h-4 w-4 text-muted-foreground" />
               Test connection
             </button>
           )}
@@ -1495,9 +1495,9 @@ export default function ChannelsPage() {
                   setOpenMenuId(null)
                   handleSendTestMessage(menuContext!.account, menuContext!.channel)
                 }}
-                className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-left text-sm text-zinc-700 hover:bg-muted"
               >
-                <Send className="h-4 w-4 text-gray-500" />
+                <Send className="h-4 w-4 text-muted-foreground" />
                 Send test message
               </button>
             )}
@@ -1508,9 +1508,9 @@ export default function ChannelsPage() {
                 setOpenMenuId(null)
                 handleDeleteCreds(menuContext!.account, menuContext!.channel)
               }}
-              className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+              className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-left text-sm text-zinc-700 hover:bg-muted"
             >
-              <Trash2 className="h-4 w-4 text-gray-500" />
+              <Trash2 className="h-4 w-4 text-muted-foreground" />
               Remove my credentials
             </button>
           )}
@@ -1523,9 +1523,9 @@ export default function ChannelsPage() {
                   setOpenMenuId(null)
                   handleGmailDisconnect(menuContext!.account)
                 }}
-                className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-left text-sm text-zinc-700 hover:bg-muted"
               >
-                <Unlink className="h-4 w-4 text-gray-500" />
+                <Unlink className="h-4 w-4 text-muted-foreground" />
                 Disconnect Gmail OAuth
               </button>
             )}
@@ -1538,13 +1538,13 @@ export default function ChannelsPage() {
                   setOpenMenuId(null)
                   handleTeamsDisconnect(menuContext!.account)
                 }}
-                className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-left text-sm text-zinc-700 hover:bg-muted"
               >
-                <Unlink className="h-4 w-4 text-gray-500" />
+                <Unlink className="h-4 w-4 text-muted-foreground" />
                 Disconnect Teams OAuth
               </button>
             )}
-          <div className="my-1 border-t border-gray-100" />
+          <div className="my-1 border-t border-border" />
           <button
             type="button"
             onClick={() => {
@@ -1565,15 +1565,15 @@ export default function ChannelsPage() {
           onClick={() => setPickerOpen(false)}
         >
           <div
-            className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-xl ring-1 ring-black/5"
+            className="w-full max-w-lg overflow-hidden rounded-2xl bg-card shadow-xl ring-1 ring-black/5"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-gray-100 bg-gradient-to-b from-gray-50/50 to-transparent px-5 py-3">
+            <div className="flex items-center justify-between border-b border-border bg-gradient-to-b from-zinc-50/50 to-transparent px-5 py-3">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                   New account
                 </p>
-                <h3 className="text-base font-semibold text-gray-900">Pick a channel</h3>
+                <h3 className="text-base font-semibold text-foreground">Pick a channel</h3>
               </div>
               <button
                 onClick={() => setPickerOpen(false)}
@@ -1602,7 +1602,7 @@ export default function ChannelsPage() {
                       setPickerOpen(false)
                       openCreate(ch)
                     }}
-                    className="flex cursor-pointer flex-col items-start gap-3 rounded-xl border border-gray-200/80 p-5 text-left transition hover:border-gray-300 hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-200"
+                    className="flex cursor-pointer flex-col items-start gap-3 rounded-xl border border-border p-5 text-left transition hover:border-zinc-300 hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-200"
                   >
                     <div
                       className={`flex h-10 w-10 items-center justify-center rounded-xl ring-1 ${chipTone}`}
@@ -1610,10 +1610,10 @@ export default function ChannelsPage() {
                       <m.Icon className="h-5 w-5" strokeWidth={2} />
                     </div>
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-gray-900">
+                      <p className="truncate text-sm font-semibold text-foreground">
                         {m.label.split(' ')[0]}
                       </p>
-                      <p className="mt-0.5 text-xs text-gray-500">
+                      <p className="mt-0.5 text-xs text-muted-foreground">
                         {n} account{n === 1 ? '' : 's'}
                       </p>
                     </div>
@@ -1627,8 +1627,8 @@ export default function ChannelsPage() {
 
       {modal && currentChannel && identifier && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-lg bg-white shadow-xl">
-            <div className="sticky top-0 flex items-center justify-between border-b bg-white px-5 py-3">
+          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-lg bg-card shadow-xl">
+            <div className="sticky top-0 flex items-center justify-between border-b bg-card px-5 py-3">
               <h3 className="font-semibold">
                 {modal.kind === 'create'
                   ? `New ${CHANNEL_META[currentChannel].label} Account`
@@ -1643,7 +1643,7 @@ export default function ChannelsPage() {
                   has no OAuth path so it always goes Manual. */}
               {modal.kind === 'create' && currentChannel !== 'whatsapp' && (
                 <div className="space-y-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                     Setup method
                   </p>
                   <div className="grid grid-cols-2 gap-3">
@@ -1669,19 +1669,19 @@ export default function ChannelsPage() {
                             className={
                               'flex flex-col items-start gap-2 rounded-xl border p-3 text-left transition ' +
                               (!oauthOk
-                                ? 'cursor-not-allowed border-gray-200 bg-gray-50 opacity-60'
+                                ? 'cursor-not-allowed border-border bg-muted opacity-60'
                                 : setupMode === 'oauth'
                                   ? 'border-teal-600 bg-teal-50/50 ring-2 ring-teal-200'
-                                  : 'border-gray-200 hover:border-gray-300')
+                                  : 'border-border hover:border-zinc-300')
                             }
                           >
                             <div className="flex items-center gap-2">
                               <ShieldCheck className="h-4 w-4 text-teal-700" />
-                              <span className="text-sm font-semibold text-gray-900">
+                              <span className="text-sm font-semibold text-foreground">
                                 Sign in with {providerLabel}
                               </span>
                             </div>
-                            <p className="text-xs text-gray-500">
+                            <p className="text-xs text-muted-foreground">
                               {oauthOk
                                 ? 'Recommended — one-click setup, no passwords'
                                 : 'Unavailable on this deployment'}
@@ -1703,16 +1703,16 @@ export default function ChannelsPage() {
                               'flex flex-col items-start gap-2 rounded-xl border p-3 text-left transition ' +
                               (setupMode === 'manual'
                                 ? 'border-teal-600 bg-teal-50/50 ring-2 ring-teal-200'
-                                : 'border-gray-200 hover:border-gray-300')
+                                : 'border-border hover:border-zinc-300')
                             }
                           >
                             <div className="flex items-center gap-2">
-                              <KeyRound className="h-4 w-4 text-gray-600" />
-                              <span className="text-sm font-semibold text-gray-900">
+                              <KeyRound className="h-4 w-4 text-zinc-600" />
+                              <span className="text-sm font-semibold text-foreground">
                                 Manual setup
                               </span>
                             </div>
-                            <p className="text-xs text-gray-500">
+                            <p className="text-xs text-muted-foreground">
                               {currentChannel === 'email'
                                 ? 'Use SMTP / IMAP credentials'
                                 : 'Use Azure app registration'}
@@ -1808,7 +1808,7 @@ export default function ChannelsPage() {
                       <select
                         value={reuseSourceId}
                         onChange={(e) => setReuseSourceId(e.target.value)}
-                        className="mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                        className="mt-1 block w-full rounded-lg border border-border bg-card px-3 py-2 text-sm shadow-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
                       >
                         <option value="">— Enter new tenant credentials below —</option>
                         {reusableTenants.map((t) => (
@@ -1989,7 +1989,7 @@ function OverflowMenuPortal({
       // unhandled clicks on dividers / padding don't leave the menu stuck open.
       onClick={onClose}
       style={{ position: 'fixed', top: pos.top, right: pos.right, zIndex: 60 }}
-      className="w-56 overflow-hidden rounded-xl border border-gray-200/80 bg-white shadow-lg ring-1 ring-black/5"
+      className="w-56 overflow-hidden rounded-xl border border-border bg-card shadow-lg ring-1 ring-black/5"
     >
       {children}
     </div>

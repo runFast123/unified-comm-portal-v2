@@ -19,6 +19,8 @@ import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supab
 import { getCurrentUser, isSuperAdmin } from '@/lib/auth'
 import { companyCSATAggregate, agentCSATAggregate, type CSATAggregate } from '@/lib/csat'
 import { Card } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Star, Clock } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
 
@@ -58,8 +60,30 @@ function fmtPct(n: number): string {
   return `${Math.round(n * 100)}%`
 }
 
-function ratingEmoji(rating: number): string {
-  return ['', '😡', '😕', '😐', '🙂', '😍'][Math.round(rating)] ?? ''
+// Map a 1–5 score to a semantic Badge variant: 1–2 red, 3 amber, 4–5 green.
+function ratingBadgeVariant(rating: number): 'success' | 'warning' | 'danger' {
+  const r = Math.round(rating)
+  if (r >= 4) return 'success'
+  if (r === 3) return 'warning'
+  return 'danger'
+}
+
+// A compact star row (filled up to the rounded rating) used in place of the
+// old face emoji. Decorative — the numeric score is always shown alongside.
+function RatingStars({ rating, className = '' }: { rating: number; className?: string }) {
+  const filled = Math.max(0, Math.min(5, Math.round(rating)))
+  return (
+    <span className={`inline-flex items-center gap-0.5 align-middle ${className}`} aria-hidden="true">
+      {[1, 2, 3, 4, 5].map((i) => (
+        <Star
+          key={i}
+          className="h-3.5 w-3.5"
+          fill={i <= filled ? 'currentColor' : 'none'}
+          strokeWidth={1.5}
+        />
+      ))}
+    </span>
+  )
 }
 
 export default async function CSATAdminPage({
@@ -74,10 +98,10 @@ export default async function CSATAdminPage({
   const profile = await getCurrentUser(user.id)
   if (!profile?.company_id) {
     return (
-      <div className="p-6">
+      <div>
         <Card className="p-6">
-          <h1 className="text-lg font-semibold mb-2">CSAT</h1>
-          <p className="text-sm text-gray-500">
+          <h1 className="text-2xl font-semibold text-foreground mb-2">CSAT</h1>
+          <p className="text-sm text-muted-foreground">
             Your account isn&apos;t attached to a company yet. Ask an admin to
             assign you so this dashboard can scope the data.
           </p>
@@ -163,11 +187,11 @@ export default async function CSATAdminPage({
   }
 
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+    <div className="space-y-6 max-w-7xl mx-auto">
       <div className="flex items-end justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Customer satisfaction</h1>
-          <p className="text-sm text-gray-500 mt-1">
+          <h1 className="text-2xl font-semibold text-foreground">Customer satisfaction</h1>
+          <p className="text-sm text-muted-foreground mt-1">
             Rolling 30-day rollup for {profile.email}&apos;s company. Surveys
             auto-send when a conversation is marked resolved
             (configurable per company).
@@ -177,7 +201,20 @@ export default async function CSATAdminPage({
 
       {/* Top KPI strip */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Kpi label="Average rating" value={fmtRating(companyAgg.avg_rating)} suffix={companyAgg.avg_rating > 0 ? `/ 5 ${ratingEmoji(companyAgg.avg_rating)}` : ''} />
+        <Kpi
+          label="Average rating"
+          value={fmtRating(companyAgg.avg_rating)}
+          suffix={
+            companyAgg.avg_rating > 0 ? (
+              <span className="inline-flex items-center gap-1.5">
+                / 5
+                <RatingStars rating={companyAgg.avg_rating} className="text-amber-500" />
+              </span>
+            ) : (
+              ''
+            )
+          }
+        />
         <Kpi label="Surveys sent" value={String(companyAgg.total_sent)} />
         <Kpi label="Responded" value={String(companyAgg.total_responded)} />
         <Kpi label="Response rate" value={fmtPct(companyAgg.response_rate)} />
@@ -185,32 +222,32 @@ export default async function CSATAdminPage({
 
       {/* Distribution */}
       <Card className="p-5">
-        <h2 className="text-sm font-semibold text-gray-700 mb-3">Rating distribution (last 30d)</h2>
+        <h2 className="text-sm font-semibold text-zinc-700 mb-3">Rating distribution (last 30d)</h2>
         <Distribution distribution={companyAgg.distribution} />
       </Card>
 
       {/* 12-week trend */}
       <Card className="p-5">
-        <h2 className="text-sm font-semibold text-gray-700 mb-3">12-week trend</h2>
+        <h2 className="text-sm font-semibold text-zinc-700 mb-3">12-week trend</h2>
         <TrendChart weekly={weekly} />
       </Card>
 
       {/* Per-agent ranking */}
       <Card className="p-0 overflow-hidden">
-        <div className="p-5 border-b border-gray-100">
-          <h2 className="text-sm font-semibold text-gray-700">Per-agent ranking</h2>
-          <p className="text-xs text-gray-500 mt-0.5">
+        <div className="p-5 border-b border-border">
+          <h2 className="text-sm font-semibold text-zinc-700">Per-agent ranking</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">
             Click an agent to drill into their individual responses + feedback.
           </p>
         </div>
         {agentRows.length === 0 ? (
-          <div className="p-6 text-sm text-gray-500 text-center">
+          <div className="p-6 text-sm text-muted-foreground text-center">
             No CSAT responses yet. Once a conversation is resolved with the
             company-level CSAT toggle on, surveys will land here.
           </div>
         ) : (
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-xs uppercase tracking-wider text-gray-500">
+            <thead className="bg-muted text-xs uppercase tracking-wider text-muted-foreground">
               <tr>
                 <th className="text-left px-4 py-2">Agent</th>
                 <th className="text-right px-4 py-2">Sent</th>
@@ -222,17 +259,21 @@ export default async function CSATAdminPage({
             </thead>
             <tbody>
               {agentRows.map((row) => (
-                <tr key={row.user_id} className="border-t border-gray-100 hover:bg-gray-50">
+                <tr key={row.user_id} className="border-t border-border hover:bg-muted">
                   <td className="px-4 py-2">
-                    <div className="font-medium text-gray-900">{row.name}</div>
-                    <div className="text-xs text-gray-500">{row.email}</div>
+                    <div className="font-medium text-foreground">{row.name}</div>
+                    <div className="text-xs text-muted-foreground">{row.email}</div>
                   </td>
                   <td className="px-4 py-2 text-right tabular-nums">{row.sent}</td>
                   <td className="px-4 py-2 text-right tabular-nums">
                     {fmtPct(row.sent === 0 ? 0 : row.responded / row.sent)}
                   </td>
                   <td className="px-4 py-2 text-right tabular-nums">
-                    {fmtRating(row.avg)} {row.avg > 0 && <span>{ratingEmoji(row.avg)}</span>}
+                    {row.avg > 0 ? (
+                      <Badge variant={ratingBadgeVariant(row.avg)} size="sm">{fmtRating(row.avg)}</Badge>
+                    ) : (
+                      fmtRating(row.avg)
+                    )}
                   </td>
                   <td className="px-4 py-2 text-right tabular-nums">
                     {fmtRating(row.last7Avg)}
@@ -257,42 +298,46 @@ export default async function CSATAdminPage({
         <Card className="p-5">
           <div className="flex items-baseline justify-between mb-4">
             <div>
-              <h2 className="text-sm font-semibold text-gray-700">
+              <h2 className="text-sm font-semibold text-zinc-700">
                 {agentDrill.user?.full_name || agentDrill.user?.email || 'Unknown agent'}
               </h2>
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-muted-foreground">
                 Avg {fmtRating(agentDrill.aggregate.avg_rating)} · {agentDrill.aggregate.total_responded} responded · {fmtPct(agentDrill.aggregate.response_rate)} response rate
               </p>
             </div>
-            <Link href="/admin/csat" className="text-xs text-gray-500 hover:underline">
+            <Link href="/admin/csat" className="text-xs text-muted-foreground hover:underline">
               ← Back to all agents
             </Link>
           </div>
           {agentDrill.surveys.length === 0 ? (
-            <p className="text-sm text-gray-500">No surveys for this agent yet.</p>
+            <p className="text-sm text-muted-foreground">No surveys for this agent yet.</p>
           ) : (
-            <ul className="divide-y divide-gray-100">
+            <ul className="divide-y divide-border">
               {agentDrill.surveys.map((s) => (
                 <li key={s.id} className="py-3 flex items-start gap-3">
-                  <div className="text-2xl shrink-0">
-                    {s.rating ? ratingEmoji(s.rating) : '⏳'}
+                  <div className="shrink-0 pt-0.5">
+                    {s.rating ? (
+                      <RatingStars rating={s.rating} className="text-amber-500" />
+                    ) : (
+                      <Clock className="h-4 w-4 text-zinc-500" />
+                    )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-baseline gap-2 flex-wrap">
                       <span className="font-medium text-sm">
                         {s.rating ? `${s.rating}/5` : 'No response yet'}
                       </span>
-                      <span className="text-xs text-gray-400">
+                      <span className="text-xs text-zinc-500">
                         {s.responded_at
                           ? `responded ${new Date(s.responded_at).toLocaleDateString()}`
                           : `sent ${new Date(s.sent_at).toLocaleDateString()}`}
                       </span>
                       {s.customer_email && (
-                        <span className="text-xs text-gray-400">· {s.customer_email}</span>
+                        <span className="text-xs text-zinc-500">· {s.customer_email}</span>
                       )}
                     </div>
                     {s.feedback && (
-                      <p className="text-sm text-gray-700 mt-1 italic">&ldquo;{s.feedback}&rdquo;</p>
+                      <p className="text-sm text-zinc-700 mt-1 italic">&ldquo;{s.feedback}&rdquo;</p>
                     )}
                     <Link
                       href={`/conversations/${s.conversation_id}`}
@@ -313,13 +358,13 @@ export default async function CSATAdminPage({
 
 // ─── helpers (server-only) ────────────────────────────────────────────────
 
-function Kpi({ label, value, suffix }: { label: string; value: string; suffix?: string }) {
+function Kpi({ label, value, suffix }: { label: string; value: string; suffix?: React.ReactNode }) {
   return (
     <Card className="p-4">
-      <div className="text-xs uppercase tracking-wider text-gray-500">{label}</div>
+      <div className="text-xs uppercase tracking-wider text-muted-foreground">{label}</div>
       <div className="mt-1 flex items-baseline gap-1.5">
-        <div className="text-2xl font-semibold text-gray-900 tabular-nums">{value}</div>
-        {suffix && <div className="text-sm text-gray-500">{suffix}</div>}
+        <div className="text-2xl font-semibold text-foreground tabular-nums">{value}</div>
+        {suffix && <div className="text-sm text-muted-foreground">{suffix}</div>}
       </div>
     </Card>
   )
@@ -342,21 +387,21 @@ function Distribution({ distribution }: { distribution: Record<1 | 2 | 3 | 4 | 5
         return (
           <div key={k} className="flex items-center gap-3 text-sm">
             <span className="w-6 shrink-0 text-right tabular-nums">{k}</span>
-            <span className="text-base">{ratingEmoji(k)}</span>
-            <div className="flex-1 h-3 bg-gray-100 rounded overflow-hidden">
+            <RatingStars rating={k} className="text-amber-500" />
+            <div className="flex-1 h-3 bg-muted rounded overflow-hidden">
               <div
                 className="h-full rounded"
                 style={{ width: `${pct}%`, backgroundColor: colors[k] }}
               />
             </div>
-            <span className="w-12 text-right tabular-nums text-xs text-gray-500">
+            <span className="w-12 text-right tabular-nums text-xs text-muted-foreground">
               {v}
             </span>
           </div>
         )
       })}
       {total === 0 && (
-        <p className="text-xs text-gray-400 italic">No responses yet.</p>
+        <p className="text-xs text-zinc-500 italic">No responses yet.</p>
       )}
     </div>
   )
