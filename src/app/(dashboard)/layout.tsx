@@ -31,6 +31,39 @@ export default async function DashboardLayout({
     redirect('/login')
   }
 
+  // ── MFA enforce-for-enrolled (Stage 1) ───────────────────────────────
+  // A user with a verified second factor whose session is still aal1 (hasn't
+  // stepped up this session) must complete the TOTP challenge before reaching
+  // any dashboard page. This applies to ALL roles (incl. super_admin).
+  //
+  // FAIL-OPEN (critical): the AAL probe is wrapped in try/catch. On ANY error
+  // we do NOT redirect — a transient GoTrue/network blip must never lock users
+  // out. We compute `needsStepUp` inside the try and call redirect() OUTSIDE
+  // it, because redirect() throws NEXT_REDIRECT internally and a surrounding
+  // catch would otherwise swallow the redirect.
+  //
+  // Loop-safety: we never redirect when already on the challenge page. The
+  // challenge page lives under (dashboard) too, so without this guard the gate
+  // would fire on /account/verify-2fa itself and loop forever.
+  const reqHeadersForMfa = await headers()
+  const mfaPath = reqHeadersForMfa.get('x-pathname') ?? ''
+  const onVerifyPage = mfaPath === '/account/verify-2fa' || mfaPath.startsWith('/account/verify-2fa/')
+  if (!onVerifyPage) {
+    let needsStepUp = false
+    try {
+      const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+      if (aal && aal.currentLevel === 'aal1' && aal.nextLevel === 'aal2') {
+        needsStepUp = true
+      }
+    } catch {
+      // Fail OPEN — do not redirect on error.
+      needsStepUp = false
+    }
+    if (needsStepUp) {
+      redirect('/account/verify-2fa')
+    }
+  }
+
   // Fetch user profile
   const { data: profile } = await supabase
     .from('users')
@@ -59,8 +92,7 @@ export default async function DashboardLayout({
   // happens until an admin explicitly restricts access. firstAccessibleRoute only
   // returns routes the user CAN reach, so this can't loop.
   if (user.role !== 'super_admin') {
-    const reqHeaders = await headers()
-    const currentPath = reqHeaders.get('x-pathname') ?? ''
+    const currentPath = mfaPath
     const section = sectionForPath(currentPath)
     if (section && !effectivePerms.has(section)) {
       const fallback = firstAccessibleRoute(effectivePerms)

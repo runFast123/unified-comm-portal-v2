@@ -40,7 +40,27 @@ export async function signIn(formData: FormData) {
     return { error: error.message }
   }
 
-  redirect('/dashboard')
+  // MFA step-up: if this user has a verified second factor, the freshly
+  // established session is still aal1 and must be promoted to aal2 via the
+  // TOTP challenge before reaching the dashboard.
+  //
+  // FAIL-OPEN: getAuthenticatorAssuranceLevel can throw (network / GoTrue
+  // hiccup). A failure here must NEVER block a legitimate sign-in, so any
+  // error falls through to /dashboard. We compute the target inside the
+  // try/catch and redirect AFTER it — `redirect()` throws NEXT_REDIRECT
+  // internally, so calling it inside the catch-bearing block would let the
+  // catch swallow the redirect.
+  let target = '/dashboard'
+  try {
+    const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+    if (aal && aal.currentLevel === 'aal1' && aal.nextLevel === 'aal2') {
+      target = '/account/verify-2fa'
+    }
+  } catch {
+    // Fall through to /dashboard — never lock the user out on a transient error.
+  }
+
+  redirect(target)
 }
 
 export async function signUp(formData: FormData) {

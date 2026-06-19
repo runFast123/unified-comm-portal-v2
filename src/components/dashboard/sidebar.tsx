@@ -737,6 +737,22 @@ export function Sidebar({
                 <FileText className="h-4 w-4 shrink-0" />
                 <span>My signature</span>
               </Link>
+              <Link
+                href="/account/security"
+                role="menuitem"
+                onClick={() => {
+                  setUserMenuOpen(false)
+                  onClose?.()
+                }}
+                className={`flex w-full items-center gap-2 px-3 py-2 text-sm transition-colors ${
+                  pathname === '/account/security'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                }`}
+              >
+                <ShieldCheck className="h-4 w-4 shrink-0" />
+                <span>Security</span>
+              </Link>
               {/* Keyboard shortcuts — moved here from the standalone
                   bottom strip per UI audit J. The `?` keybind already
                   works globally; this menu item is the discoverable
