@@ -404,8 +404,187 @@ export default function InboxPage() {
   // Load More both full-replace the list, so they must never interleave.
   const loadingMoreRef = useRef(false)
 
+  // ── Server-side filter plan ───────────────────────────────────────────
+  // Previously every predicate below (status, assignee, unread, category,
+  // sentiment, priority, free-text search) ran client-side as an array
+  // `.filter()` over ONLY the 50 loaded messages, so a matching conversation
+  // that hadn't paged in was silently missed. We now push the DB-expressible
+  // predicates into the supabase query (additive to tenant scope + RBAC) so
+  // they apply across the FULL dataset. Two predicates stay client-side and
+  // are documented at `filteredItems` (snooze: trivial, derived from now;
+  // unread_only: per-device localStorage, not a DB column).
+  //
+  // `inboxFilterPlan` collects everything the list/loadMore queries need to
+  // reproduce identical filtering. It folds together the three filter sources
+  // that used to be applied separately client-side:
+  //   1. InboxFiltersBar    → filters.{channel,category,sentiment,priority,search}
+  //   2. scope toggle        → myConversationsOnly
+  //   3. facets sidebar      → facetFilters.{urgency,status,assignment}
+  //   4. active saved view   → activeView.filters.{status,assignee,account_ids,age_hours_gt}
+  // When two sources set the same dimension (e.g. sidebar status + saved-view
+  // status) we AND them, matching the old client-side behaviour where each
+  // independent `if` had to pass.
+  const inboxFilterPlan = useMemo(() => {
+    const view = activeView?.filters ?? {}
+    const search = filters.search.trim()
+
+    // category / sentiment / urgency live on message_classifications (a
+    // one-row-per-message child). A non-null filter on any of them forces an
+    // inner join so unmatched messages drop out server-side.
+    const category = filters.category !== 'all' ? (filters.category as string) : null
+    const sentiment = filters.sentiment !== 'all' ? (filters.sentiment as string) : null
+    // Urgency comes from the facets sidebar AND, indirectly, from the priority
+    // dropdown — priority is DERIVED from urgency via derivePriority(). The map
+    // is 1:1 for urgent/high/medium, but priority 'low' folds together urgency
+    // 'low' + NULL + any unknown value, which isn't a single `.eq`. So:
+    //   • priority urgent/high/medium → urgency .eq(same)
+    //   • priority low                → handled client-side (kept in filteredItems)
+    let urgency = facetFilters.urgency ?? null
+    if (!urgency && filters.priority !== 'all' && filters.priority !== 'low') {
+      urgency = filters.priority
+    }
+    const classificationInner = !!(category || sentiment || urgency)
+
+    // conversation-level predicates (status / assignment / snooze / merged).
+    // `conversations` is made an inner join unconditionally (every stored
+    // message has one) so we can also push merged_into_id IS NULL down.
+    const status = facetFilters.status ?? (view.status && view.status !== 'all' ? view.status : null)
+
+    // Assignment: scope toggle (myConversationsOnly) AND sidebar AND saved-view
+    // can each constrain it. They never conflict in practice (all resolve to
+    // me / unassigned / a specific user); if both 'me' and a user id were set
+    // we honour the most specific. Resolve to a concrete server predicate.
+    let assignedTo: string | null = null // a specific user_id to match
+    let assignedToMe = false
+    let unassigned = false
+    if (myConversationsOnly) assignedToMe = true
+    if (facetFilters.assignment === 'me') assignedToMe = true
+    else if (facetFilters.assignment === 'unassigned') unassigned = true
+    if (view.assignee && view.assignee !== 'all') {
+      if (view.assignee === 'me') assignedToMe = true
+      else if (view.assignee === 'unassigned') unassigned = true
+      else assignedTo = view.assignee
+    }
+    // assignedToMe needs the current user id; resolved at query time.
+
+    // saved-view account scoping (intersected with tenant scope by the caller).
+    const accountIds = Array.isArray(view.account_ids) && view.account_ids.length > 0
+      ? view.account_ids
+      : null
+
+    // saved-view age filter: only rows older than N hours.
+    const ageCutoffIso = view.age_hours_gt && view.age_hours_gt > 0
+      ? new Date(Date.now() - view.age_hours_gt * 36e5).toISOString()
+      : null
+
+    return {
+      search: search || null,
+      category,
+      sentiment,
+      urgency,
+      classificationInner,
+      status,
+      assignedTo,
+      assignedToMe,
+      unassigned,
+      accountIds,
+      ageCutoffIso,
+    }
+  }, [filters.category, filters.sentiment, filters.priority, filters.search, facetFilters.urgency, facetFilters.status, facetFilters.assignment, myConversationsOnly, activeView])
+
+  // Stable string key of the plan — drives query identity so a filter change is
+  // treated as a NEW query (skeletons) rather than a background refresh.
+  const inboxFilterKey = useMemo(
+    () => JSON.stringify(inboxFilterPlan) + '|' + (currentUserId ?? ''),
+    [inboxFilterPlan, currentUserId]
+  )
+
+  // The select string toggles message_classifications between a left join and
+  // an inner join depending on whether a classification predicate is active —
+  // an unconditional inner join would silently drop unclassified messages.
+  const inboxSelect = useMemo(() => {
+    const mc = inboxFilterPlan.classificationInner
+      ? 'message_classifications!inner ( category, sentiment, urgency, confidence, classified_at )'
+      : 'message_classifications ( category, sentiment, urgency, confidence, classified_at )'
+    return `
+          id,
+          conversation_id,
+          account_id,
+          channel,
+          sender_name,
+          message_text,
+          email_subject,
+          direction,
+          reply_required,
+          replied,
+          is_spam,
+          spam_reason,
+          timestamp,
+          received_at,
+          accounts!messages_account_id_fkey ( id, name, phase2_enabled ),
+          ${mc},
+          ai_replies ( status, created_at ),
+          conversations!messages_conversation_id_fkey!inner ( status, assigned_to, tags, snoozed_until, merged_into_id, assigned:users!conversations_assigned_to_fkey ( full_name ) )
+        `
+  }, [inboxFilterPlan.classificationInner])
+
+  // Apply the server-side filter plan to a messages query. Additive only — the
+  // caller has already applied tenant scope, RBAC channel scope, the spam/view
+  // filter, and (for loadMore) the keyset cursor. Returns the augmented query.
+  // Typed loosely because `.select(<dynamic string>)` already erases the row
+  // type to `any` upstream, so a precise generic would add fragility (the
+  // builder threads `this`) for no real safety here — matching the file's
+  // existing `msg: any` convention for these PostgREST chains.
+  const applyInboxFilters = useCallback((query: any): any => {
+    const p = inboxFilterPlan
+    let q = query
+
+    // ── message_classifications predicates (embedded one-to-many; inner-joined
+    //    via inboxSelect when any of these are set) ──
+    if (p.category) q = q.eq('message_classifications.category', p.category)
+    if (p.sentiment) q = q.eq('message_classifications.sentiment', p.sentiment)
+    if (p.urgency) q = q.eq('message_classifications.urgency', p.urgency)
+
+    // ── conversation predicates (conversations is inner-joined in inboxSelect) ──
+    // Drop merged-away conversations server-side (was a client-side post-filter).
+    q = q.is('conversations.merged_into_id', null)
+    if (p.status) q = q.eq('conversations.status', p.status)
+    if (p.assignedTo) q = q.eq('conversations.assigned_to', p.assignedTo)
+    else if (p.assignedToMe && currentUserId) q = q.eq('conversations.assigned_to', currentUserId)
+    else if (p.unassigned) q = q.is('conversations.assigned_to', null)
+    // NOTE: the snooze hide-filter stays CLIENT-SIDE (see filteredItems). It's a
+    // trivial derived "snoozed_until > now" check that would need a SECOND
+    // referenced-table `.or()` alongside the search `.or()` below; snoozed rows
+    // are low-volume, so keeping it client-side avoids that fragility with no
+    // practical paging impact.
+
+    // ── message-level predicates ──
+    if (p.accountIds) q = q.in('account_id', p.accountIds)
+    if (p.ageCutoffIso) q = q.lt('received_at', p.ageCutoffIso)
+
+    // ── free-text search ── matches sender, email subject, and body across the
+    // FULL dataset (was a client-side substring test over loaded rows only).
+    // BEHAVIOR CHANGE: the old client-side search ALSO matched account_name
+    // (the tenant/account label). That column lives on the joined `accounts`
+    // row and PostgREST can't OR a root column together with an embedded-table
+    // column in one .or(), so account-name matching is DROPPED — and it can't
+    // be recovered client-side either, since rows that match ONLY on account
+    // name are never fetched by this query. Sender/subject/body cover the
+    // overwhelming majority of searches and now span every page (the goal).
+    // Input is escaped so a comma/paren/wildcard in the term can't break the
+    // .or() grammar or act as an unintended ilike wildcard.
+    if (p.search) {
+      const esc = p.search.replace(/([%_,()\\])/g, '\\$1')
+      q = q.or(`sender_name.ilike.%${esc}%,email_subject.ilike.%${esc}%,message_text.ilike.%${esc}%`)
+    }
+
+    return q
+  }, [inboxFilterPlan, currentUserId])
+
   const fetchInboxItems = useCallback(async () => {
-    const queryKey = [inboxView, filters.channel, dashboardFilter ?? '', activeCompanyId ?? '', companyAccountIds.join(',')].join('|')
+    // Filter state is part of the query identity now (filters run server-side),
+    // so changing any filter is a NEW query → skeletons, not a silent refresh.
+    const queryKey = [inboxView, filters.channel, dashboardFilter ?? '', activeCompanyId ?? '', companyAccountIds.join(','), inboxFilterKey].join('|')
     const isBackgroundRefresh = fetchedQueryKeyRef.current === queryKey
     // Skip a background refresh while Load More is in flight — its page-1
     // replace would wipe the appended pages. The next realtime event (or any
@@ -428,29 +607,14 @@ export default function InboxPage() {
         } catch { /* use context value */ }
       }
 
-      // Fetch inbound messages with joined data
+      // Fetch inbound messages with joined data. The select string is dynamic:
+      // message_classifications switches to an inner join when a category/
+      // sentiment/urgency filter is active (so unmatched messages drop out);
+      // conversations is always inner-joined so we can push merged/status/
+      // assignee/snooze predicates down to the DB.
       let messagesQuery = supabase
         .from('messages')
-        .select(`
-          id,
-          conversation_id,
-          account_id,
-          channel,
-          sender_name,
-          message_text,
-          email_subject,
-          direction,
-          reply_required,
-          replied,
-          is_spam,
-          spam_reason,
-          timestamp,
-          received_at,
-          accounts!messages_account_id_fkey ( id, name, phase2_enabled ),
-          message_classifications ( category, sentiment, urgency, confidence, classified_at ),
-          ai_replies ( status, created_at ),
-          conversations!messages_conversation_id_fkey ( status, assigned_to, tags, snoozed_until, merged_into_id, assigned:users!conversations_assigned_to_fkey ( full_name ) )
-        `)
+        .select(inboxSelect)
         .eq('direction', 'inbound')
 
       // Apply view-specific spam/newsletter filters
@@ -487,6 +651,18 @@ export default function InboxPage() {
       // query correctly returns no rows instead of falling through unscoped.
       if (activeCompanyId) {
         messagesQuery = messagesQuery.in('account_id', resolvedAccountIds)
+      }
+
+      // ── Apply the server-side filter plan ──
+      // Only on the main inbox view — the spam/newsletter views render the raw
+      // `items` list (no filter bar, no `filteredItems`) and must keep showing
+      // ALL flagged messages regardless of the inbox filters. For those views
+      // we still push merged_into_id IS NULL so they match the badge counts and
+      // the old client-side `visibleMessages` drop.
+      if (inboxView === 'inbox') {
+        messagesQuery = applyInboxFilters(messagesQuery)
+      } else {
+        messagesQuery = messagesQuery.is('conversations.merged_into_id', null)
       }
 
       // Also fetch newsletter + spam counts for the badges. We inner-join
@@ -658,7 +834,12 @@ export default function InboxPage() {
       deduped.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
 
       setItems(deduped)
-      setHasMore(deduped.length >= INBOX_PAGE_SIZE)
+      // "Load More" availability keys off the RAW message count, not the
+      // collapsed row count — collapse can shrink 50 messages to far fewer
+      // rows, which previously hid the button while more pages still existed.
+      // (loadMore already used the raw `moreMessages.length` test; this aligns
+      // the initial fetch with it.)
+      setHasMore(data.length >= INBOX_PAGE_SIZE)
       setTotalCount(deduped.length)
       // Only a fetch that returned data marks the query as "on screen" — a
       // failed first load keeps skeletons (not a wrong empty state) on retry.
@@ -670,7 +851,7 @@ export default function InboxPage() {
       setInitialLoading(false)
       setRefreshing(false)
     }
-  }, [isAdmin, companyAccountIds, activeCompanyId, inboxView, dashboardFilter, filters.channel, INBOX_PAGE_SIZE])
+  }, [isAdmin, companyAccountIds, activeCompanyId, inboxView, dashboardFilter, filters.channel, channelRestricted, allowedChannels, INBOX_PAGE_SIZE, inboxFilterKey, inboxSelect, applyInboxFilters])
 
   useEffect(() => {
     fetchInboxItems()
@@ -688,17 +869,13 @@ export default function InboxPage() {
       const lastItem = items[items.length - 1]
       if (!lastItem) return
 
+      // Same dynamic select + filter plan as the initial fetch so the next page
+      // is filtered identically (server-side) and the keyset cursor walks the
+      // SAME filtered set — otherwise Load More could surface rows the active
+      // filters exclude.
       let moreQuery = supabase
         .from('messages')
-        .select(`
-          id, conversation_id, account_id, channel, sender_name, message_text,
-          email_subject, direction, reply_required, replied, is_spam, spam_reason,
-          timestamp, received_at,
-          accounts!messages_account_id_fkey ( id, name, phase2_enabled ),
-          message_classifications ( category, sentiment, urgency, confidence, classified_at ),
-          ai_replies ( status, created_at ),
-          conversations!messages_conversation_id_fkey ( status, assigned_to, tags, snoozed_until, merged_into_id, assigned:users!conversations_assigned_to_fkey ( full_name ) )
-        `)
+        .select(inboxSelect)
         .eq('direction', 'inbound')
         .lt('received_at', lastItem.timestamp)
         .order('received_at', { ascending: false })
@@ -713,6 +890,10 @@ export default function InboxPage() {
       // Scope to the active tenant. `activeCompanyId === null` is super_admin
       // combined view → run unscoped. Zero-account tenants pass `[]` → no rows.
       if (activeCompanyId) moreQuery = moreQuery.in('account_id', companyAccountIds)
+
+      // Apply the server-side filter plan (inbox view only — mirrors fetchInboxItems).
+      if (inboxView === 'inbox') moreQuery = applyInboxFilters(moreQuery)
+      else moreQuery = moreQuery.is('conversations.merged_into_id', null)
 
       const { data: moreMessages } = await moreQuery
 
@@ -795,7 +976,7 @@ export default function InboxPage() {
       setLoadingMore(false)
       loadingMoreRef.current = false
     }
-  }, [items, loadingMore, hasMore, refreshing, isAdmin, companyAccountIds, activeCompanyId, inboxView, filters.channel, INBOX_PAGE_SIZE])
+  }, [items, loadingMore, hasMore, refreshing, companyAccountIds, activeCompanyId, inboxView, filters.channel, channelRestricted, allowedChannels, INBOX_PAGE_SIZE, inboxSelect, applyInboxFilters])
 
   // Real-time: auto-refresh inbox when new messages arrive (debounced 3s)
   const debounceRef = useRef<NodeJS.Timeout | null>(null)
@@ -862,67 +1043,37 @@ export default function InboxPage() {
     listTopRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [fetchInboxItems])
 
+  // ── Client-side residue filter ────────────────────────────────────────
+  // MOST predicates now run server-side in `applyInboxFilters` (status,
+  // assignee, category, sentiment, urgency, most of priority, free-text search,
+  // saved-view account_ids/age, merged-drop) so they apply across the FULL
+  // dataset rather than the loaded page. Only three predicates remain here, and
+  // ONLY because they can't be expressed cleanly/safely in the DB query:
+  //
+  //   1. Snooze hide — a trivial derived "snoozed_until > now" comparison.
+  //      Kept client-side to avoid a second referenced-table `.or()` next to
+  //      the search `.or()`; snoozed rows are low-volume so paging is unaffected.
+  //   2. priority === 'low' — priority is DERIVED from urgency, and 'low' folds
+  //      together urgency low/NULL/unknown, which isn't a single `.eq`. The
+  //      other priorities (urgent/high/medium) ARE pushed server-side.
+  //   3. unread_only (saved view) — "unread" is per-DEVICE localStorage
+  //      (useReadStatus), not a DB column, so it can only be computed here.
   const filteredItems = useMemo(() => {
-    // Pull view-only filter fields (the ones not exposed in InboxFiltersBar).
-    // These come from the active saved view (if any) and are applied on top.
     const viewFilters = activeView?.filters ?? {}
     const nowMs = Date.now()
+    const lowPriorityOnly = filters.priority === 'low'
     return items.filter((item) => {
-      // Snooze filter: by default hide rows whose snoozed_until is still in
-      // the future. When the user toggles "Show snoozed" we keep them.
       if (!showSnoozed && item.snoozed_until && new Date(item.snoozed_until).getTime() > nowMs) {
         return false
       }
-      if (myConversationsOnly && currentUserId && item.assigned_to !== currentUserId) return false
-      if (filters.channel !== 'all' && item.channel !== filters.channel) return false
-      if (filters.category !== 'all' && item.category !== filters.category) return false
-      if (filters.sentiment !== 'all' && item.sentiment !== filters.sentiment) return false
-      if (filters.priority !== 'all' && item.priority !== filters.priority) return false
-      if (
-        filters.search &&
-        !item.subject_or_preview.toLowerCase().includes(filters.search.toLowerCase()) &&
-        !item.sender_name?.toLowerCase().includes(filters.search.toLowerCase()) &&
-        !item.account_name.toLowerCase().includes(filters.search.toLowerCase())
-      ) {
-        return false
-      }
-      // ── Saved-view-only filters ────────────────────────────────────
-      if (viewFilters.status && viewFilters.status !== 'all' && item.conversation_status !== viewFilters.status) return false
-      if (viewFilters.account_ids && viewFilters.account_ids.length > 0 && !viewFilters.account_ids.includes(item.account_id)) return false
-      if (viewFilters.assignee && viewFilters.assignee !== 'all') {
-        if (viewFilters.assignee === 'unassigned') {
-          if (item.assigned_to) return false
-        } else if (viewFilters.assignee === 'me') {
-          if (!currentUserId || item.assigned_to !== currentUserId) return false
-        } else {
-          // Specific user_id
-          if (item.assigned_to !== viewFilters.assignee) return false
-        }
-      }
-      if (viewFilters.age_hours_gt && viewFilters.age_hours_gt > 0) {
-        const ageHours = (nowMs - new Date(item.timestamp).getTime()) / 36e5
-        if (ageHours < viewFilters.age_hours_gt) return false
-      }
-      // Unread-only: unread = latest activity newer than the last time THIS
-      // device opened the conversation (per-device localStorage via isUnread).
-      // This was previously a silent no-op — the saved-view flag was stored but
-      // never applied here.
+      // priority 'low' is the one priority value not pushed to the server.
+      if (lowPriorityOnly && item.priority !== 'low') return false
+      // Unread-only: latest activity newer than the last time THIS device opened
+      // the conversation (per-device localStorage via isUnread).
       if (viewFilters.unread_only && !isUnread(item.conversation_id, item.timestamp)) return false
-      // ── Smart-inbox sidebar filters ───────────────────────────────
-      // Channel/category/sentiment are mirrored into `filters` (above) so
-      // they're already applied. Urgency/status/assignment are sidebar-only.
-      if (facetFilters.urgency && (item.urgency ?? null) !== facetFilters.urgency) return false
-      if (facetFilters.status && (item.conversation_status ?? null) !== facetFilters.status) return false
-      if (facetFilters.assignment) {
-        if (facetFilters.assignment === 'me') {
-          if (!currentUserId || item.assigned_to !== currentUserId) return false
-        } else if (facetFilters.assignment === 'unassigned') {
-          if (item.assigned_to) return false
-        }
-      }
       return true
     })
-  }, [items, filters, myConversationsOnly, currentUserId, activeView, showSnoozed, facetFilters])
+  }, [items, filters.priority, activeView, showSnoozed])
 
   // ─── Bulk-action handlers ────────────────────────────────────────────
   // Each handler runs one bulk operation. Where applicable we use .select()
