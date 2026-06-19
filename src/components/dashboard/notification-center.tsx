@@ -13,21 +13,32 @@ import {
   X,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase-client'
-import { useUser } from '@/context/user-context'
 import { cn } from '@/lib/utils'
 
 type NotificationType = 'new_message' | 'ai_reply_ready' | 'escalation' | 'system_alert'
 
-interface Notification {
+/** Row shape from public.notifications (RLS scopes SELECT/UPDATE to own rows). */
+interface NotificationRow {
+  id: string
+  type: string | null
+  title: string | null
+  body: string | null
+  link: string | null
+  conversation_id: string | null
+  read_at: string | null
+  created_at: string
+}
+
+/** Display model the dropdown renders. `read` is derived from read_at. */
+interface NotificationItem {
   id: string
   type: NotificationType
   title: string
   description: string
   timestamp: string
   read: boolean
-  conversationId?: string | null
-  senderName?: string | null
-  companyName?: string | null
+  conversationId: string | null
+  link: string | null
 }
 
 const typeConfig: Record<NotificationType, { icon: React.ElementType; color: string; bg: string }> = {
@@ -35,6 +46,14 @@ const typeConfig: Record<NotificationType, { icon: React.ElementType; color: str
   ai_reply_ready: { icon: Bot, color: 'text-teal-600', bg: 'bg-teal-100' },
   escalation: { icon: AlertTriangle, color: 'text-orange-600', bg: 'bg-orange-100' },
   system_alert: { icon: Info, color: 'text-purple-600', bg: 'bg-purple-100' },
+}
+
+/** Map a raw `type` string to a known NotificationType (default new_message). */
+function asNotificationType(t: string | null): NotificationType {
+  if (t === 'ai_reply_ready' || t === 'escalation' || t === 'system_alert' || t === 'new_message') {
+    return t
+  }
+  return 'new_message'
 }
 
 function timeAgo(dateStr: string): string {
@@ -78,14 +97,42 @@ function playNotificationSound() {
   }
 }
 
+/** Map a DB row to the dropdown display model. */
+function toItem(row: NotificationRow): NotificationItem {
+  const type = asNotificationType(row.type)
+  return {
+    id: row.id,
+    type,
+    // Titles for `new_message` embed the sender name (built server-side from
+    // raw sender_name), which can carry `<email>` brackets / wrapping quotes —
+    // cleanSenderName strips those for display. Other types have plain titles.
+    title: row.title ? cleanSenderName(row.title) : 'Notification',
+    description: row.body || '',
+    timestamp: row.created_at,
+    read: row.read_at != null,
+    conversationId: row.conversation_id,
+    link: row.link,
+  }
+}
+
+/** How often to re-poll the persisted table so the badge stays current. */
+const POLL_INTERVAL_MS = 45_000
+
 export function NotificationCenter() {
   const router = useRouter()
-  const { activeCompanyId, companyAccountIds } = useUser()
   const [open, setOpen] = useState(false)
-  const [notifications, setNotifications] = useState<Notification[]>([])
+  const [notifications, setNotifications] = useState<NotificationItem[]>([])
   const [loading, setLoading] = useState(false)
   const [permissionGranted, setPermissionGranted] = useState(false)
+
   const panelRef = useRef<HTMLDivElement>(null)
+  // Guards against setState after unmount (the bell is a hot client component
+  // with a poll interval + async fetches in flight on navigation/logout).
+  const mountedRef = useRef(true)
+  // IDs of unread rows seen in the PRIOR fetch — lets us play the sound only
+  // when a genuinely-new unread row appears, not on every poll. `null` until
+  // the first fetch completes so the initial load is silent.
+  const seenUnreadRef = useRef<Set<string> | null>(null)
 
   const unreadCount = notifications.filter((n) => !n.read).length
 
@@ -96,186 +143,142 @@ export function NotificationCenter() {
       setPermissionGranted(true)
     } else if (Notification.permission !== 'denied') {
       Notification.requestPermission().then((perm) => {
-        setPermissionGranted(perm === 'granted')
+        if (mountedRef.current) setPermissionGranted(perm === 'granted')
       })
     }
   }, [])
 
   const fetchNotifications = useCallback(async () => {
-    setLoading(true)
+    if (mountedRef.current) setLoading(true)
     try {
       const supabase = createClient()
 
-      // Fetch recent inbound messages as "new_message" notifications
-      let messagesQuery = supabase
-        .from('messages')
-        .select('id, conversation_id, sender_name, email_subject, message_text, channel, received_at, replied')
-        .eq('direction', 'inbound')
-        .order('received_at', { ascending: false })
-        .limit(10)
+      // RLS restricts SELECT to the caller's own rows (user_id = auth.uid()),
+      // so no manual user filter is required. We still resolve the user id and
+      // add a defensive .eq('user_id', …) so a future RLS change can't widen
+      // this feed cross-user.
+      const { data: { user } } = await supabase.auth.getUser()
 
-      // Fetch recent AI replies as "ai_reply_ready" notifications
-      let aiRepliesQuery = supabase
-        .from('ai_replies')
-        .select('id, message_id, status, created_at, channel, messages!ai_replies_message_id_fkey(conversation_id, sender_name)')
-        .in('status', ['pending_approval', 'edited'])
+      let query = supabase
+        .from('notifications')
+        .select('*')
         .order('created_at', { ascending: false })
-        .limit(10)
+        .limit(30)
+      if (user?.id) query = query.eq('user_id', user.id)
 
-      // Tenant scope: restrict both feeds to the active tenant's accounts.
-      // Combined view (super_admin, activeCompanyId === null) runs unscoped.
-      if (activeCompanyId) {
-        messagesQuery = messagesQuery.in('account_id', companyAccountIds)
-        aiRepliesQuery = aiRepliesQuery.in('account_id', companyAccountIds)
+      const { data, error } = await query
+      if (error) {
+        console.error('Failed to fetch notifications:', error.message)
+        return
       }
+      if (!mountedRef.current) return
 
-      const { data: messages } = await messagesQuery
-      const { data: aiReplies } = await aiRepliesQuery
+      const rows = (data as NotificationRow[] | null) ?? []
+      const items = rows.map(toItem)
 
-      const items: Notification[] = []
-
-      // Build message notifications
-      ;(messages || []).forEach((msg: any) => {
-        const sender = cleanSenderName(msg.sender_name)
-        items.push({
-          id: `msg-${msg.id}`,
-          type: 'new_message',
-          title: `New ${msg.channel} message`,
-          description: `${sender}: ${(msg.email_subject || msg.message_text || '').slice(0, 60)}`,
-          timestamp: msg.received_at,
-          read: msg.replied === true,
-          conversationId: msg.conversation_id,
-          senderName: sender,
-        })
-      })
-
-      // Build AI reply notifications
-      ;(aiReplies || []).forEach((reply: any) => {
-        const linked = reply.messages as any
-        const sender = cleanSenderName(linked?.sender_name)
-        items.push({
-          id: `ai-${reply.id}`,
-          type: 'ai_reply_ready',
-          title: 'AI draft ready for review',
-          description: `Reply for ${sender} via ${reply.channel}`,
-          timestamp: reply.created_at,
-          read: false,
-          conversationId: linked?.conversation_id || null,
-          senderName: sender,
-        })
-      })
-
-      // Sort by timestamp desc
-      items.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-
-      setNotifications(items.slice(0, 20))
-    } catch (err) {
-      console.error('Failed to fetch notifications:', err)
-    } finally {
-      setLoading(false)
-    }
-  }, [activeCompanyId, companyAccountIds])
-
-  useEffect(() => {
-    fetchNotifications()
-  }, [fetchNotifications])
-
-  // Subscribe to realtime message inserts for browser push notifications
-  useEffect(() => {
-    const supabase = createClient()
-
-    const channel = supabase
-      .channel('notification-center-realtime')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: 'direction=eq.inbound',
-        },
-        (payload: any) => {
-          const msg = payload.new
-          if (!msg || msg.direction !== 'inbound') return
-
-          // Tenant scope: when a tenant is selected, drop realtime inserts for
-          // accounts outside it. Supabase realtime filters only accept one
-          // expression (we keep direction server-side), so account scope is
-          // enforced here. Combined view (activeCompanyId === null) lets all
-          // tenants' messages through.
-          if (activeCompanyId && (!msg.account_id || !companyAccountIds.includes(msg.account_id))) {
-            return
-          }
-
-          const sender = cleanSenderName(msg.sender_name)
-          const subject = msg.email_subject || ''
-          const bodyPreview = (msg.message_text || '').slice(0, 60)
-
-          // Add to notification list (prepend, keep 20)
-          const newNotif: Notification = {
-            id: `rt-${msg.id}-${Date.now()}`,
-            type: 'new_message',
-            title: `New ${msg.channel || 'email'} message`,
-            description: `${sender}: ${subject || bodyPreview}`,
-            timestamp: msg.received_at || new Date().toISOString(),
-            read: false,
-            conversationId: msg.conversation_id || null,
-            senderName: sender,
-          }
-
-          setNotifications((prev) => [newNotif, ...prev].slice(0, 20))
-
-          // Play notification sound
+      // Sound: only when a genuinely-new UNREAD row appears vs the prior fetch.
+      const currentUnreadIds = rows.filter((r) => r.read_at == null).map((r) => r.id)
+      const prevSeen = seenUnreadRef.current
+      if (prevSeen !== null) {
+        const newUnread = currentUnreadIds.filter((id) => !prevSeen.has(id))
+        if (newUnread.length > 0) {
           playNotificationSound()
-
-          // Show browser notification only when tab is not focused
+          // Browser push only when the tab isn't focused (mirrors prior behavior).
           if (document.hidden && permissionGranted) {
-            try {
-              const browserNotif = new window.Notification(
-                `New message from ${sender}`,
-                {
-                  body: subject ? `${subject}\n${bodyPreview}` : bodyPreview,
+            const first = items.find((i) => i.id === newUnread[0])
+            if (first) {
+              try {
+                const browserNotif = new window.Notification(first.title, {
+                  body: first.description,
                   icon: '/favicon.ico',
-                  tag: `msg-${msg.id}`,
+                  tag: first.id,
+                })
+                browserNotif.onclick = () => {
+                  window.focus()
+                  const dest = first.link || (first.conversationId ? `/conversations/${first.conversationId}` : '/inbox')
+                  window.location.href = dest
+                  browserNotif.close()
                 }
-              )
-              browserNotif.onclick = () => {
-                window.focus()
-                if (msg.conversation_id) {
-                  window.location.href = `/conversations/${msg.conversation_id}`
-                }
-                browserNotif.close()
+              } catch {
+                // Browser notification creation failed
               }
-            } catch {
-              // Browser notification creation failed
             }
           }
         }
-      )
-      .subscribe()
+      }
+      seenUnreadRef.current = new Set(currentUnreadIds)
 
+      setNotifications(items)
+    } catch (err) {
+      console.error('Failed to fetch notifications:', err)
+    } finally {
+      if (mountedRef.current) setLoading(false)
+    }
+  }, [permissionGranted])
+
+  // Initial fetch + lightweight polling. Intentionally NOT Supabase realtime —
+  // `notifications` isn't in the realtime publication, so we poll (matches the
+  // old fetch-on-open behavior). The interval is cleared on unmount.
+  useEffect(() => {
+    mountedRef.current = true
+    fetchNotifications()
+    const t = setInterval(fetchNotifications, POLL_INTERVAL_MS)
     return () => {
-      supabase.removeChannel(channel)
+      mountedRef.current = false
+      clearInterval(t)
     }
-  }, [permissionGranted, activeCompanyId, companyAccountIds])
+  }, [fetchNotifications])
 
-  const markAllRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
-  }
-
-  const handleNotificationClick = (notification: Notification) => {
-    // Mark as read
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === notification.id ? { ...n, read: true } : n))
-    )
-    setOpen(false)
-    // Navigate to conversation if available
-    if (notification.conversationId) {
-      router.push(`/conversations/${notification.conversationId}`)
-    } else {
-      router.push('/inbox')
+  const markAllRead = useCallback(async () => {
+    const now = new Date().toISOString()
+    // Optimistic: flip locally first so the badge clears instantly.
+    setNotifications((prev) => prev.map((n) => (n.read ? n : { ...n, read: true })))
+    if (seenUnreadRef.current) seenUnreadRef.current = new Set()
+    try {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      // Update only the user's currently-unread rows. RLS scopes UPDATE to own
+      // rows; the .is('read_at', null) keeps it to the unread set, and the
+      // user_id filter is defensive (mirrors the select).
+      let upd = supabase.from('notifications').update({ read_at: now }).is('read_at', null)
+      if (user?.id) upd = upd.eq('user_id', user.id)
+      await upd
+    } catch {
+      // Non-critical — the next poll reconciles state from the server.
     }
-  }
+  }, [])
+
+  const handleNotificationClick = useCallback(
+    async (notification: NotificationItem) => {
+      setOpen(false)
+      // Optimistic local read flip + persist via the browser client (RLS scopes
+      // the UPDATE to the caller's own rows).
+      if (!notification.read) {
+        setNotifications((prev) =>
+          prev.map((n) => (n.id === notification.id ? { ...n, read: true } : n))
+        )
+        seenUnreadRef.current?.delete(notification.id)
+        try {
+          const supabase = createClient()
+          await supabase
+            .from('notifications')
+            .update({ read_at: new Date().toISOString() })
+            .eq('id', notification.id)
+        } catch {
+          // Non-critical — next poll reconciles.
+        }
+      }
+      // Navigate: prefer the stored link, fall back to the conversation/inbox.
+      if (notification.link) {
+        router.push(notification.link)
+      } else if (notification.conversationId) {
+        router.push(`/conversations/${notification.conversationId}`)
+      } else {
+        router.push('/inbox')
+      }
+    },
+    [router]
+  )
 
   const notificationPortal = open && typeof document !== 'undefined'
     ? createPortal(
@@ -353,13 +356,9 @@ export function NotificationCenter() {
                             <span className="flex-shrink-0 h-2 w-2 rounded-full bg-blue-500" />
                           )}
                         </div>
-                        <p className="mt-0.5 text-xs text-gray-500 truncate">
-                          {notification.description}
-                        </p>
-                        {notification.senderName && (
-                          <p className="mt-0.5 text-[11px] text-gray-400 truncate">
-                            {notification.senderName}
-                            {notification.companyName ? ` - ${notification.companyName}` : ''}
+                        {notification.description && (
+                          <p className="mt-0.5 text-xs text-gray-500 truncate">
+                            {notification.description}
                           </p>
                         )}
                         <p className="mt-0.5 text-[11px] text-gray-400">
@@ -395,8 +394,9 @@ export function NotificationCenter() {
       {/* Bell Button */}
       <button
         onClick={() => {
-          setOpen(!open)
-          if (!open) fetchNotifications()
+          const next = !open
+          setOpen(next)
+          if (next) fetchNotifications()
         }}
         className="relative flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
         aria-label="Notifications"

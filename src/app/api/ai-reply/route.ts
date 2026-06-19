@@ -552,6 +552,38 @@ export async function POST(request: Request) {
       try { await supabase.from('kb_hits').insert(kbHits) } catch { /* ignore */ }
     }
 
+    // Persisted in-app notification: tell the conversation's ASSIGNED agent a
+    // draft is ready to review. Assignee-only — unassigned drafts live in the
+    // shared inbox, so no notification. Fail-soft: createNotification never
+    // throws, and we guard the lookup so a notification failure never breaks
+    // reply generation. Reuse the service-role `supabase` + account.company_id.
+    if (aiReply) {
+      try {
+        const { data: convForNotif } = await supabase
+          .from('conversations')
+          .select('assigned_to')
+          .eq('id', conversation_id)
+          .maybeSingle()
+        const assignedTo = (convForNotif as { assigned_to?: string | null } | null)?.assigned_to ?? null
+        if (assignedTo) {
+          const { createNotification } = await import('@/lib/notifications')
+          await createNotification(
+            {
+              user_id: assignedTo,
+              company_id: account.company_id ?? null,
+              type: 'ai_reply_ready',
+              title: 'AI reply ready to review',
+              link: `/conversations/${conversation_id}`,
+              conversation_id,
+            },
+            supabase
+          )
+        }
+      } catch (notifErr) {
+        console.error('ai-reply persisted-notification error:', notifErr instanceof Error ? notifErr.message : notifErr)
+      }
+    }
+
     // Trust-mode AUTO-SEND applies ONLY to the automatic pipeline (inbound
     // message → webhook → classify → ai-reply, authenticated with the webhook
     // secret → isInternalCall). When a HUMAN clicks "Generate AI reply" they

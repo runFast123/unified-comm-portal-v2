@@ -175,6 +175,61 @@ export async function triggerNotifications(
   try {
     if (messageData.is_spam) return
 
+    // ── Persisted in-app notification (the dashboard bell) ────────────
+    // Done FIRST, independent of the admin email/Slack `notification_rules`
+    // fan-out below: the bell must fire for the assigned agent even when an
+    // account has no notification_rules configured (the common case), so it
+    // cannot sit behind this function's rule-based early returns. Only the
+    // spam guard above gates it.
+    //
+    // Recipient model: the conversation's ASSIGNED agent only. Unassigned work
+    // lives in the shared inbox, so we create NO notification when assigned_to
+    // is null (no all-agents blast). Fail-soft — a failed insert must never
+    // break ingest; createNotification never throws, and we guard the lookup.
+    // Reuse the caller's service-role `supabase`.
+    try {
+      const { data: conv } = await supabase
+        .from('conversations')
+        .select('assigned_to')
+        .eq('id', messageData.conversation_id)
+        .maybeSingle()
+      const assignedTo = (conv as { assigned_to?: string | null } | null)?.assigned_to ?? null
+      if (assignedTo) {
+        // Resolve the account's owning company (notifications.company_id).
+        const { data: acct } = await supabase
+          .from('accounts')
+          .select('company_id')
+          .eq('id', messageData.account_id)
+          .maybeSingle()
+        const companyId = (acct as { company_id?: string | null } | null)?.company_id ?? null
+
+        // Clean the sender for display here (strip `<email>` / wrapping quotes)
+        // so the stored title is render-ready and the bell doesn't have to
+        // re-clean a string that also contains the subject.
+        const rawSender = messageData.sender_name || messageData.sender_email || 'Unknown'
+        const senderLabel = rawSender.replace(/<[^>]+>/g, '').replace(/^["']+|["']+$/g, '').trim() || 'Unknown'
+        const bellChannelLabel = messageData.channel.charAt(0).toUpperCase() + messageData.channel.slice(1)
+        const title = messageData.email_subject
+          ? `${senderLabel}: ${messageData.email_subject}`
+          : `New ${bellChannelLabel.toLowerCase()} from ${senderLabel}`
+        const { createNotification } = await import('@/lib/notifications')
+        await createNotification(
+          {
+            user_id: assignedTo,
+            company_id: companyId,
+            type: 'new_message',
+            title,
+            body: messageData.message_text?.substring(0, 200) || null,
+            link: `/conversations/${messageData.conversation_id}`,
+            conversation_id: messageData.conversation_id,
+          },
+          supabase
+        )
+      }
+    } catch (notifErr) {
+      console.error('triggerNotifications persisted-notification error:', notifErr instanceof Error ? notifErr.message : notifErr)
+    }
+
     const { data: rules, error } = await supabase
       .from('notification_rules')
       .select('*')
