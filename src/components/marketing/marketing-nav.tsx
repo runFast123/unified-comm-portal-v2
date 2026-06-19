@@ -62,7 +62,7 @@ export function MarketingNav() {
           </Link>
           <Link
             href="/contact"
-            className="group inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-teal-700 to-teal-600 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-teal-700/25 transition-all hover:shadow-md hover:shadow-teal-700/30"
+            className="group inline-flex items-center gap-1.5 rounded-lg bg-[var(--brand-accent)] px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-teal-700/25 transition-all hover:brightness-110 hover:shadow-md hover:shadow-teal-700/30"
           >
             Request a demo
             <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
@@ -104,7 +104,7 @@ export function MarketingNav() {
             <Link
               href="/contact"
               onClick={() => setOpen(false)}
-              className="rounded-lg bg-gradient-to-r from-teal-700 to-teal-600 px-4 py-2.5 text-center text-sm font-semibold text-white"
+              className="rounded-lg bg-[var(--brand-accent)] px-4 py-2.5 text-center text-sm font-semibold text-white hover:brightness-110"
             >
               Request a demo
             </Link>

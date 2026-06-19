@@ -296,7 +296,9 @@ a, button, input, select, textarea {
   background-clip: text;
   -webkit-text-fill-color: transparent;
   color: transparent;
-  animation: gradient-pan 6s ease infinite;
+  /* Pans once then holds — a one-time shimmer rather than perpetual motion
+     (calmer; the hero text settles into a static brand gradient). */
+  animation: gradient-pan 6s ease-out 1 both;
 }
 
 /* Infinite marquee (logos / channels) */
@@ -305,7 +307,7 @@ a, button, input, select, textarea {
   to { transform: translateX(-50%); }
 }
 .animate-marquee {
-  animation: marquee 28s linear infinite;
+  animation: marquee 40s linear infinite;
 }
 .marquee-mask {
   -webkit-mask-image: linear-gradient(to right, transparent, #000 12%, #000 88%, transparent);

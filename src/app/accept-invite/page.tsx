@@ -222,7 +222,7 @@ function AcceptInviteCard() {
       </div>
 
       <div className="relative w-full max-w-md px-4 animate-fade-in">
-        <div className="rounded-2xl bg-white/95 backdrop-blur-sm p-8 shadow-2xl border border-white/20">
+        <div className="rounded-xl bg-white/95 backdrop-blur-sm p-8 shadow-2xl border border-white/20">
           {/* Logo */}
           <div className="mb-8 text-center">
             <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-teal-600 to-teal-700 shadow-lg shadow-teal-600/30">
@@ -256,7 +256,7 @@ function AcceptInviteCard() {
               </div>
               <Link
                 href="/login"
-                className="block w-full rounded-lg bg-gradient-to-r from-teal-700 to-teal-600 px-4 py-2.5 text-center text-sm font-semibold text-white shadow-sm shadow-teal-700/25 transition-all hover:from-teal-800 hover:to-teal-700 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-teal-500/50"
+                className="block w-full rounded-lg bg-[var(--brand-accent)] px-4 py-2.5 text-center text-sm font-semibold text-white shadow-sm shadow-teal-700/25 transition-all hover:brightness-110 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-teal-500/50"
               >
                 Go to sign in
               </Link>
@@ -306,10 +306,10 @@ function AcceptInviteCard() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     disabled={phase === 'saving'}
-                    className="w-full rounded-lg border border-gray-300 py-2.5 pl-10 pr-4 text-sm transition-all focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 hover:border-gray-400 disabled:opacity-60"
+                    className="w-full rounded-lg border border-border py-2.5 pl-10 pr-4 text-sm transition-all focus:border-[var(--brand-accent)] hover:border-zinc-400 disabled:opacity-70"
                   />
                 </div>
-                <p className="mt-1.5 text-xs text-gray-400">Must be at least 8 characters</p>
+                <p className="mt-1.5 text-xs text-zinc-500">Must be at least 8 characters</p>
               </div>
 
               <div>
@@ -334,7 +334,7 @@ function AcceptInviteCard() {
                     value={confirm}
                     onChange={(e) => setConfirm(e.target.value)}
                     disabled={phase === 'saving'}
-                    className="w-full rounded-lg border border-gray-300 py-2.5 pl-10 pr-4 text-sm transition-all focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 hover:border-gray-400 disabled:opacity-60"
+                    className="w-full rounded-lg border border-border py-2.5 pl-10 pr-4 text-sm transition-all focus:border-[var(--brand-accent)] hover:border-zinc-400 disabled:opacity-70"
                   />
                 </div>
               </div>
@@ -342,7 +342,7 @@ function AcceptInviteCard() {
               <button
                 type="submit"
                 disabled={phase === 'saving'}
-                className="w-full rounded-lg bg-gradient-to-r from-teal-700 to-teal-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-teal-700/25 transition-all hover:from-teal-800 hover:to-teal-700 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-teal-500/50 disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none flex items-center justify-center gap-2"
+                className="w-full rounded-lg bg-[var(--brand-accent)] px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-teal-700/25 transition-all hover:brightness-110 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-teal-500/50 disabled:cursor-not-allowed disabled:bg-[var(--brand-accent)]/70 disabled:shadow-none flex items-center justify-center gap-2"
               >
                 {phase === 'saving' && <Loader2 className="h-4 w-4 animate-spin" />}
                 {phase === 'saving' ? 'Saving…' : 'Set password & continue'}
@@ -352,7 +352,7 @@ function AcceptInviteCard() {
         </div>
 
         {/* Footer — mirrors (auth)/layout.tsx */}
-        <p className="mt-6 text-center text-xs text-teal-200/60">
+        <p className="mt-6 text-center text-xs text-teal-100/80">
           Powered by AI &middot; Teams &middot; Email &middot; WhatsApp
         </p>
       </div>

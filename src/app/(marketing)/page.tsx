@@ -190,9 +190,9 @@ export default function LandingPage() {
         {/* animated background */}
         <div className="pointer-events-none absolute inset-0 -z-10 bg-dot-grid opacity-70" aria-hidden="true" />
         <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden" aria-hidden="true">
-          <div className="animate-blob absolute -left-24 -top-24 h-96 w-96 rounded-full bg-teal-300/40 blur-3xl" />
-          <div className="animate-blob absolute right-0 top-10 h-80 w-80 rounded-full bg-emerald-300/40 blur-3xl [animation-delay:3s]" />
-          <div className="animate-blob absolute bottom-0 left-1/3 h-80 w-80 rounded-full bg-cyan-200/40 blur-3xl [animation-delay:6s]" />
+          <div className="animate-blob absolute -left-24 -top-24 h-96 w-96 rounded-full bg-teal-300/25 blur-3xl" />
+          <div className="animate-blob absolute right-0 top-10 h-80 w-80 rounded-full bg-emerald-300/25 blur-3xl [animation-delay:3s]" />
+          <div className="animate-blob absolute bottom-0 left-1/3 h-80 w-80 rounded-full bg-cyan-200/25 blur-3xl [animation-delay:6s]" />
         </div>
         <div className="absolute inset-x-0 bottom-0 -z-10 h-40 bg-gradient-to-b from-transparent to-white" aria-hidden="true" />
 

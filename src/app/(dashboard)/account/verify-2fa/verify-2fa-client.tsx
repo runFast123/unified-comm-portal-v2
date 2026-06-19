@@ -169,7 +169,7 @@ export default function Verify2faClient({ next }: { next: string | null }) {
             <form action={signOut} className="pt-2 text-center">
               <button
                 type="submit"
-                className="text-sm font-medium text-gray-500 underline-offset-2 hover:text-gray-700 hover:underline"
+                className="inline-flex items-center justify-center rounded-[var(--radius)] px-3 py-1.5 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-800"
               >
                 Sign out
               </button>

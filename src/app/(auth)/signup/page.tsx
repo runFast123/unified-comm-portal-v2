@@ -55,7 +55,7 @@ export default function SignupPage() {
               required
               autoComplete="name"
               placeholder="John Doe"
-              className="w-full rounded-lg border border-gray-300 py-2.5 pl-10 pr-4 text-sm transition-all focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 hover:border-gray-400"
+              className="w-full rounded-lg border border-border py-2.5 pl-10 pr-4 text-sm transition-all focus:border-[var(--brand-accent)] hover:border-zinc-400"
             />
           </div>
         </div>
@@ -78,7 +78,7 @@ export default function SignupPage() {
               required
               autoComplete="email"
               placeholder="you@example.com"
-              className="w-full rounded-lg border border-gray-300 py-2.5 pl-10 pr-4 text-sm transition-all focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 hover:border-gray-400"
+              className="w-full rounded-lg border border-border py-2.5 pl-10 pr-4 text-sm transition-all focus:border-[var(--brand-accent)] hover:border-zinc-400"
             />
           </div>
         </div>
@@ -102,16 +102,16 @@ export default function SignupPage() {
               autoComplete="new-password"
               placeholder="••••••••"
               minLength={8}
-              className="w-full rounded-lg border border-gray-300 py-2.5 pl-10 pr-4 text-sm transition-all focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 hover:border-gray-400"
+              className="w-full rounded-lg border border-border py-2.5 pl-10 pr-4 text-sm transition-all focus:border-[var(--brand-accent)] hover:border-zinc-400"
             />
           </div>
-          <p className="mt-1.5 text-xs text-gray-400">Must be at least 8 characters</p>
+          <p className="mt-1.5 text-xs text-zinc-500">Must be at least 8 characters</p>
         </div>
 
         <button
           type="submit"
           disabled={loading}
-          className="w-full rounded-lg bg-gradient-to-r from-teal-700 to-teal-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-teal-700/25 transition-all hover:from-teal-800 hover:to-teal-700 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-teal-500/50 disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none flex items-center justify-center gap-2"
+          className="w-full rounded-lg bg-[var(--brand-accent)] px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-teal-700/25 transition-all hover:brightness-110 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-teal-500/50 disabled:cursor-not-allowed disabled:bg-[var(--brand-accent)]/70 disabled:shadow-none flex items-center justify-center gap-2"
         >
           {loading && <Loader2 className="h-4 w-4 animate-spin" />}
           {loading ? 'Creating account...' : 'Create Account'}
@@ -119,16 +119,16 @@ export default function SignupPage() {
       </form>
 
       <div className="mt-6 flex items-center gap-3">
-        <div className="h-px flex-1 bg-gray-200" />
-        <span className="text-xs text-gray-400">or</span>
-        <div className="h-px flex-1 bg-gray-200" />
+        <div className="h-px flex-1 bg-border" />
+        <span className="text-xs text-zinc-500">or</span>
+        <div className="h-px flex-1 bg-border" />
       </div>
 
-      <p className="mt-4 text-center text-sm text-gray-500">
+      <p className="mt-4 text-center text-sm text-muted-foreground">
         Already have an account?{' '}
         <Link
           href="/login"
-          className="font-semibold text-teal-700 hover:text-teal-800 transition-colors"
+          className="font-semibold text-[var(--brand-accent)] hover:brightness-110 transition-colors"
         >
           Sign in
         </Link>

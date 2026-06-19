@@ -82,7 +82,7 @@ function LoginForm() {
               required
               autoComplete="email"
               placeholder="you@example.com"
-              className="w-full rounded-lg border border-gray-300 py-2.5 pl-10 pr-4 text-sm transition-all focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 hover:border-gray-400"
+              className="w-full rounded-lg border border-border py-2.5 pl-10 pr-4 text-sm transition-all focus:border-[var(--brand-accent)] hover:border-zinc-400"
             />
           </div>
         </div>
@@ -105,7 +105,7 @@ function LoginForm() {
               required
               autoComplete="current-password"
               placeholder="••••••••"
-              className="w-full rounded-lg border border-gray-300 py-2.5 pl-10 pr-4 text-sm transition-all focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 hover:border-gray-400"
+              className="w-full rounded-lg border border-border py-2.5 pl-10 pr-4 text-sm transition-all focus:border-[var(--brand-accent)] hover:border-zinc-400"
             />
           </div>
         </div>
@@ -113,14 +113,14 @@ function LoginForm() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full rounded-lg bg-gradient-to-r from-teal-700 to-teal-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-teal-700/25 transition-all hover:from-teal-800 hover:to-teal-700 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-teal-500/50 disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none flex items-center justify-center gap-2"
+          className="w-full rounded-lg bg-[var(--brand-accent)] px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-teal-700/25 transition-all hover:brightness-110 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-teal-500/50 disabled:cursor-not-allowed disabled:bg-[var(--brand-accent)]/70 disabled:shadow-none flex items-center justify-center gap-2"
         >
           {loading && <Loader2 className="h-4 w-4 animate-spin" />}
           {loading ? 'Signing in...' : 'Sign In'}
         </button>
       </form>
 
-      <p className="mt-6 text-center text-xs text-gray-400">
+      <p className="mt-6 text-center text-xs text-zinc-500">
         Access is invite-only. Ask your administrator to add you, then use the
         set-password link they share.
       </p>

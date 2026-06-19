@@ -13,7 +13,7 @@ export default function AuthLayout({
       </div>
 
       <div className="relative w-full max-w-md px-4 animate-fade-in">
-        <div className="rounded-2xl bg-white/95 backdrop-blur-sm p-8 shadow-2xl border border-white/20">
+        <div className="rounded-xl bg-white/95 backdrop-blur-sm p-8 shadow-2xl border border-white/20">
           {/* Logo */}
           <div className="mb-8 text-center">
             <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-teal-600 to-teal-700 shadow-lg shadow-teal-600/30">
@@ -32,7 +32,7 @@ export default function AuthLayout({
         </div>
 
         {/* Footer */}
-        <p className="mt-6 text-center text-xs text-teal-200/60">
+        <p className="mt-6 text-center text-xs text-teal-100/80">
           Powered by AI &middot; Teams &middot; Email &middot; WhatsApp
         </p>
       </div>
