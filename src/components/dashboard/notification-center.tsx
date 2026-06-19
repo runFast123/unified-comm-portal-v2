@@ -233,7 +233,9 @@ export function NotificationCenter() {
     const now = new Date().toISOString()
     // Optimistic: flip locally first so the badge clears instantly.
     setNotifications((prev) => prev.map((n) => (n.read ? n : { ...n, read: true })))
-    if (seenUnreadRef.current) seenUnreadRef.current = new Set()
+    // Do NOT reset seenUnreadRef here: the just-read ids must stay in the "seen"
+    // set so the next poll doesn't re-classify them as new unread (and replay the
+    // sound / browser push) in the window before the server UPDATE is visible.
     try {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
@@ -257,7 +259,9 @@ export function NotificationCenter() {
         setNotifications((prev) =>
           prev.map((n) => (n.id === notification.id ? { ...n, read: true } : n))
         )
-        seenUnreadRef.current?.delete(notification.id)
+        // Keep this id in seenUnreadRef (don't delete it): if the read UPDATE
+        // hasn't committed when the next poll runs, the row is still "seen" and
+        // won't replay the notification sound.
         try {
           const supabase = createClient()
           await supabase

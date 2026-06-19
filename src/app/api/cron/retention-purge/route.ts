@@ -160,6 +160,11 @@ export async function GET(request: Request) {
           .select('id, last_message_at, created_at')
           .in('account_id', accountIds)
           .in('status', [...PURGEABLE_STATUSES])
+          // Never purge a conversation with a pending snooze. A resolved/archived
+          // conversation can carry a future snoozed_until that the wake-snoozed
+          // cron will reopen; deleting it would silently destroy that scheduled
+          // resurfacing. Pending-snooze rows are immune regardless of age.
+          .is('snoozed_until', null)
           .or(
             `last_message_at.lt.${cutoffIso},` +
               `and(last_message_at.is.null,created_at.lt.${cutoffIso})`,

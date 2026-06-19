@@ -438,7 +438,13 @@ export default function InboxPage() {
     // is 1:1 for urgent/high/medium, but priority 'low' folds together urgency
     // 'low' + NULL + any unknown value, which isn't a single `.eq`. So:
     //   • priority urgent/high/medium → urgency .eq(same)
-    //   • priority low                → handled client-side (kept in filteredItems)
+    //   • priority low                → handled client-side (kept in filteredItems).
+    //     KNOWN LIMITATION: 'low' folds urgency low + NULL + unknown, which is
+    //     neither a single server `.eq` nor expressible as an embed filter without
+    //     an inner join that would drop the unclassified (=low) rows. So "show
+    //     only low" filters the LOADED page, not the full dataset, and can miss
+    //     low-priority conversations not yet paged in. Accepted: low is the
+    //     catch-all bucket; the actionable priorities span the full dataset.
     let urgency = facetFilters.urgency ?? null
     if (!urgency && filters.priority !== 'all' && filters.priority !== 'low') {
       urgency = filters.priority
@@ -581,6 +587,16 @@ export default function InboxPage() {
     return q
   }, [inboxFilterPlan, currentUserId])
 
+  // Keyset pagination cursor: the LAST RAW message fetched (lowest received_at,
+  // then lowest id as a deterministic tiebreaker) — NOT the collapsed row head.
+  // loadMore continues strictly below this boundary so it (a) never skips rows
+  // that share the boundary received_at, and (b) never re-fetches older messages
+  // of on-screen conversations (which would inflate message_count).
+  const cursorRef = useRef<{ receivedAt: string; id: string } | null>(null)
+  // The account-id set fetchInboxItems actually used (after the /api/user-accounts
+  // fallback). loadMore reuses it so pages 2+ are scoped identically to page 1.
+  const resolvedAccountIdsRef = useRef<string[]>(companyAccountIds)
+
   const fetchInboxItems = useCallback(async () => {
     // Filter state is part of the query identity now (filters run server-side),
     // so changing any filter is a NEW query → skeletons, not a silent refresh.
@@ -606,6 +622,8 @@ export default function InboxPage() {
           if (data.accountIds?.length > 0) resolvedAccountIds = data.accountIds
         } catch { /* use context value */ }
       }
+      // Remember the resolved set so loadMore scopes pages 2+ identically.
+      resolvedAccountIdsRef.current = resolvedAccountIds
 
       // Fetch inbound messages with joined data. The select string is dynamic:
       // message_classifications switches to an inner join when a category/
@@ -633,6 +651,9 @@ export default function InboxPage() {
 
       messagesQuery = messagesQuery
         .order('received_at', { ascending: false })
+        // id is the deterministic tiebreaker for equal received_at — required so
+        // the keyset cursor (received_at, id) can page without skipping ties.
+        .order('id', { ascending: false })
         .limit(INBOX_PAGE_SIZE)
 
       // Apply channel filter server-side (so Teams/Email/WhatsApp filter actually fetches correct data)
@@ -840,6 +861,11 @@ export default function InboxPage() {
       // (loadMore already used the raw `moreMessages.length` test; this aligns
       // the initial fetch with it.)
       setHasMore(data.length >= INBOX_PAGE_SIZE)
+      // Keyset cursor = the LAST RAW message of this page (the true page
+      // boundary by received_at,id), NOT the collapsed head — so loadMore
+      // continues from the real message stream, not a conversation's newest msg.
+      const lastRaw = data[data.length - 1] as any
+      cursorRef.current = lastRaw ? { receivedAt: (lastRaw.received_at ?? lastRaw.timestamp) as string, id: lastRaw.id } : null
       setTotalCount(deduped.length)
       // Only a fetch that returned data marks the query as "on screen" — a
       // failed first load keeps skeletons (not a wrong empty state) on retry.
@@ -866,19 +892,24 @@ export default function InboxPage() {
     loadingMoreRef.current = true
     try {
       const supabase = createClient()
-      const lastItem = items[items.length - 1]
-      if (!lastItem) return
+      // Compound keyset cursor from the previous page's last RAW message
+      // (received_at, then id). A strict .lt on received_at alone would skip
+      // rows sharing the exact boundary timestamp (they'd land on no page) and
+      // re-fetch older messages of on-screen conversations (inflating
+      // message_count). The (received_at, id) tuple walks the raw stream exactly
+      // once. Timestamps are double-quoted so the +00:00 offset can't be
+      // misparsed inside the .or() grammar. Same dynamic select + filter plan as
+      // the initial fetch so the next page is filtered identically server-side.
+      const cursor = cursorRef.current
+      if (!cursor) return
 
-      // Same dynamic select + filter plan as the initial fetch so the next page
-      // is filtered identically (server-side) and the keyset cursor walks the
-      // SAME filtered set — otherwise Load More could surface rows the active
-      // filters exclude.
       let moreQuery = supabase
         .from('messages')
         .select(inboxSelect)
         .eq('direction', 'inbound')
-        .lt('received_at', lastItem.timestamp)
+        .or(`received_at.lt."${cursor.receivedAt}",and(received_at.eq."${cursor.receivedAt}",id.lt.${cursor.id})`)
         .order('received_at', { ascending: false })
+        .order('id', { ascending: false })
         .limit(INBOX_PAGE_SIZE)
 
       if (inboxView === 'inbox') moreQuery = moreQuery.eq('is_spam', false)
@@ -889,7 +920,7 @@ export default function InboxPage() {
       if (channelRestricted) moreQuery = moreQuery.in('channel', allowedChannels)
       // Scope to the active tenant. `activeCompanyId === null` is super_admin
       // combined view → run unscoped. Zero-account tenants pass `[]` → no rows.
-      if (activeCompanyId) moreQuery = moreQuery.in('account_id', companyAccountIds)
+      if (activeCompanyId) moreQuery = moreQuery.in('account_id', resolvedAccountIdsRef.current)
 
       // Apply the server-side filter plan (inbox view only — mirrors fetchInboxItems).
       if (inboxView === 'inbox') moreQuery = applyInboxFilters(moreQuery)
@@ -898,6 +929,10 @@ export default function InboxPage() {
       const { data: moreMessages } = await moreQuery
 
       if (moreMessages && moreMessages.length > 0) {
+        // Advance the keyset cursor to this page's last RAW message (boundary).
+        const lastRaw = moreMessages[moreMessages.length - 1] as any
+        cursorRef.current = { receivedAt: (lastRaw.received_at ?? lastRaw.timestamp) as string, id: lastRaw.id }
+
         const visibleMore = moreMessages.filter((msg: any) => {
           const conv = msg.conversations as { merged_into_id?: string | null } | null
           return !conv?.merged_into_id
