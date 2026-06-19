@@ -144,7 +144,6 @@ export function MacroRunner({ conversationId, onApplied, onInsertTemplate }: Mac
       <Button
         size="sm"
         variant="secondary"
-        className="bg-teal-50 text-teal-700 hover:bg-teal-100 border border-teal-200"
         onClick={() => setOpen((v) => !v)}
         title="Apply a saved macro (sets status / tags / assignee / priority — never sends)"
       >
@@ -154,19 +153,19 @@ export function MacroRunner({ conversationId, onApplied, onInsertTemplate }: Mac
       </Button>
 
       {open && (
-        <div className="absolute bottom-full left-0 mb-1 w-80 rounded-xl border border-gray-200 bg-white shadow-xl z-20">
-          <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
-            <p className="text-sm font-semibold text-gray-800">Macros</p>
-            <span className="text-xs text-gray-400">{macros.length}</span>
+        <div className="absolute bottom-full left-0 mb-1 w-80 rounded-lg border border-border bg-white shadow-lg z-20">
+          <div className="flex items-center justify-between border-b border-border px-4 py-3">
+            <p className="text-sm font-semibold text-zinc-800">Macros</p>
+            <span className="text-xs text-zinc-500">{macros.length}</span>
           </div>
 
           <div className="max-h-72 overflow-y-auto py-1">
             {loading ? (
               <div className="flex items-center justify-center py-6">
-                <Loader2 size={18} className="animate-spin text-gray-400" />
+                <Loader2 size={18} className="animate-spin text-zinc-400" />
               </div>
             ) : macros.length === 0 ? (
-              <div className="px-4 py-5 text-center text-xs text-gray-400">
+              <div className="px-4 py-5 text-center text-xs text-zinc-500">
                 No macros yet. An admin can create them in settings.
               </div>
             ) : (
@@ -188,20 +187,20 @@ export function MacroRunner({ conversationId, onApplied, onInsertTemplate }: Mac
                     type="button"
                     onClick={() => handlePick(macro)}
                     disabled={applyingId !== null}
-                    className="w-full px-4 py-2.5 text-left transition-colors hover:bg-teal-50 disabled:opacity-60"
+                    className="w-full px-4 py-2.5 text-left transition-colors hover:bg-zinc-50 disabled:opacity-60"
                   >
                     <div className="flex items-center gap-2">
                       {isApplying ? (
-                        <Loader2 size={13} className="shrink-0 animate-spin text-teal-600" />
+                        <Loader2 size={13} className="shrink-0 animate-spin text-zinc-500" />
                       ) : (
-                        <Zap size={13} className="shrink-0 text-teal-500" />
+                        <Zap size={13} className="shrink-0 text-zinc-500" />
                       )}
-                      <span className="text-sm font-medium text-gray-800 truncate">
+                      <span className="text-sm font-medium text-zinc-800 truncate">
                         {macro.name}
                       </span>
                     </div>
                     {macro.description && (
-                      <p className="mt-0.5 line-clamp-1 text-xs text-gray-500">
+                      <p className="mt-0.5 line-clamp-1 text-xs text-zinc-500">
                         {macro.description}
                       </p>
                     )}
@@ -210,9 +209,9 @@ export function MacroRunner({ conversationId, onApplied, onInsertTemplate }: Mac
                         {chips.map((c) => (
                           <span
                             key={c}
-                            className="inline-flex items-center gap-1 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600"
+                            className="inline-flex items-center gap-1 rounded bg-zinc-100 px-1.5 py-0.5 text-[11px] font-medium text-zinc-600"
                           >
-                            <Check size={9} className="text-teal-500" />
+                            <Check size={9} className="text-zinc-500" />
                             {c}
                           </span>
                         ))}
@@ -224,8 +223,8 @@ export function MacroRunner({ conversationId, onApplied, onInsertTemplate }: Mac
             )}
           </div>
 
-          <div className="border-t border-gray-100 px-4 py-2">
-            <p className="text-[10px] leading-snug text-gray-400">
+          <div className="border-t border-border px-4 py-2">
+            <p className="text-[11px] leading-snug text-zinc-500">
               Macros update the conversation only. They never send a message — replies
               still need your approval.
             </p>

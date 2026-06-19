@@ -205,9 +205,9 @@ export function StatusDropdown({
       )}
 
       {open && (
-        <div className="absolute top-full left-0 mt-1 w-60 rounded-lg border border-gray-200 bg-white shadow-lg z-30 py-1 max-h-96 overflow-y-auto">
-          <div className="px-3 py-1.5 border-b border-gray-100">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Lifecycle</p>
+        <div className="absolute top-full left-0 mt-1 w-60 rounded-lg border border-border bg-card shadow-lg z-30 py-1 max-h-96 overflow-y-auto">
+          <div className="px-3 py-1.5 border-b border-border">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Lifecycle</p>
           </div>
           {statusOrder.map((s) => {
             const sc = statusConfig[s]
@@ -217,14 +217,14 @@ export function StatusDropdown({
                 onClick={() => handleStatusChange(s)}
                 className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm transition-colors ${
                   s === status
-                    ? 'bg-teal-50 text-teal-700 font-medium'
-                    : 'text-gray-700 hover:bg-gray-50'
+                    ? 'bg-[var(--brand-accent)]/10 text-[var(--brand-accent)] font-medium'
+                    : 'text-foreground hover:bg-muted'
                 }`}
               >
                 <span className={`inline-block h-2 w-2 rounded-full ${sc.color}`} />
                 {sc.label}
                 {s === status && (
-                  <span className="ml-auto text-xs text-teal-500">Current</span>
+                  <span className="ml-auto text-xs text-[var(--brand-accent)]">Current</span>
                 )}
               </button>
             )
@@ -235,12 +235,12 @@ export function StatusDropdown({
               the lifecycle list. */}
           {customStatuses.length > 0 && (
             <>
-              <div className="mt-1 px-3 py-1.5 border-y border-gray-100 bg-gray-50/60 flex items-center justify-between">
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Custom</p>
+              <div className="mt-1 px-3 py-1.5 border-y border-border bg-muted/60 flex items-center justify-between">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Custom</p>
                 {secondary && (
                   <button
                     onClick={() => handleSecondaryChange(null)}
-                    className="text-[10px] text-gray-500 hover:text-red-600"
+                    className="text-[11px] text-zinc-500 hover:text-red-600"
                   >
                     Clear
                   </button>
@@ -253,7 +253,7 @@ export function StatusDropdown({
                     key={cs.id}
                     onClick={() => handleSecondaryChange(isActive ? null : cs)}
                     className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm transition-colors ${
-                      isActive ? 'bg-teal-50 text-teal-700 font-medium' : 'text-gray-700 hover:bg-gray-50'
+                      isActive ? 'bg-[var(--brand-accent)]/10 text-[var(--brand-accent)] font-medium' : 'text-foreground hover:bg-muted'
                     }`}
                   >
                     <span
@@ -261,7 +261,7 @@ export function StatusDropdown({
                       style={{ background: cs.color }}
                     />
                     {cs.name}
-                    {isActive && <Check size={12} className="ml-auto text-teal-500" />}
+                    {isActive && <Check size={12} className="ml-auto text-[var(--brand-accent)]" />}
                   </button>
                 )
               })}

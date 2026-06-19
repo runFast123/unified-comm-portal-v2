@@ -112,8 +112,8 @@ export function ThreadSummary({
   // Collapsed: show a one-line preview of the actual summary instead of
   // the previous generic "AI summary available — click to expand". Per
   // UI audit C, users should be able to skim the gist without expanding.
-  // The 4-px purple left bar marks this as an AI-generated card so the
-  // "purple = AI" semantic stays consistent across the page.
+  // The 4-px teal left bar marks this as an AI-generated card so the
+  // "teal = AI" brand-accent semantic stays consistent across the page.
   if (state.kind === 'summary' && collapsed) {
     // Use the first sentence (or first 90 chars, whichever is shorter)
     // so the preview never wraps onto a second line at the typical
@@ -130,38 +130,38 @@ export function ThreadSummary({
         aria-expanded={false}
         aria-label="Expand AI summary"
         className={cn(
-          'group flex w-full items-stretch overflow-hidden rounded-lg border border-violet-200 bg-white text-left shadow-sm transition-colors',
-          'hover:bg-violet-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400'
+          'group flex w-full items-stretch overflow-hidden rounded-lg border border-teal-200 bg-card text-left shadow-sm transition-colors',
+          'hover:bg-teal-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400'
         )}
       >
-        {/* Purple left accent bar — visual marker for AI content */}
-        <span aria-hidden="true" className="w-1 shrink-0 bg-violet-500" />
+        {/* Teal left accent bar — visual marker for AI content */}
+        <span aria-hidden="true" className="w-1 shrink-0 bg-teal-600" />
         <span className="flex flex-1 items-center gap-2 px-3 py-2.5 min-w-0">
-          <Sparkles className="h-3.5 w-3.5 shrink-0 text-violet-600" />
+          <Sparkles className="h-3.5 w-3.5 shrink-0 text-teal-700" />
           <span className="flex-1 min-w-0">
-            <span className="block text-[10px] font-semibold uppercase tracking-wider text-violet-600">
+            <span className="block text-[10px] font-semibold uppercase tracking-wider text-teal-700">
               AI Summary
             </span>
-            <span className="block text-xs leading-snug text-gray-700 truncate">
+            <span className="block text-xs leading-snug text-zinc-700 truncate">
               {preview}
             </span>
           </span>
-          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-violet-500 transition-transform group-hover:translate-y-0.5" />
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-teal-600 transition-transform group-hover:translate-y-0.5" />
         </span>
       </button>
     )
   }
 
-  // Expanded card. The 4-px purple left bar matches the collapsed
-  // teaser so the "purple = AI" semantic is consistent across both
-  // states — quick visual clue that this is an AI-generated section.
+  // Expanded card. The 4-px teal left bar matches the collapsed
+  // teaser so the "teal = AI" brand-accent semantic is consistent across
+  // both states — quick visual clue that this is an AI-generated section.
   return (
-    <div className="flex items-stretch overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-      <span aria-hidden="true" className="w-1 shrink-0 bg-violet-500" />
+    <div className="flex items-stretch overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+      <span aria-hidden="true" className="w-1 shrink-0 bg-teal-600" />
       <div className="flex-1 min-w-0">
       <div className="flex items-center gap-2 px-4 py-3">
-        <Sparkles size={16} className="text-violet-600" />
-        <h3 className="flex-1 text-left text-sm font-semibold text-gray-900">
+        <Sparkles size={16} className="text-teal-700" />
+        <h3 className="flex-1 text-left text-sm font-semibold text-foreground">
           Thread Summary
         </h3>
         {state.kind === 'summary' && (
@@ -171,7 +171,7 @@ export function ThreadSummary({
               onClick={() => generate(true)}
               aria-label="Regenerate summary"
               title="Regenerate"
-              className="rounded-md p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-violet-700"
+              className="rounded-md p-1 text-zinc-500 transition-colors hover:bg-muted hover:text-teal-700"
             >
               <RefreshCw size={13} />
             </button>
@@ -180,7 +180,7 @@ export function ThreadSummary({
               onClick={() => setCollapsed(true)}
               aria-label="Collapse summary"
               title="Collapse"
-              className="rounded-md p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-violet-700"
+              className="rounded-md p-1 text-zinc-500 transition-colors hover:bg-muted hover:text-teal-700"
             >
               <ChevronUp size={13} />
             </button>
@@ -188,16 +188,16 @@ export function ThreadSummary({
         )}
       </div>
 
-      <div className="border-t border-gray-100 px-4 py-3">
+      <div className="border-t border-border px-4 py-3">
         {state.kind === 'idle' && (
           // Friendly empty state per UI audit G — small icon + one-line
           // explanation + primary action. The previous version was just
           // a bare button which read as a half-finished widget.
           <div className="flex flex-col items-center gap-3 py-2 text-center">
-            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-violet-50 ring-1 ring-violet-200">
-              <Sparkles className="h-5 w-5 text-violet-500" strokeWidth={1.75} />
+            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-teal-50 ring-1 ring-teal-200">
+              <Sparkles className="h-5 w-5 text-teal-600" strokeWidth={1.75} />
             </span>
-            <p className="max-w-[240px] text-xs text-gray-600">
+            <p className="max-w-[240px] text-xs text-zinc-600">
               Get a one-paragraph recap of the conversation, including the
               customer&apos;s ask and what&apos;s been promised.
             </p>
@@ -222,25 +222,25 @@ export function ThreadSummary({
             aria-label="Generating summary"
             className="space-y-2"
           >
-            <div className="flex items-center gap-2 text-xs text-violet-700">
+            <div className="flex items-center gap-2 text-xs text-teal-700">
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
               Summarizing conversation...
             </div>
-            <div className="space-y-1.5 rounded-xl bg-violet-50 p-3 ring-1 ring-violet-100">
-              <div className="h-2.5 w-11/12 animate-pulse rounded bg-violet-200/70" />
-              <div className="h-2.5 w-10/12 animate-pulse rounded bg-violet-200/70" />
-              <div className="h-2.5 w-7/12 animate-pulse rounded bg-violet-200/70" />
+            <div className="space-y-1.5 rounded-xl bg-teal-50 p-3 ring-1 ring-teal-100">
+              <div className="h-2.5 w-11/12 animate-pulse rounded bg-teal-200/70" />
+              <div className="h-2.5 w-10/12 animate-pulse rounded bg-teal-200/70" />
+              <div className="h-2.5 w-7/12 animate-pulse rounded bg-teal-200/70" />
             </div>
           </div>
         )}
 
         {state.kind === 'summary' && (
           <div className="space-y-2">
-            <div className="rounded-xl bg-violet-50 p-3 text-sm leading-relaxed text-violet-900 ring-1 ring-violet-200">
-              <p className="mb-1.5 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-violet-500">
+            <div className="rounded-xl bg-teal-50 p-3 text-sm leading-relaxed text-teal-900 ring-1 ring-teal-200">
+              <p className="mb-1.5 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-teal-700">
                 <span>AI summary</span>
                 {state.cached && (
-                  <span className="rounded-full bg-violet-200/60 px-1.5 py-px text-[9px] text-violet-700">
+                  <span className="rounded-full bg-teal-200/60 px-1.5 py-px text-[9px] text-teal-700">
                     cached
                   </span>
                 )}
@@ -259,7 +259,7 @@ export function ThreadSummary({
             <button
               type="button"
               onClick={() => generate(true)}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-violet-50 px-3 py-1.5 text-xs font-medium text-violet-700 ring-1 ring-violet-200 transition-colors hover:bg-violet-100"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-teal-50 px-3 py-1.5 text-xs font-medium text-teal-700 ring-1 ring-teal-200 transition-colors hover:bg-teal-100"
             >
               <RefreshCw className="h-3 w-3" />
               Regenerate
@@ -276,7 +276,7 @@ export function ThreadSummary({
             <button
               type="button"
               onClick={() => generate(false)}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-violet-50 px-3 py-1.5 text-xs font-medium text-violet-700 ring-1 ring-violet-200 transition-colors hover:bg-violet-100"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-teal-50 px-3 py-1.5 text-xs font-medium text-teal-700 ring-1 ring-teal-200 transition-colors hover:bg-teal-100"
             >
               <RefreshCw className="h-3 w-3" />
               Try again

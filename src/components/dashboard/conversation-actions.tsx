@@ -339,15 +339,15 @@ export function ConversationActions({
         {pendingAttachments.map((a) => (
           <span
             key={a.path}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-gray-50 text-gray-700 px-2.5 py-1 text-xs ring-1 ring-gray-200"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-50 text-zinc-700 px-2.5 py-1 text-xs ring-1 ring-zinc-200"
           >
-            <Paperclip size={11} className="text-gray-400" />
+            <Paperclip size={11} className="text-zinc-500" />
             <span className="max-w-[14rem] truncate">{a.filename}</span>
-            <span className="tabular-nums text-gray-400">{formatBytes(a.size)}</span>
+            <span className="tabular-nums text-zinc-500">{formatBytes(a.size)}</span>
             <button
               type="button"
               onClick={() => handleRemoveAttachment(a.path)}
-              className="ml-0.5 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-700"
+              className="ml-0.5 rounded hover:bg-zinc-200 text-zinc-500 hover:text-zinc-700"
               aria-label={`Remove ${a.filename}`}
             >
               <X size={12} />
@@ -355,7 +355,7 @@ export function ConversationActions({
           </span>
         ))}
         {uploadingAttachments && (
-          <span className="inline-flex items-center gap-1.5 rounded-lg bg-teal-50 text-teal-700 px-2.5 py-1 text-xs ring-1 ring-teal-200">
+          <span className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-100 text-zinc-700 px-2.5 py-1 text-xs ring-1 ring-zinc-200">
             <Loader2 size={11} className="animate-spin" />
             Uploading…
           </span>
@@ -1449,9 +1449,9 @@ export function ConversationActions({
   // run unconditionally — the early-return must stay below them.
   if (isReadOnly) {
     return (
-      <div className="sticky bottom-0 bg-white border-t border-gray-200 py-3 px-5 z-10">
-        <div className="flex items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">
-          <Eye size={14} className="text-gray-400" />
+      <div className="sticky bottom-0 bg-white border-t border-border py-3 px-5 z-10">
+        <div className="flex items-center gap-2 rounded-md border border-border bg-zinc-50 px-3 py-2 text-xs text-zinc-600">
+          <Eye size={14} className="text-zinc-500" />
           <span>Read-only access. Contact your admin to upgrade your role to reply, escalate, or resolve.</span>
         </div>
       </div>
@@ -1459,7 +1459,7 @@ export function ConversationActions({
   }
 
   return (
-    <div className="sticky bottom-0 bg-white border-t border-gray-200 py-4 px-5 z-10 space-y-4">
+    <div className="sticky bottom-0 bg-white border-t border-border py-4 px-5 z-10 space-y-4">
       {/* Hidden file input shared by every paperclip button in the composer */}
       <input
         ref={attachmentInputRef}
@@ -1528,23 +1528,23 @@ export function ConversationActions({
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
           onClick={(e) => { if (e.target === e.currentTarget) setShowScheduleModal(false) }}
         >
-          <div className="w-full max-w-md overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-[0_20px_60px_rgba(16,24,40,0.18),0_4px_12px_rgba(16,24,40,0.08)]">
+          <div className="w-full max-w-md overflow-hidden rounded-2xl border border-border bg-white shadow-[0_20px_60px_rgba(16,24,40,0.18),0_4px_12px_rgba(16,24,40,0.08)]">
             {/* Header */}
-            <div className="flex items-start justify-between gap-4 border-b border-gray-100 bg-gradient-to-b from-indigo-50/40 to-transparent px-6 py-4">
+            <div className="flex items-start justify-between gap-4 border-b border-border bg-gradient-to-b from-indigo-50/40 to-transparent px-6 py-4">
               <div className="flex min-w-0 items-center gap-3">
                 <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200">
                   <Clock className="h-4 w-4" strokeWidth={2} />
                 </div>
                 <div className="min-w-0">
-                  <h3 className="text-[15px] font-semibold leading-tight text-gray-900">Schedule reply</h3>
-                  <p className="mt-0.5 text-xs text-gray-500">Pick when this reply should be sent.</p>
+                  <h3 className="text-[15px] font-semibold leading-tight text-zinc-900">Schedule reply</h3>
+                  <p className="mt-0.5 text-xs text-zinc-500">Pick when this reply should be sent.</p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setShowScheduleModal(false)}
                 aria-label="Close"
-                className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700"
               >
                 <X className="h-4 w-4" strokeWidth={2} />
               </button>
@@ -1553,7 +1553,7 @@ export function ConversationActions({
             <div className="space-y-4 px-6 py-5">
               {/* Quick-pick chips */}
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">Quick picks</p>
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Quick picks</p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {[
                     { key: 'in1h', label: 'In 1 hour' },
@@ -1575,7 +1575,7 @@ export function ConversationActions({
 
               {/* Datetime picker */}
               <div>
-                <label htmlFor="schedule-datetime" className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+                <label htmlFor="schedule-datetime" className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
                   Send at
                 </label>
                 <input
@@ -1583,7 +1583,7 @@ export function ConversationActions({
                   type="datetime-local"
                   value={scheduledFor}
                   onChange={(e) => setScheduledFor(e.target.value)}
-                  className="mt-2 w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm tabular-nums text-gray-800 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  className="mt-2 w-full rounded-lg border border-zinc-300 px-3.5 py-2.5 text-sm tabular-nums text-zinc-800 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                 />
               </div>
 
@@ -1605,7 +1605,7 @@ export function ConversationActions({
             </div>
 
             {/* Footer */}
-            <div className="flex items-center justify-end gap-2 border-t border-gray-100 bg-gray-50/50 px-6 py-3">
+            <div className="flex items-center justify-end gap-2 border-t border-border bg-zinc-50/50 px-6 py-3">
               <Button size="sm" variant="ghost" onClick={() => setShowScheduleModal(false)} disabled={scheduling}>
                 Cancel
               </Button>
@@ -1640,7 +1640,7 @@ export function ConversationActions({
 
       {/* Reply compose areas */}
       {showManualReply && (
-        <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3">
+        <div className="rounded-lg border border-border bg-zinc-50 p-4 space-y-3">
           {/* Teams reply destination indicator */}
           {channel === 'teams' && teamsChatId && (
             <div className="flex items-center gap-2 rounded-lg bg-indigo-50 border border-indigo-100 px-3 py-2 text-xs text-indigo-700">
@@ -1661,10 +1661,10 @@ export function ConversationActions({
                 <Eye size={12} />
                 Preview — How the customer will see this
               </div>
-              <div className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap border-l-3 border-teal-300 pl-3">
+              <div className="text-sm text-zinc-800 leading-relaxed whitespace-pre-wrap border-l-3 border-teal-300 pl-3">
                 {manualText}
               </div>
-              <p className="text-[10px] text-gray-400">From: {accountName}</p>
+              <p className="text-[11px] text-zinc-500">From: {accountName}</p>
             </div>
           )}
           <div className="relative">
@@ -1682,7 +1682,7 @@ export function ConversationActions({
                 style={{ fontFamily: 'inherit' }}
               >
                 <span className="invisible">{manualText}</span>
-                <span className="italic text-gray-400">{smartSuggestion}</span>
+                <span className="italic text-zinc-400">{smartSuggestion}</span>
               </div>
             )}
             <textarea
@@ -1695,14 +1695,14 @@ export function ConversationActions({
               onSelect={(e) => setCursorPos(e.currentTarget.selectionStart)}
               onBlur={dismissSmartSuggestion}
               placeholder="Type your reply... (use /shortcut for quick templates)"
-              className="relative z-10 w-full rounded-lg border border-gray-300 bg-transparent px-3.5 py-3 text-sm leading-relaxed focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500 min-h-[140px] resize-y"
+              className="relative z-10 w-full rounded-lg border border-zinc-300 bg-transparent px-3.5 py-3 text-sm leading-relaxed focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500 min-h-[140px] resize-y"
               rows={6}
             />
             {/* Shortcut autocomplete popup */}
             {shortcutQuery !== null && shortcutTemplates.length > 0 && (
-              <div className="absolute bottom-full left-0 mb-1 w-full max-w-md rounded-lg border border-gray-200 bg-white shadow-lg z-30 max-h-56 overflow-y-auto">
-                <div className="px-3 py-1.5 border-b border-gray-100">
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Template Shortcuts</p>
+              <div className="absolute bottom-full left-0 mb-1 w-full max-w-md rounded-lg border border-border bg-white shadow-lg z-30 max-h-56 overflow-y-auto">
+                <div className="px-3 py-1.5 border-b border-border">
+                  <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Template Shortcuts</p>
                 </div>
                 {shortcutTemplates.map((template, idx) => (
                   <button
@@ -1710,28 +1710,28 @@ export function ConversationActions({
                     onClick={() => handleShortcutSelect(template)}
                     onMouseEnter={() => setShortcutIndex(idx)}
                     className={`w-full px-3 py-2 text-left transition-colors flex items-start gap-2 ${
-                      idx === shortcutIndex ? 'bg-teal-50' : 'hover:bg-gray-50'
+                      idx === shortcutIndex ? 'bg-teal-50' : 'hover:bg-zinc-50'
                     }`}
                   >
-                    <span className="inline-flex items-center gap-1 rounded bg-gray-100 px-1.5 py-0.5 text-xs font-mono text-gray-600 shrink-0 mt-0.5">
+                    <span className="inline-flex items-center gap-1 rounded bg-zinc-100 px-1.5 py-0.5 text-xs font-mono text-zinc-600 shrink-0 mt-0.5">
                       /{template.shortcut}
                     </span>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-gray-800 truncate">{template.title}</span>
+                        <span className="text-sm font-medium text-zinc-800 truncate">{template.title}</span>
                         {template.category && (
                           <Badge variant="default" size="sm">{template.category}</Badge>
                         )}
                       </div>
-                      <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">{template.content}</p>
+                      <p className="text-xs text-zinc-500 mt-0.5 line-clamp-1">{template.content}</p>
                     </div>
                   </button>
                 ))}
               </div>
             )}
             {shortcutQuery !== null && shortcutTemplates.length === 0 && shortcutLoaded && shortcutQuery.length > 0 && (
-              <div className="absolute bottom-full left-0 mb-1 w-64 rounded-lg border border-gray-200 bg-white shadow-lg z-30 p-3">
-                <p className="text-xs text-gray-400 text-center">No matching shortcuts</p>
+              <div className="absolute bottom-full left-0 mb-1 w-64 rounded-lg border border-border bg-white shadow-lg z-30 p-3">
+                <p className="text-xs text-zinc-500 text-center">No matching shortcuts</p>
               </div>
             )}
           </div>
@@ -1743,20 +1743,20 @@ export function ConversationActions({
               text they're editing. Hidden when the user has the toggle
               off OR the resolver returned null (no signature configured). */}
           {isEmailChannel && appendSignature && resolvedSignature && (
-            <div className="rounded-md border border-dashed border-gray-200 bg-white px-3 py-2">
+            <div className="rounded-md border border-dashed border-border bg-white px-3 py-2">
               <div className="flex items-center justify-between mb-1">
-                <span className="text-[10px] uppercase tracking-wider text-gray-400">
+                <span className="text-[11px] uppercase tracking-wider text-zinc-500">
                   Signature (will be appended)
                 </span>
                 <button
                   type="button"
                   onClick={() => persistAppendSignature(false)}
-                  className="text-[10px] text-gray-400 hover:text-gray-600 underline"
+                  className="text-[11px] text-zinc-500 hover:text-zinc-700 underline"
                 >
                   hide
                 </button>
               </div>
-              <pre className="whitespace-pre-wrap font-sans text-xs text-gray-400 italic">
+              <pre className="whitespace-pre-wrap font-sans text-xs text-zinc-500 italic">
                 {resolvedSignature}
               </pre>
             </div>
@@ -1770,7 +1770,7 @@ export function ConversationActions({
                 disabled={uploadingAttachments}
                 title="Attach files"
                 aria-label="Attach files"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 ring-1 ring-gray-200 bg-white hover:bg-gray-50 hover:text-gray-700 disabled:opacity-60"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-zinc-700 ring-1 ring-zinc-200 bg-white hover:bg-zinc-100 disabled:opacity-60"
               >
                 {uploadingAttachments ? <Loader2 size={14} className="animate-spin" /> : <Paperclip size={14} />}
               </button>
@@ -1780,7 +1780,7 @@ export function ConversationActions({
                 disabled
                 title="Attachments are only supported for Email right now"
                 aria-label="Attachments disabled on this channel"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-300 ring-1 ring-gray-200 bg-white cursor-not-allowed"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-zinc-300 ring-1 ring-zinc-200 bg-white cursor-not-allowed"
               >
                 <Paperclip size={14} />
               </button>
@@ -1803,8 +1803,8 @@ export function ConversationActions({
                 disabled={resolvedSignature === null}
                 className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-medium ring-1 transition-colors disabled:opacity-50 ${
                   appendSignature && resolvedSignature !== null
-                    ? 'bg-teal-50 text-teal-700 ring-teal-200 hover:bg-teal-100'
-                    : 'bg-gray-50 text-gray-500 ring-gray-200 hover:bg-gray-100'
+                    ? 'bg-zinc-200 text-zinc-700 ring-zinc-300 hover:bg-zinc-300'
+                    : 'bg-zinc-50 text-zinc-500 ring-zinc-200 hover:bg-zinc-100'
                 }`}
                 aria-pressed={appendSignature}
               >
@@ -1821,7 +1821,6 @@ export function ConversationActions({
             <Button
               size="sm"
               variant="secondary"
-              className="bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200"
               onClick={openScheduleModal}
               disabled={scheduling}
               title="Schedule this reply to send later"
@@ -1848,21 +1847,21 @@ export function ConversationActions({
                 draft-saved + tab-to-accept are inline only when relevant.
                 Removed the always-on "Ctrl+Enter to send" hint that was
                 turning the strip into a wall of micro-text. */}
-            <span className="text-[10px] text-gray-400 flex items-center gap-2 ml-auto">
-              {draftSaved && <span className="text-green-500">Draft saved</span>}
+            <span className="text-[11px] text-zinc-500 flex items-center gap-2 ml-auto">
+              {draftSaved && <span className="text-green-700">Draft saved</span>}
               {smartSuggestion && smartComposeEnabled && (
-                <span className="text-teal-600">
-                  <kbd className="px-1 py-0.5 bg-teal-50 rounded text-[9px] font-mono ring-1 ring-teal-200">Tab</kbd> to accept
+                <span className="text-zinc-600">
+                  <kbd className="px-1 py-0.5 bg-zinc-100 rounded text-[10px] font-mono ring-1 ring-zinc-200">Tab</kbd> to accept
                 </span>
               )}
               <button
                 type="button"
                 onClick={() => persistSmartComposeEnabled(!smartComposeEnabled)}
                 title={`Smart Compose is ${smartComposeEnabled ? 'on' : 'off'} — Ctrl+. to toggle`}
-                className={`px-1.5 py-0.5 rounded text-[10px] font-medium ring-1 transition-colors ${
+                className={`px-1.5 py-0.5 rounded text-[11px] font-medium ring-1 transition-colors ${
                   smartComposeEnabled
-                    ? 'bg-teal-50 text-teal-700 ring-teal-200 hover:bg-teal-100'
-                    : 'bg-gray-100 text-gray-500 ring-gray-200 hover:bg-gray-200'
+                    ? 'bg-zinc-200 text-zinc-700 ring-zinc-300 hover:bg-zinc-300'
+                    : 'bg-zinc-100 text-zinc-500 ring-zinc-200 hover:bg-zinc-200'
                 }`}
               >
                 AI {smartComposeEnabled ? 'On' : 'Off'}
@@ -1873,12 +1872,12 @@ export function ConversationActions({
       )}
 
       {showEditReply && (
-        <div className="rounded-lg border border-purple-200 bg-purple-50 p-3 space-y-2">
-          <p className="text-xs font-medium text-purple-700">Edit AI Draft</p>
+        <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 space-y-2">
+          <p className="text-xs font-medium text-teal-700">Edit AI Draft</p>
           <textarea
             value={editText}
             onChange={(e) => setEditText(e.target.value)}
-            className="w-full rounded-lg border border-purple-300 px-3 py-2 text-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 min-h-[120px] resize-y"
+            className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500 min-h-[120px] resize-y"
             rows={5}
           />
           <AttachmentChips />
@@ -1890,7 +1889,7 @@ export function ConversationActions({
                 disabled={uploadingAttachments}
                 title="Attach files"
                 aria-label="Attach files"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-purple-500 ring-1 ring-purple-200 bg-white hover:bg-purple-50 hover:text-purple-700 disabled:opacity-60"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-zinc-700 ring-1 ring-zinc-200 bg-white hover:bg-zinc-100 disabled:opacity-60"
               >
                 {uploadingAttachments ? <Loader2 size={14} className="animate-spin" /> : <Paperclip size={14} />}
               </button>
@@ -1900,7 +1899,7 @@ export function ConversationActions({
                 disabled
                 title="Attachments are only supported for Email right now"
                 aria-label="Attachments disabled on this channel"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-300 ring-1 ring-gray-200 bg-white cursor-not-allowed"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-zinc-300 ring-1 ring-zinc-200 bg-white cursor-not-allowed"
               >
                 <Paperclip size={14} />
               </button>
@@ -1932,7 +1931,7 @@ export function ConversationActions({
             still see the AI draft in the sidebar (read-only) and reply
             manually, but can't approve/send it as-is or edit it. */}
         {aiReplyId && aiReplyStatus === 'pending_approval' && canApproveAI && (
-          <Button size="sm" variant="success" onClick={handleApprove} disabled={loading === 'approve'}>
+          <Button size="sm" variant="primary" onClick={handleApprove} disabled={loading === 'approve'}>
             {loading === 'approve' ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={14} />}
             Approve &amp; Send
           </Button>
@@ -1941,7 +1940,6 @@ export function ConversationActions({
           <Button
             size="sm"
             variant="secondary"
-            className="bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200"
             onClick={() => { setShowEditReply(!showEditReply); setShowManualReply(false) }}
           >
             <Pencil size={14} />
@@ -1953,7 +1951,7 @@ export function ConversationActions({
             unobtrusive — appears next to Manual Reply. */}
         {aiDraftText && !canApproveAI && (
           <span
-            className="inline-flex items-center gap-1 rounded-md bg-gray-50 px-2 py-1 text-[11px] font-medium text-gray-500 ring-1 ring-gray-200"
+            className="inline-flex items-center gap-1 rounded-md bg-zinc-50 px-2 py-1 text-[11px] font-medium text-zinc-500 ring-1 ring-zinc-200"
             title="AI draft is view-only for your role — reply manually or ask a supervisor to approve."
           >
             <Eye size={11} /> AI draft (view only)
@@ -1972,7 +1970,6 @@ export function ConversationActions({
           <Button
             size="sm"
             variant="secondary"
-            className="bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200"
             onClick={() => setShowTemplates(!showTemplates)}
           >
             <FileText size={14} />
@@ -1980,21 +1977,21 @@ export function ConversationActions({
             <ChevronDown size={12} />
           </Button>
           {showTemplates && (
-            <div className="absolute bottom-full left-0 mb-1 w-[28rem] rounded-xl border border-gray-200 bg-white shadow-xl z-20">
-              <div className="px-4 py-3 border-b border-gray-100 space-y-2">
+            <div className="absolute bottom-full left-0 mb-1 w-[28rem] rounded-lg border border-border bg-white shadow-lg z-20">
+              <div className="px-4 py-3 border-b border-border space-y-2">
                 <div className="flex items-center justify-between">
-                  <p className="text-sm font-semibold text-gray-800">Canned Responses</p>
-                  <span className="text-xs text-gray-400">{templates.length} templates</span>
+                  <p className="text-sm font-semibold text-zinc-800">Canned Responses</p>
+                  <span className="text-xs text-zinc-500">{templates.length} templates</span>
                 </div>
                 {/* Search input */}
                 <div className="relative">
-                  <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500" />
                   <input
                     type="text"
                     value={templateSearch}
                     onChange={(e) => setTemplateSearch(e.target.value)}
                     placeholder="Search templates..."
-                    className="w-full rounded-md border border-gray-200 py-1.5 pl-8 pr-3 text-xs focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                    className="w-full rounded-md border border-zinc-200 py-1.5 pl-8 pr-3 text-xs focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
                   />
                 </div>
                 {/* Category filter */}
@@ -2005,7 +2002,7 @@ export function ConversationActions({
                       className={`rounded-full px-2 py-0.5 text-xs font-medium transition-colors ${
                         selectedCategory === 'all'
                           ? 'bg-teal-100 text-teal-700'
-                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
                       }`}
                     >
                       All
@@ -2017,7 +2014,7 @@ export function ConversationActions({
                         className={`rounded-full px-2 py-0.5 text-xs font-medium transition-colors ${
                           selectedCategory === cat
                             ? 'bg-teal-100 text-teal-700'
-                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
                         }`}
                       >
                         {cat}
@@ -2029,10 +2026,10 @@ export function ConversationActions({
               <div className="py-1 max-h-64 overflow-y-auto">
                 {templatesLoading ? (
                   <div className="flex items-center justify-center py-6">
-                    <Loader2 size={18} className="animate-spin text-gray-400" />
+                    <Loader2 size={18} className="animate-spin text-zinc-400" />
                   </div>
                 ) : filteredTemplates.length === 0 ? (
-                  <div className="px-3 py-4 text-center text-xs text-gray-400">
+                  <div className="px-3 py-4 text-center text-xs text-zinc-500">
                     No templates found
                   </div>
                 ) : (
@@ -2040,17 +2037,17 @@ export function ConversationActions({
                     <button
                       key={template.id}
                       onClick={() => handleTemplateSelect(template)}
-                      className="w-full px-3 py-2 text-left hover:bg-gray-50 transition-colors"
+                      className="w-full px-3 py-2 text-left hover:bg-zinc-50 transition-colors"
                     >
                       <div className="flex items-center gap-2">
-                        <p className="text-sm font-medium text-gray-800">{template.title}</p>
+                        <p className="text-sm font-medium text-zinc-800">{template.title}</p>
                         {template.category && (
                           <Badge variant="default" size="sm">{template.category}</Badge>
                         )}
                       </div>
-                      <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{template.content}</p>
+                      <p className="text-xs text-zinc-500 mt-0.5 line-clamp-2">{template.content}</p>
                       {template.usage_count > 0 && (
-                        <p className="text-xs text-gray-300 mt-0.5">Used {template.usage_count} times</p>
+                        <p className="text-xs text-zinc-400 mt-0.5">Used {template.usage_count} times</p>
                       )}
                     </button>
                   ))
@@ -2067,15 +2064,14 @@ export function ConversationActions({
           tiny "Conversation actions" caption gives the section a
           name (was a single un-labeled flex row before, which the
           UI audit called out as ambiguous-scope). */}
-      <div className="border-t border-gray-100 pt-3">
-        <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+      <div className="border-t border-border pt-3">
+        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
           Conversation actions
         </p>
         <div className="flex flex-wrap items-center gap-2">
           <Button
             size="sm"
             variant="secondary"
-            className="bg-green-50 text-green-700 hover:bg-green-100 border border-green-200"
             onClick={handleMarkReplied}
             disabled={loading === 'mark_replied'}
           >
@@ -2085,7 +2081,6 @@ export function ConversationActions({
           <Button
             size="sm"
             variant="danger"
-            className="bg-orange-500 hover:bg-orange-600"
             onClick={handleEscalate}
             disabled={loading === 'escalate'}
           >
@@ -2094,8 +2089,7 @@ export function ConversationActions({
           </Button>
           <Button
             size="sm"
-            variant="ghost"
-            className="text-green-700 border border-green-300 hover:bg-green-50"
+            variant="success"
             onClick={handleResolve}
             disabled={loading === 'resolve'}
           >

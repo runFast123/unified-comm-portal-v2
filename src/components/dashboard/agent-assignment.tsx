@@ -159,7 +159,7 @@ export function AgentAssignment({
           </Badge>
         ) : (
           <Badge variant="default" size="sm">
-            <UserCircle size={12} className="mr-0.5 text-gray-400" />
+            <UserCircle size={12} className="mr-0.5 text-muted-foreground" />
             Unassigned
           </Badge>
         )}
@@ -216,7 +216,7 @@ export function AgentAssignment({
             {loading ? (
               <Loader2 size={10} className="animate-spin mr-1" />
             ) : (
-              <UserCircle size={12} className="mr-0.5 text-gray-400" />
+              <UserCircle size={12} className="mr-0.5 text-muted-foreground" />
             )}
             Unassigned
             <ChevronDown size={10} className="ml-0.5" />
@@ -225,16 +225,16 @@ export function AgentAssignment({
       </button>
 
       {open && (
-        <div className="absolute top-full left-0 mt-1 w-64 rounded-lg border border-gray-200 bg-white shadow-lg z-30 py-1">
-          <div className="px-3 py-1.5 border-b border-gray-100">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Assign to</p>
+        <div className="absolute top-full left-0 mt-1 w-64 rounded-lg border border-border bg-card shadow-lg z-30 py-1">
+          <div className="px-3 py-1.5 border-b border-border">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Assign to</p>
           </div>
 
           {/* Unassign option */}
           {assignedTo && (
             <button
               onClick={() => handleAssign(null)}
-              className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-gray-500 hover:bg-red-50 hover:text-red-600 transition-colors border-b border-gray-100"
+              className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-muted-foreground hover:bg-red-50 hover:text-red-600 transition-colors border-b border-border"
             >
               <X size={14} />
               Unassign
@@ -243,10 +243,10 @@ export function AgentAssignment({
 
           {usersLoading ? (
             <div className="flex items-center justify-center py-6">
-              <Loader2 size={18} className="animate-spin text-gray-400" />
+              <Loader2 size={18} className="animate-spin text-muted-foreground" />
             </div>
           ) : users.length === 0 ? (
-            <div className="px-3 py-4 text-center text-xs text-gray-400">
+            <div className="px-3 py-4 text-center text-xs text-muted-foreground">
               No users found
             </div>
           ) : (
@@ -257,11 +257,11 @@ export function AgentAssignment({
                   onClick={() => handleAssign(user.id)}
                   className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm transition-colors ${
                     user.id === assignedTo
-                      ? 'bg-teal-50 text-teal-700 font-medium'
-                      : 'text-gray-700 hover:bg-gray-50'
+                      ? 'bg-[var(--brand-accent)]/10 text-[var(--brand-accent)] font-medium'
+                      : 'text-foreground hover:bg-muted'
                   }`}
                 >
-                  <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-gray-200 text-[10px] font-bold text-gray-600 shrink-0">
+                  <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-muted text-[10px] font-bold text-muted-foreground shrink-0">
                     {getInitials(user.full_name, user.email)}
                   </span>
                   <div className="min-w-0">
@@ -269,11 +269,11 @@ export function AgentAssignment({
                       {user.full_name || user.email}
                     </p>
                     {user.full_name && (
-                      <p className="text-xs text-gray-400 truncate">{user.email}</p>
+                      <p className="text-xs text-muted-foreground truncate">{user.email}</p>
                     )}
                   </div>
                   {user.id === assignedTo && (
-                    <span className="ml-auto text-xs text-teal-500 shrink-0">Current</span>
+                    <span className="ml-auto text-xs text-[var(--brand-accent)] shrink-0">Current</span>
                   )}
                 </button>
               ))}

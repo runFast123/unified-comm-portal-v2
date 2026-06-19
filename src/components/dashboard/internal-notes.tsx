@@ -398,23 +398,23 @@ export function InternalNotes({ conversationId, authorName }: InternalNotesProps
   }, [notes])
 
   return (
-    <div className="rounded-xl border border-amber-200 bg-gradient-to-b from-amber-50 to-amber-50/50 shadow-sm">
+    <div className="rounded-xl border border-border bg-card shadow-sm">
       {/* Header */}
-      <div className="flex items-center gap-2 border-b border-amber-200 px-4 py-3">
+      <div className="flex items-center gap-2 border-b border-border px-4 py-3">
         <StickyNote size={16} className="text-amber-600" />
-        <h3 className="text-sm font-semibold text-amber-900">Internal Notes</h3>
-        <span className="text-xs text-amber-500">
+        <h3 className="text-sm font-semibold text-foreground">Internal Notes</h3>
+        <span className="text-xs text-muted-foreground">
           ({notes.length} {notes.length === 1 ? 'note' : 'notes'})
         </span>
         {!useSupabase && (
-          <span className="ml-auto text-[10px] text-amber-400 bg-amber-100 px-1.5 py-0.5 rounded">
+          <span className="ml-auto text-[11px] text-zinc-500 bg-muted px-1.5 py-0.5 rounded">
             Local storage
           </span>
         )}
       </div>
 
       {/* Add note input */}
-      <div className="px-4 py-4 border-b border-amber-100 relative">
+      <div className="px-4 py-4 border-b border-border relative">
         <div className="flex gap-2">
           <textarea
             ref={inputRef}
@@ -459,12 +459,12 @@ export function InternalNotes({ conversationId, authorName }: InternalNotesProps
             }}
             placeholder="Add an internal note... type @ to mention a teammate"
             rows={2}
-            className="flex-1 resize-none rounded-lg border border-amber-200 bg-white px-3.5 py-2.5 text-sm text-gray-800 placeholder:text-amber-300 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+            className="flex-1 resize-none rounded-lg border border-border bg-card px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-[var(--brand-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--brand-accent)]"
           />
           <Button
             size="sm"
             variant="primary"
-            className="self-start bg-amber-600 hover:bg-amber-700 focus-visible:ring-amber-500"
+            className="self-start"
             onClick={handleAddNote}
             disabled={!newNoteText.trim()}
           >
@@ -476,7 +476,7 @@ export function InternalNotes({ conversationId, authorName }: InternalNotesProps
         {/* Mention popover */}
         {showPopover && (
           <div
-            className="absolute left-4 right-4 top-full z-30 mt-1 max-h-56 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg"
+            className="absolute left-4 right-4 top-full z-30 mt-1 max-h-56 overflow-y-auto rounded-lg border border-border bg-card shadow-lg"
             role="listbox"
           >
             {suggestions.map((u, i) => (
@@ -494,13 +494,13 @@ export function InternalNotes({ conversationId, authorName }: InternalNotesProps
                 onMouseEnter={() => setActiveIndex(i)}
                 className={`block w-full text-left px-3 py-2 text-sm transition-colors ${
                   i === activeIndex
-                    ? 'bg-teal-50 text-teal-900'
-                    : 'text-gray-700 hover:bg-gray-50'
+                    ? 'bg-[var(--brand-accent)]/10 text-[var(--brand-accent)]'
+                    : 'text-foreground hover:bg-muted'
                 }`}
               >
                 <div className="font-medium">{u.full_name || u.email}</div>
                 {u.full_name && (
-                  <div className="text-[11px] text-gray-500">{u.email}</div>
+                  <div className="text-[11px] text-zinc-500">{u.email}</div>
                 )}
               </button>
             ))}
@@ -511,7 +511,7 @@ export function InternalNotes({ conversationId, authorName }: InternalNotesProps
       {/* Notes list */}
       <div className="max-h-64 overflow-y-auto">
         {loading ? (
-          <div className="px-4 py-6 text-center text-xs text-amber-400">
+          <div className="px-4 py-6 text-center text-xs text-zinc-500">
             Loading notes...
           </div>
         ) : notes.length === 0 ? (
@@ -522,28 +522,28 @@ export function InternalNotes({ conversationId, authorName }: InternalNotesProps
             <span className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-50 ring-1 ring-amber-200">
               <StickyNote className="h-5 w-5 text-amber-500" strokeWidth={1.75} />
             </span>
-            <p className="text-xs font-medium text-gray-700">
+            <p className="text-xs font-medium text-foreground">
               No internal notes yet
             </p>
-            <p className="text-[11px] text-gray-500 max-w-[220px]">
+            <p className="text-[11px] text-zinc-500 max-w-[220px]">
               Notes are visible to your teammates only. Use them to track
               context, mention <span className="font-semibold">@team</span>, or jot a
               follow-up reminder.
             </p>
           </div>
         ) : (
-          <div className="divide-y divide-amber-100">
+          <div className="divide-y divide-border">
             {notes.map((note) => (
               <div
                 key={note.id}
                 className={`px-4 py-3.5 group transition-colors ${
                   note.pinned
-                    ? 'bg-amber-100/60 border-l-2 border-l-amber-400'
-                    : 'hover:bg-amber-50/80'
+                    ? 'bg-amber-50 border-l-2 border-l-amber-400'
+                    : 'hover:bg-muted'
                 }`}
               >
                 <div className="flex items-start justify-between gap-2">
-                  <p className="text-sm text-gray-800 leading-relaxed flex-1 whitespace-pre-wrap break-words">
+                  <p className="text-sm text-foreground leading-relaxed flex-1 whitespace-pre-wrap break-words">
                     {renderedBodies.get(note.id) || note.text}
                   </p>
                   <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
@@ -552,7 +552,7 @@ export function InternalNotes({ conversationId, authorName }: InternalNotesProps
                       className={`p-1 rounded transition-colors ${
                         note.pinned
                           ? 'text-amber-600 hover:text-amber-700'
-                          : 'text-gray-400 hover:text-amber-600'
+                          : 'text-zinc-500 hover:text-amber-600'
                       }`}
                       title={note.pinned ? 'Unpin' : 'Pin'}
                     >
@@ -560,14 +560,14 @@ export function InternalNotes({ conversationId, authorName }: InternalNotesProps
                     </button>
                     <button
                       onClick={() => handleDeleteNote(note.id)}
-                      className="p-1 rounded text-gray-400 hover:text-red-500 transition-colors"
+                      className="p-1 rounded text-zinc-500 hover:text-red-500 transition-colors"
                       title="Delete note"
                     >
                       <Trash2 size={12} />
                     </button>
                   </div>
                 </div>
-                <div className="mt-2 flex items-center gap-3 text-[10px] text-amber-500">
+                <div className="mt-2 flex items-center gap-3 text-[11px] text-zinc-600">
                   <span className="flex items-center gap-1">
                     <User size={9} />
                     {note.author}

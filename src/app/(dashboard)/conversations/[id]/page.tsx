@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ArrowLeft, Crown, User } from 'lucide-react'
+import { ArrowLeft, Crown, User, Clock } from 'lucide-react'
 import { ChannelIcon } from '@/components/ui/channel-icon'
 import { ConversationThread } from '@/components/dashboard/conversation-thread'
 import { ScrollToBottom } from '@/components/dashboard/scroll-to-bottom'
@@ -402,12 +402,12 @@ export default async function ConversationPage({
           status, snooze, merge, assign and CSAT into one tight band.
           Splitting into three weight tiers gives the eye an anchor and
           stops the actions from competing with the subject for focus. */}
-      <div className="shrink-0 border-b border-gray-200 bg-white px-4 sm:px-6 py-4">
+      <div className="shrink-0 border-b border-border bg-card px-4 sm:px-6 py-4">
         {/* Row 1: title + primary actions */}
         <div className="flex items-start gap-4 sm:gap-5">
           <Link
             href="/inbox"
-            className="text-gray-400 hover:text-teal-700 transition-colors shrink-0 mt-0.5"
+            className="text-muted-foreground hover:text-[var(--brand-accent)] transition-colors shrink-0 mt-0.5"
             aria-label="Back to inbox"
           >
             <ArrowLeft size={20} />
@@ -422,7 +422,7 @@ export default async function ConversationPage({
                 // 20px / semibold + tracking-tight gives the page a clear
                 // primary anchor instead of competing weights with the
                 // action buttons.
-                className="font-semibold text-gray-900 text-xl tracking-tight line-clamp-2 break-words"
+                className="font-semibold text-foreground text-xl tracking-tight line-clamp-2 break-words"
                 title={participantName}
               >
                 {participantName}
@@ -482,29 +482,29 @@ export default async function ConversationPage({
             collapse into one quiet text-xs line so they read as
             secondary info rather than competing pills. The aligned
             ml offset keeps the line indented under the title. */}
-        <div className="mt-1.5 ml-[52px] sm:ml-[62px] flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-500">
+        <div className="mt-1.5 ml-[52px] sm:ml-[62px] flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
           <span className="truncate">{accountName.replace(/\s+Teams$/i, '').replace(/\s+WhatsApp$/i, '')}</span>
-          <span className="text-gray-300">&middot;</span>
+          <span className="text-zinc-300">&middot;</span>
           <span>{getChannelLabel(channel)}</span>
           {channel !== 'teams' && conversation.participant_email && (
             <>
-              <span className="hidden sm:inline text-gray-300">&middot;</span>
+              <span className="hidden sm:inline text-zinc-300">&middot;</span>
               <span className="hidden sm:inline truncate">{conversation.participant_email}</span>
             </>
           )}
           {firstMsgAt && (
             <>
-              <span className="text-gray-300">&middot;</span>
+              <span className="text-zinc-300">&middot;</span>
               <span>Active {formatDuration(activeDurationMs)}</span>
             </>
           )}
           {lastMsgAt && (
             <>
-              <span className="text-gray-300">&middot;</span>
+              <span className="text-zinc-300">&middot;</span>
               <span>Last reply {formatDuration(lastReplyMs)} ago</span>
             </>
           )}
-          <span className="text-gray-300">&middot;</span>
+          <span className="text-zinc-300">&middot;</span>
           <span>{messageCount} msgs ({inboundCount} inbound)</span>
           {/* Meta 24-hour reply-window state (WhatsApp/Messenger/Instagram only). */}
           {replyWindow.applicable && (
@@ -526,7 +526,7 @@ export default async function ConversationPage({
           )}
           {totalConversations > 1 && (
             <>
-              <span className="text-gray-300">&middot;</span>
+              <span className="text-zinc-300">&middot;</span>
               <span>{totalConversations} conversations</span>
             </>
           )}
@@ -556,7 +556,7 @@ export default async function ConversationPage({
           </span>
           {contactProfile && (
             <>
-              <span className="h-4 w-px bg-gray-200 mx-1" aria-hidden="true" />
+              <span className="h-4 w-px bg-border mx-1" aria-hidden="true" />
               <Link
                 href={`/contacts/${contactProfile.id}`}
                 className="inline-flex items-center gap-1 rounded-full bg-teal-50 border border-teal-100 px-2.5 py-1 text-[11px] font-semibold text-teal-700 hover:bg-teal-100 transition-colors"
@@ -592,7 +592,7 @@ export default async function ConversationPage({
       {/* Follow-up reminder for conversations waiting >48h */}
       {status === 'waiting_on_customer' && lastMsgAt && lastReplyMs > 48 * 60 * 60 * 1000 && (
         <div className="shrink-0 mx-4 sm:mx-6 mt-3 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 flex items-center gap-3">
-          <span className="text-amber-500 text-lg">⏰</span>
+          <Clock className="h-5 w-5 text-amber-500" />
           <div className="flex-1">
             <p className="text-sm font-medium text-amber-800">Customer hasn&apos;t replied in {formatDuration(lastReplyMs)}</p>
             <p className="text-xs text-amber-600">Consider sending a follow-up to keep the conversation active.</p>
@@ -619,7 +619,7 @@ export default async function ConversationPage({
               <ScrollToBottom messageCount={messages.length} />
               </>
             ) : (
-              <div className="flex items-center justify-center h-full text-gray-400 text-sm">
+              <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
                 No messages in this conversation yet.
               </div>
             )}
@@ -642,7 +642,7 @@ export default async function ConversationPage({
           </ResizableBottomPanel>
 
           {/* Bottom action bar */}
-          <div className="shrink-0 border-t border-gray-200 bg-white px-4 sm:px-6 py-5">
+          <div className="shrink-0 border-t border-border bg-card px-4 sm:px-6 py-5">
             <ConversationActions
               conversationId={id}
               accountId={conversation.account_id}

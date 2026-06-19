@@ -138,12 +138,12 @@ function AttachmentChip({ att, index }: { att: AttachmentItem; index: number }) 
 
   if (isImage && resolvedUrl) {
     return (
-      <div className="rounded-lg border border-gray-200 bg-white overflow-hidden hover:shadow-sm transition-all">
+      <div className="rounded-lg border border-border bg-card overflow-hidden hover:shadow-sm transition-all">
         <a href={resolvedUrl} target="_blank" rel="noopener noreferrer">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={resolvedUrl} alt={name} className="max-h-48 w-auto rounded-t-lg object-contain bg-gray-50" loading="lazy" />
+          <img src={resolvedUrl} alt={name} className="max-h-48 w-auto rounded-t-lg object-contain bg-muted" loading="lazy" />
         </a>
-        <div className="flex items-center gap-2 px-3 py-1.5 text-xs text-gray-500">
+        <div className="flex items-center gap-2 px-3 py-1.5 text-xs text-zinc-500">
           <FileImage className="h-3 w-3" />
           <span className="truncate">{name}</span>
           {size ? <span className="shrink-0">{formatFileSize(size)}</span> : null}
@@ -155,16 +155,16 @@ function AttachmentChip({ att, index }: { att: AttachmentItem; index: number }) 
   const downloadable = !!(directUrl || path)
 
   return (
-    <div className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-3 py-2.5 hover:border-gray-300 hover:shadow-sm transition-all">
-      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gray-100 shrink-0">
+    <div className="flex items-center gap-3 rounded-lg border border-border bg-card px-3 py-2.5 hover:border-zinc-300 hover:shadow-sm transition-all">
+      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted shrink-0">
         {getFileIcon(name, mime)}
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-gray-800 truncate">{name}</p>
-        <p className="text-xs text-gray-400">
+        <p className="text-sm font-medium text-zinc-700 truncate">{name}</p>
+        <p className="text-xs text-zinc-500">
           {mime.split('/').pop()?.toUpperCase() || 'FILE'}
           {size ? ` · ${formatFileSize(size)}` : ''}
-          {failed ? <span className="text-red-400"> · unavailable</span> : null}
+          {failed ? <span className="text-red-500"> · unavailable</span> : null}
         </p>
       </div>
       {downloadable ? (
@@ -175,7 +175,7 @@ function AttachmentChip({ att, index }: { att: AttachmentItem; index: number }) 
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
-            className="flex h-8 w-8 items-center justify-center rounded-md text-gray-400 hover:text-teal-600 hover:bg-teal-50 transition-colors"
+            className="flex h-8 w-8 items-center justify-center rounded-md text-zinc-500 hover:text-teal-600 hover:bg-teal-50 transition-colors"
             title={`Download ${name}`}
           >
             <Download className="h-4 w-4" />
@@ -185,14 +185,14 @@ function AttachmentChip({ att, index }: { att: AttachmentItem; index: number }) 
             type="button"
             onClick={handleOpen}
             disabled={loading}
-            className="flex h-8 w-8 items-center justify-center rounded-md text-gray-400 hover:text-teal-600 hover:bg-teal-50 transition-colors disabled:opacity-50"
+            className="flex h-8 w-8 items-center justify-center rounded-md text-zinc-500 hover:text-teal-600 hover:bg-teal-50 transition-colors disabled:opacity-50"
             title={`Download ${name}`}
           >
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
           </button>
         )
       ) : (
-        <span className="text-[10px] text-gray-500 px-2">No file</span>
+        <span className="text-[11px] text-zinc-500 px-2">No file</span>
       )}
     </div>
   )
@@ -223,8 +223,8 @@ function renderAttachments(attachments: unknown) {
   if (items.length === 0) return null
 
   return (
-    <div className="px-4 py-3 border-t border-gray-100 bg-gray-50/50">
-      <div className="flex items-center gap-1.5 mb-2 text-xs font-medium text-gray-500 uppercase tracking-wider">
+    <div className="px-4 py-3 border-t border-border bg-muted/50">
+      <div className="flex items-center gap-1.5 mb-2 text-xs font-medium text-zinc-500 uppercase tracking-wider">
         <Paperclip size={11} />
         <span>{items.length} Attachment{items.length > 1 ? 's' : ''}</span>
       </div>
@@ -286,9 +286,9 @@ function inlineFormat(line: string, keyPrefix: string): React.ReactNode {
     } else if (tok.includes('@') && !tok.startsWith('*') && !tok.startsWith('_')) {
       out.push(<a key={k} href={`mailto:${tok}`} className="text-teal-600 hover:underline">{tok}</a>)
     } else if (tok.startsWith('**') && tok.endsWith('**')) {
-      out.push(<strong key={k} className="font-semibold text-gray-900">{tok.slice(2, -2)}</strong>)
+      out.push(<strong key={k} className="font-semibold text-foreground">{tok.slice(2, -2)}</strong>)
     } else if (tok.startsWith('*') && tok.endsWith('*')) {
-      out.push(<strong key={k} className="font-semibold text-gray-900">{tok.slice(1, -1).trim()}</strong>)
+      out.push(<strong key={k} className="font-semibold text-foreground">{tok.slice(1, -1).trim()}</strong>)
     } else if (tok.startsWith('_') && tok.endsWith('_')) {
       out.push(<em key={k}>{tok.slice(1, -1)}</em>)
     } else {
@@ -302,7 +302,7 @@ function inlineFormat(line: string, keyPrefix: string): React.ReactNode {
 
 /** Format email body - clean up quoted text, signatures, and formatting */
 function formatEmailBody(rawText: string | null): React.ReactNode {
-  if (!rawText) return <span className="text-gray-500 italic">No content</span>
+  if (!rawText) return <span className="text-muted-foreground italic">No content</span>
   // Decode HTML entities (older stored bodies carry raw &#160; / &#39; etc.) so
   // the thread renders clean text — matches the inbox-preview decode.
   const text = decodeHtmlEntities(rawText)
@@ -355,10 +355,10 @@ function formatEmailBody(rawText: string | null): React.ReactNode {
     if (formMatch && looksLikeFormValue) {
       formattedParts.push(
         <div key={i} className="flex flex-col sm:flex-row sm:gap-2 py-1">
-          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide min-w-[140px]">
+          <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wide min-w-[140px]">
             {formMatch[1].replace(/\(Optional\)/i, '').trim()}
           </span>
-          <span className="text-sm text-gray-900 font-medium">{inlineFormat(nextLine, `fv-${i}`)}</span>
+          <span className="text-sm text-foreground font-medium">{inlineFormat(nextLine, `fv-${i}`)}</span>
         </div>
       )
       i += 2
@@ -366,7 +366,7 @@ function formatEmailBody(rawText: string | null): React.ReactNode {
     }
 
     if (line === '---') {
-      formattedParts.push(<hr key={i} className="my-2 border-gray-200" />)
+      formattedParts.push(<hr key={i} className="my-2 border-border" />)
       i++
       continue
     }
@@ -375,7 +375,7 @@ function formatEmailBody(rawText: string | null): React.ReactNode {
       // Check if it's a signature line
       const isSignature = line.startsWith('Sent from') || line.startsWith('This message was sent from')
       formattedParts.push(
-        <p key={i} className={cn('text-sm leading-relaxed', isSignature ? 'text-gray-400 italic text-xs mt-2' : 'text-gray-800')}>
+        <p key={i} className={cn('text-sm leading-relaxed', isSignature ? 'text-zinc-500 italic text-xs mt-2' : 'text-zinc-700')}>
           {inlineFormat(line, `l-${i}`)}
         </p>
       )
@@ -390,14 +390,14 @@ function formatEmailBody(rawText: string | null): React.ReactNode {
       <div className="space-y-0.5">{formattedParts}</div>
       {quotedLines.length > 0 && (
         <details className="mt-3 group">
-          <summary className="cursor-pointer text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1 rounded-md hover:bg-gray-100 px-2 py-1 -mx-2 transition-colors">
+          <summary className="cursor-pointer text-xs text-zinc-500 hover:text-zinc-600 flex items-center gap-1 rounded-md hover:bg-muted px-2 py-1 -mx-2 transition-colors">
             <span className="group-open:hidden">
               &ldquo;{quotedLines[0]?.substring(0, 80)}{quotedLines[0]?.length > 80 ? '...' : ''}&rdquo;
-              <span className="ml-1 text-gray-300">+{quotedLines.length} lines</span>
+              <span className="ml-1 text-zinc-400">+{quotedLines.length} lines</span>
             </span>
             <span className="hidden group-open:inline">Hide quoted text</span>
           </summary>
-          <div className="mt-2 border-l-2 border-gray-200 pl-3 text-xs text-gray-400 whitespace-pre-wrap max-h-[200px] overflow-y-auto">
+          <div className="mt-2 border-l-2 border-border pl-3 text-xs text-zinc-500 whitespace-pre-wrap max-h-[200px] overflow-y-auto">
             {quotedLines.join('\n')}
           </div>
         </details>
@@ -418,8 +418,8 @@ function DeliveryStatus({ sent }: { sent: boolean }) {
 // AI indicator badge
 function AIBadge() {
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-purple-100 to-violet-100 border border-purple-200 px-2 py-0.5 text-[10px] font-bold text-purple-700 shadow-sm">
-      <Sparkles size={10} className="text-purple-500" />
+    <span className="inline-flex items-center gap-1 rounded-full bg-teal-50 ring-1 ring-teal-200 px-2 py-0.5 text-[10px] font-bold text-teal-700 shadow-sm">
+      <Sparkles size={10} className="text-teal-700" />
       AI
     </span>
   )
@@ -443,53 +443,53 @@ function EmailMessage({ message, isOutbound }: { message: Message; isOutbound: b
           // glance even when chronologically interleaved.
           isOutbound
             ? 'border-teal-300 bg-teal-50'
-            : 'border-gray-200 bg-white'
+            : 'border-border bg-card'
         )}
       >
         {/* Email header */}
         <div className={cn(
           'px-5 py-3.5 border-b',
-          isOutbound ? 'border-teal-200 bg-teal-100/60' : 'border-gray-100 bg-gray-50/50'
+          isOutbound ? 'border-teal-200 bg-teal-100/60' : 'border-border bg-muted/50'
         )}>
           <div className="flex items-start gap-3">
             <div className={cn(
               'flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white shadow-sm',
-              isOutbound ? 'bg-teal-600' : 'bg-indigo-500'
+              isOutbound ? 'bg-teal-600' : 'bg-zinc-500'
             )}>
               {initials || 'U'}
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-semibold text-sm text-gray-900 truncate">{name}</span>
+                <span className="font-semibold text-sm text-foreground truncate">{name}</span>
                 {/* Direction badge — leaves no doubt about who sent what. */}
                 {isOutbound ? (
                   <span className="inline-flex items-center gap-1 rounded-full bg-teal-600 text-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
                     You sent
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-indigo-100 text-indigo-700 border border-indigo-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-zinc-100 text-zinc-700 border border-zinc-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
                     Received
                   </span>
                 )}
                 {message.sender_type === 'ai' && <AIBadge />}
               </div>
               {email && email !== name && (
-                <span className="text-xs text-gray-500 truncate block mt-0.5">{email}</span>
+                <span className="text-xs text-muted-foreground truncate block mt-0.5">{email}</span>
               )}
               {message.email_subject && (
                 <div className="flex items-center gap-1.5 mt-1">
-                  <Mail size={11} className="text-gray-400 shrink-0" />
-                  <span className="text-xs font-medium text-gray-600 truncate">
+                  <Mail size={11} className="text-zinc-500 shrink-0" />
+                  <span className="text-xs font-medium text-zinc-600 truncate">
                     {message.email_subject}
                   </span>
                 </div>
               )}
             </div>
             <div className="flex flex-col items-end gap-0.5 shrink-0">
-              <span className="text-[11px] font-medium text-gray-600" suppressHydrationWarning>
+              <span className="text-[11px] font-medium text-zinc-600" suppressHydrationWarning>
                 {formatRelativeTime(message.timestamp)}
               </span>
-              <span className="text-[10px] text-gray-400 flex items-center gap-1">
+              <span className="text-[10px] text-zinc-500 flex items-center gap-1">
                 <Clock size={9} />
                 {formatTime(message.timestamp)}
               </span>
@@ -528,7 +528,7 @@ function TeamsBubble({ message, isOutbound }: { message: Message; isOutbound: bo
       <div
         className={cn(
           'flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white shadow-sm',
-          isOutbound ? 'bg-[#6264a7]' : 'bg-gradient-to-br from-gray-400 to-gray-500'
+          isOutbound ? 'bg-[var(--color-teams)]' : 'bg-zinc-500'
         )}
       >
         {initials}
@@ -536,19 +536,19 @@ function TeamsBubble({ message, isOutbound }: { message: Message; isOutbound: bo
 
       <div className="min-w-0 flex-1">
         <div className={cn('mb-1.5 flex items-center gap-2 flex-wrap', isOutbound ? 'justify-end' : 'justify-start')}>
-          <span className="text-xs font-semibold text-gray-800">{senderName}</span>
+          <span className="text-xs font-semibold text-zinc-700">{senderName}</span>
           {/* Direction badge — same pattern as EmailMessage so the inbox feels consistent. */}
           {isOutbound ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-[#6264a7] text-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
+            <span className="inline-flex items-center gap-1 rounded-full bg-[var(--color-teams)] text-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
               You sent
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1 rounded-full bg-gray-200 text-gray-700 border border-gray-300 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
+            <span className="inline-flex items-center gap-1 rounded-full bg-zinc-200 text-zinc-700 border border-zinc-300 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
               Received
             </span>
           )}
           {message.sender_type === 'ai' && <AIBadge />}
-          <span className="text-[10px] text-gray-400" suppressHydrationWarning>
+          <span className="text-[11px] text-zinc-500" suppressHydrationWarning>
             {formatRelativeTime(message.timestamp)}
           </span>
         </div>
@@ -556,17 +556,17 @@ function TeamsBubble({ message, isOutbound }: { message: Message; isOutbound: bo
         <div
           className={cn(
             'rounded-xl px-5 py-3.5 shadow-md border-2',
-            // Was a barely-there pale gradient. Now a vivid Teams purple
-            // (#6264a7 family) so outbound is unmistakable next to the
+            // Was a barely-there pale gradient. Now a vivid Teams brand fill
+            // (--color-teams) so outbound is unmistakable next to the
             // white inbound bubbles.
             isOutbound
-              ? 'bg-[#6264a7] text-white border-[#5558a3]'
-              : 'bg-white border-gray-200'
+              ? 'bg-[var(--color-teams)] text-white border-[var(--color-teams)]'
+              : 'bg-card border-border'
           )}
         >
           <p className={cn(
             'text-sm leading-relaxed whitespace-pre-wrap',
-            isOutbound ? 'text-white' : 'text-gray-900'
+            isOutbound ? 'text-white' : 'text-foreground'
           )}>
             {inlineFormat(decodeHtmlEntities(message.message_text), `tm-${message.id}`)}
           </p>
@@ -591,16 +591,16 @@ function WhatsAppBubble({ message, isOutbound }: { message: Message; isOutbound:
       <div
         className={cn(
           'relative rounded-lg px-3 py-2',
-          isOutbound ? 'bg-[#dcf8c6]' : 'bg-white border border-gray-200',
+          isOutbound ? 'bg-[#dcf8c6]' : 'bg-card border border-border',
           isOutbound ? 'rounded-tr-none' : 'rounded-tl-none'
         )}
       >
-        <p className="text-sm leading-relaxed text-gray-900 whitespace-pre-wrap">
+        <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">
           {inlineFormat(decodeHtmlEntities(message.message_text), `wa-${message.id}`)}
         </p>
         {message.attachments && renderAttachments(message.attachments)}
         <div className="mt-1 flex items-center justify-end gap-1.5">
-          <span className="text-[10px] text-gray-500" title={formatTime(message.timestamp)} suppressHydrationWarning>
+          <span className="text-[10px] text-zinc-500" title={formatTime(message.timestamp)} suppressHydrationWarning>
             {formatRelativeTime(message.timestamp)}
           </span>
           {isOutbound && <DeliveryStatus sent={true} />}
@@ -646,7 +646,7 @@ export function ConversationThread({ messages, channel, conversationId }: Conver
 
             const isAgentReply = message.direction === 'outbound'
             const label = isAgentReply ? `Agent replied in ${gapText}` : `Customer replied after ${gapText}`
-            const gapColor = gapMins < 60 ? 'text-green-500 bg-green-50 border-green-200' : gapMins < 240 ? 'text-amber-500 bg-amber-50 border-amber-200' : 'text-red-500 bg-red-50 border-red-200'
+            const gapColor = gapMins < 60 ? 'text-green-700 bg-green-50 border-green-200' : gapMins < 240 ? 'text-amber-700 bg-amber-50 border-amber-200' : 'text-red-700 bg-red-50 border-red-200'
 
             responseTimeIndicator = (
               <div className="flex justify-center py-1">
@@ -665,9 +665,9 @@ export function ConversationThread({ messages, channel, conversationId }: Conver
           <div key={message.id}>
             {showDateSep && (
               <div className="flex items-center gap-3 py-3">
-                <div className="h-px flex-1 bg-gray-200" />
-                <span className="text-xs font-medium text-gray-400">{msgDate}</span>
-                <div className="h-px flex-1 bg-gray-200" />
+                <div className="h-px flex-1 bg-border" />
+                <span className="text-xs font-medium text-zinc-500">{msgDate}</span>
+                <div className="h-px flex-1 bg-border" />
               </div>
             )}
 
