@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Copy, Check, Code2, MessagesSquare, ExternalLink, Plus, Trash2, Pencil } from 'lucide-react'
 import { useConfirm } from '@/components/ui/confirm-dialog'
+import { Skeleton } from '@/components/ui/skeleton'
 
 interface BusinessHours {
   tz: string
@@ -285,7 +286,22 @@ export default function LiveChatAdminPage() {
       )}
 
       {loading ? (
-        <div className="text-sm text-gray-500">Loading…</div>
+        <div className="space-y-6">
+          {/* widget switcher */}
+          <div className="flex flex-wrap items-center gap-2">
+            <Skeleton className="h-8 w-32 rounded-lg" />
+            <Skeleton className="h-8 w-28 rounded-lg" />
+            <Skeleton className="h-8 w-28 rounded-lg" />
+          </div>
+          {/* widget name field */}
+          <div className="space-y-2">
+            <Skeleton className="h-3 w-24 rounded" />
+            <Skeleton className="h-11 w-full max-w-lg rounded-lg" />
+          </div>
+          {/* content cards */}
+          <Skeleton className="h-40 w-full rounded-2xl" />
+          <Skeleton className="h-64 w-full rounded-2xl" />
+        </div>
       ) : widgets.length === 0 ? (
         <div className="animate-slide-up rounded-xl border bg-white p-8 text-center">
           <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-green-100">

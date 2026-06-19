@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { ShieldCheck, Loader2, Check, X, Info } from 'lucide-react'
 import { useToast } from '@/components/ui/toast'
+import { Skeleton } from '@/components/ui/skeleton'
 import { DEFAULT_ROLE_PERMISSIONS } from '@/lib/permissions/defaults'
 import {
   SECTION_PERMISSIONS,
@@ -213,8 +214,45 @@ export default function RolesPage() {
 
   if (loading) {
     return (
-      <div className="flex h-64 items-center justify-center text-gray-400">
-        <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading roles & permissions…
+      <div className="space-y-6">
+        <div className="flex items-center gap-3">
+          <ShieldCheck className="h-6 w-6 text-teal-700" />
+          <div>
+            <h1 className="text-xl font-semibold text-gray-900">Roles &amp; Permissions</h1>
+            <p className="text-sm text-gray-500">
+              Control which sections, channels, and actions each role — and individual users — can access.
+            </p>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex gap-3 border-b border-gray-200 pb-2">
+          <Skeleton className="h-5 w-16 rounded" />
+          <Skeleton className="h-5 w-16 rounded" />
+          <Skeleton className="h-5 w-20 rounded" />
+        </div>
+
+        {/* Permission matrix */}
+        <div className="overflow-hidden rounded-lg border border-gray-200">
+          <div className="flex items-center gap-3 border-b border-gray-200 bg-gray-50 px-4 py-2.5">
+            <Skeleton className="h-3 w-28 rounded" />
+            <div className="ml-auto flex gap-6">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Skeleton key={i} className="h-3 w-16 rounded" />
+              ))}
+            </div>
+          </div>
+          {Array.from({ length: 7 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-3 border-b border-gray-100 px-4 py-2.5 last:border-b-0">
+              <Skeleton className="h-4 w-40 rounded" />
+              <div className="ml-auto flex gap-6">
+                {Array.from({ length: 5 }).map((_, j) => (
+                  <Skeleton key={j} className="h-4 w-16 rounded" />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     )
   }

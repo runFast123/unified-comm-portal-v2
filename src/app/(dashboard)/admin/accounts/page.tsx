@@ -703,7 +703,7 @@ export default function AccountsPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Account Management</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Manage all {accounts.length} connected accounts and their phase settings
+            Manage all {accounts.length} connected accounts and their automation settings
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -754,15 +754,15 @@ export default function AccountsPage() {
       <div className="flex items-center gap-4">
         <Badge variant="success">
           <span className="mr-1.5 inline-block h-2 w-2 rounded-full bg-green-500" />
-          {accounts.filter((a) => a.phase1_enabled && a.phase2_enabled).length} Full System
+          {accounts.filter((a) => a.phase1_enabled && a.phase2_enabled).length} AI replies on
         </Badge>
         <Badge variant="warning">
           <span className="mr-1.5 inline-block h-2 w-2 rounded-full bg-yellow-500" />
-          {accounts.filter((a) => a.phase1_enabled && !a.phase2_enabled).length} Monitor Only
+          {accounts.filter((a) => a.phase1_enabled && !a.phase2_enabled).length} Monitoring only
         </Badge>
         <Badge variant="default">
           <span className="mr-1.5 inline-block h-2 w-2 rounded-full bg-gray-400" />
-          {accounts.filter((a) => !a.phase1_enabled).length} Idle
+          {accounts.filter((a) => !a.phase1_enabled).length} Off
         </Badge>
       </div>
 
@@ -994,7 +994,12 @@ export default function AccountsPage() {
             {/* Phase Toggles (existing functionality) */}
             <div className="rounded-lg border border-gray-200 p-4 space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-gray-700">Phase 1 - Monitor</span>
+                <div className="flex-1 mr-4">
+                  <span className="text-sm font-medium text-gray-700">Monitor inbox</span>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Ingest and classify incoming messages.
+                  </p>
+                </div>
                 <Toggle
                   checked={detailAccount.phase1_enabled}
                   onChange={(val) => {
@@ -1008,7 +1013,12 @@ export default function AccountsPage() {
                 />
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-gray-700">Phase 2 - AI Reply</span>
+                <div className="flex-1 mr-4">
+                  <span className="text-sm font-medium text-gray-700">AI auto-reply</span>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Let AI draft/send replies (requires trust mode). Master switch for AI replies.
+                  </p>
+                </div>
                 <Toggle
                   checked={detailAccount.phase2_enabled}
                   onChange={(val) => {

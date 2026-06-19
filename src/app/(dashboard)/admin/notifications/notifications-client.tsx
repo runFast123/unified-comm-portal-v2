@@ -11,6 +11,7 @@ import { useConfirm } from '@/components/ui/confirm-dialog'
 import { Select } from '@/components/ui/select'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
 import { useToast } from '@/components/ui/toast'
+import { Skeleton } from '@/components/ui/skeleton'
 import {
   Bell,
   Plus,
@@ -18,7 +19,6 @@ import {
   Edit2,
   Save,
   Link,
-  Loader2,
 } from 'lucide-react'
 
 interface NotificationRule {
@@ -401,9 +401,41 @@ export default function NotificationsClient({ companyAccountIds }: Notifications
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-24">
-        <Loader2 className="h-8 w-8 animate-spin text-teal-600" />
-        <span className="ml-3 text-gray-500">Loading notification rules...</span>
+      <div className="space-y-6 animate-fade-in">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Notification Rules</h1>
+            <p className="mt-1 text-sm text-gray-500">
+              Configure when and how you receive notifications about incoming messages
+            </p>
+          </div>
+          <Skeleton className="h-9 w-28 rounded-lg" />
+        </div>
+
+        {/* Slack Webhook Configuration */}
+        <Card title="Slack Integration" description="Configure the Slack Incoming Webhook for notifications">
+          <div className="flex items-end gap-4">
+            <Skeleton className="h-10 flex-1 rounded-lg" />
+            <Skeleton className="h-10 w-24 rounded-lg" />
+            <Skeleton className="h-10 w-20 rounded-lg" />
+          </div>
+        </Card>
+
+        {/* Rules Table */}
+        <Card>
+          <div className="flex items-center gap-4 border-b border-gray-100 pb-3">
+            <Skeleton className="h-3 w-32 rounded" />
+            <Skeleton className="ml-auto h-3 w-12 rounded" />
+          </div>
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-4 border-b border-gray-50 py-3 last:border-b-0">
+              <Skeleton className="h-4 w-4 rounded" />
+              <Skeleton className="h-4 w-40 rounded" />
+              <Skeleton className="h-5 w-16 rounded-full" />
+              <Skeleton className="ml-auto h-5 w-12 rounded-full" />
+            </div>
+          ))}
+        </Card>
       </div>
     )
   }

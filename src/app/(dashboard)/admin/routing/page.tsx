@@ -15,12 +15,12 @@ import { Toggle } from '@/components/ui/toggle'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
 import { useToast } from '@/components/ui/toast'
 import { useConfirm } from '@/components/ui/confirm-dialog'
+import { Skeleton } from '@/components/ui/skeleton'
 import {
   GitBranch,
   Plus,
   Trash2,
   Edit2,
-  Loader2,
   X,
   Tag,
   UserCheck,
@@ -344,9 +344,39 @@ export default function RoutingRulesPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-24">
-        <Loader2 className="h-8 w-8 animate-spin text-teal-600" />
-        <span className="ml-3 text-gray-500">Loading routing rules…</span>
+      <div className="space-y-6 animate-fade-in">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Routing Rules</h1>
+            <p className="mt-1 text-sm text-gray-500">
+              Auto-tag, prioritize, and assign inbound conversations based on conditions.
+            </p>
+          </div>
+          <Skeleton className="h-9 w-28 rounded-lg" />
+        </div>
+
+        {/* Summary chips */}
+        <div className="flex flex-wrap gap-2">
+          <Skeleton className="h-7 w-20 rounded-full" />
+          <Skeleton className="h-7 w-20 rounded-full" />
+          <Skeleton className="h-7 w-28 rounded-full" />
+        </div>
+
+        {/* Rules table */}
+        <div className="rounded-2xl border border-gray-200/80 bg-white p-1 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_1px_3px_rgba(16,24,40,0.06)]">
+          <div className="flex items-center gap-4 border-b border-gray-100 px-4 py-3">
+            <Skeleton className="h-3 w-32 rounded" />
+            <Skeleton className="ml-auto h-3 w-12 rounded" />
+          </div>
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-4 border-b border-gray-50 px-4 py-3 last:border-b-0">
+              <Skeleton className="h-4 w-4 rounded" />
+              <Skeleton className="h-4 w-40 rounded" />
+              <Skeleton className="h-5 w-12 rounded-full" />
+              <Skeleton className="ml-auto h-3 w-56 rounded" />
+            </div>
+          ))}
+        </div>
       </div>
     )
   }
