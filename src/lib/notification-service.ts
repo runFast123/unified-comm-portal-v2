@@ -13,6 +13,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import nodemailer from 'nodemailer'
 import { logInfo, logError } from '@/lib/logger'
 import { COMPANY_ADMIN_ROLE_NAMES } from '@/lib/roles'
+import type { NotificationType } from '@/lib/notifications'
 import type { ChannelType } from '@/types/database'
 
 export interface NotificationMessageData {
@@ -456,20 +457,26 @@ export async function sendSystemAlert(
     const link = alert.link.startsWith('http') ? alert.link : `${portalUrl}${alert.link}`
 
     let adminEmails: string[] = []
+    // Also collect the admin user ids so we can drop a persisted in-app
+    // notification (the bell) for each one after delivery. Same resolution as
+    // the email path — active company admins for the alerted account's company.
+    let adminIds: string[] = []
     if (companyId) {
       const { data: admins } = await supabase
         .from('users')
-        .select('email')
+        .select('id, email')
         .eq('company_id', companyId)
         .in('role', [...COMPANY_ADMIN_ROLE_NAMES])
         .eq('is_active', true)
+      const adminRows = (admins ?? []) as { id: string; email: string | null }[]
       adminEmails = [
         ...new Set(
-          ((admins ?? []) as { email: string | null }[])
+          adminRows
             .map((a) => a.email?.trim().toLowerCase())
             .filter((e): e is string => !!e)
         ),
       ]
+      adminIds = [...new Set(adminRows.map((a) => a.id).filter((id): id is string => !!id))]
     }
 
     const deliveries: Promise<unknown>[] = []
@@ -567,6 +574,41 @@ export async function sendSystemAlert(
       Promise.allSettled(deliveries),
       new Promise((resolve) => setTimeout(resolve, 15000)),
     ])
+
+    // ── Persisted in-app notification (the bell) — one per admin ─────────
+    // Done AFTER email/Slack so a bell-insert hiccup can't delay the urgent
+    // out-of-band channels. Map the operational alert type to the bell's
+    // notification taxonomy: SLA breach → 'escalation', channel disconnect →
+    // 'system_alert'. createNotification is itself fail-soft (never throws);
+    // the extra try/catch is belt-and-braces so the cron/poller can't break.
+    if (adminIds.length > 0) {
+      try {
+        const bellType: NotificationType =
+          alert.type === 'sla_breach' ? 'escalation' : 'system_alert'
+        const { createNotification } = await import('@/lib/notifications')
+        await Promise.allSettled(
+          adminIds.map((adminId) =>
+            createNotification(
+              {
+                user_id: adminId,
+                company_id: companyId,
+                type: bellType,
+                title: alert.title,
+                body: alert.body,
+                link: alert.link,
+              },
+              supabase
+            )
+          )
+        )
+      } catch (notifErr) {
+        console.error(
+          'sendSystemAlert persisted-notification error:',
+          notifErr instanceof Error ? notifErr.message : notifErr
+        )
+      }
+    }
+
     await logInfo('notification', 'system_alert_sent', alert.title, {
       alert_type: alert.type,
       account_id: alert.account_id,

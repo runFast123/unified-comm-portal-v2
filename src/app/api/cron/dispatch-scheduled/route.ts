@@ -7,6 +7,7 @@ import { validateWebhookSecret, getReplyToMessageId } from '@/lib/api-helpers'
 import { logError, logInfo } from '@/lib/logger'
 import { getRequestId } from '@/lib/request-id'
 import { recordMetric } from '@/lib/metrics'
+import { createNotification } from '@/lib/notifications'
 
 // Per-run cap so a backlog never monopolises one invocation.
 const BATCH_LIMIT = 50
@@ -350,6 +351,22 @@ export async function GET(request: Request) {
         kind: 'scheduled',
         requestId,
       })
+      // Also surface it in the queuing agent's bell. Reuse the admin
+      // (service-role) client; createNotification is fail-soft and no-ops on a
+      // null user_id, so an unattributed queued row simply gets no bell entry.
+      if (row.created_by) {
+        void createNotification(
+          {
+            user_id: row.created_by,
+            type: 'system_alert',
+            title: 'Your reply failed to send',
+            body: `To ${row.to_address || `the ${row.channel} recipient`}: ${message.slice(0, 200)}`,
+            link: `/conversations/${row.conversation_id}`,
+            conversation_id: row.conversation_id,
+          },
+          admin
+        )
+      }
     }
   }
 
@@ -544,6 +561,20 @@ export async function GET(request: Request) {
           kind: 'pending_send',
           requestId,
         })
+        // Mirror the scheduled-messages path: also land it in the agent's bell.
+        if (row.created_by) {
+          void createNotification(
+            {
+              user_id: row.created_by,
+              type: 'system_alert',
+              title: 'Your reply failed to send',
+              body: `To ${row.to_address || `the ${row.channel} recipient`}: ${message.slice(0, 200)}`,
+              link: `/conversations/${row.conversation_id}`,
+              conversation_id: row.conversation_id,
+            },
+            admin
+          )
+        }
       }
     }
   }
