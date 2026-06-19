@@ -34,8 +34,8 @@ export function Toggle({
         disabled={disabled}
         onClick={() => onChange(!checked)}
         className={cn(
-          'relative mt-0.5 inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2',
-          checked ? 'bg-teal-700' : 'bg-gray-200',
+          'relative mt-0.5 inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-accent)] focus-visible:ring-offset-2',
+          checked ? 'bg-[var(--brand-accent)]' : 'bg-zinc-200',
           disabled && 'cursor-not-allowed'
         )}
       >
@@ -49,10 +49,10 @@ export function Toggle({
       {(label || description) && (
         <div className="flex flex-col">
           {label && (
-            <span className="text-sm font-medium text-gray-900">{label}</span>
+            <span className="text-sm font-medium text-foreground">{label}</span>
           )}
           {description && (
-            <span className="text-sm text-gray-500">{description}</span>
+            <span className="text-sm text-muted-foreground">{description}</span>
           )}
         </div>
       )}

@@ -11,16 +11,16 @@ export interface SkeletonProps {
 }
 
 /**
- * Low-level pulsing placeholder block. Default visual matches the design
- * tokens used in KPICard / ReportCard — soft gray with generous radius.
- * Pass className overrides (e.g. `h-4 w-20 rounded-full`) for specific shapes.
+ * Low-level pulsing placeholder block. Single canonical shimmer treatment for
+ * the whole app — a token-driven `animate-pulse bg-muted` block. Pass className
+ * overrides (e.g. `h-4 w-20 rounded-full`) for specific shapes.
  */
 export function Skeleton({ className, width, height, rounded }: SkeletonProps) {
   return (
     <div
       className={cn(
-        'animate-pulse bg-gray-200/70',
-        rounded ?? 'rounded',
+        'animate-pulse bg-muted',
+        rounded ?? 'rounded-md',
         className
       )}
       style={{ width, height }}
@@ -59,15 +59,15 @@ export interface SkeletonCardProps {
 }
 
 /**
- * Card-shaped placeholder styled to mirror KPICard — rounded-2xl border,
- * soft shadow, label + large value + subtitle stack, icon chip in the corner.
+ * Card-shaped placeholder styled to mirror the real Card primitive —
+ * matching rounded-xl radius, tokenized surface + border, soft shadow,
+ * label + large value + subtitle stack, icon chip in the corner.
  */
 export function SkeletonCard({ className }: SkeletonCardProps) {
   return (
     <div
       className={cn(
-        'relative flex flex-col overflow-hidden rounded-2xl border border-gray-200/80 bg-white p-5',
-        'shadow-[0_1px_2px_rgba(16,24,40,0.04),0_1px_3px_rgba(16,24,40,0.06)]',
+        'relative flex flex-col overflow-hidden rounded-xl border border-border bg-card p-5 shadow-sm',
         className
       )}
     >
@@ -91,7 +91,7 @@ export function SkeletonCard({ className }: SkeletonCardProps) {
  */
 export function InboxRowSkeleton() {
   return (
-    <div className="flex items-center gap-3 border-b border-gray-100 px-4 py-3">
+    <div className="flex items-center gap-3 border-b border-border px-4 py-3">
       <Skeleton className="h-4 w-4 rounded" />
       <Skeleton className="h-9 w-9 flex-shrink-0 rounded-full" />
       <div className="flex-1 space-y-2">

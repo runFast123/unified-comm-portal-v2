@@ -1,6 +1,7 @@
 'use client'
 
 import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 interface PaginationProps {
@@ -41,22 +42,24 @@ export function Pagination({
 
   return (
     <div className={cn('flex items-center justify-between py-3', className)}>
-      <p className="text-xs text-gray-500">
-        Showing <span className="font-semibold text-gray-700">{start}–{end}</span> of{' '}
-        <span className="font-semibold text-gray-700">{totalItems}</span>
+      <p className="text-xs text-muted-foreground">
+        Showing <span className="font-semibold text-zinc-700">{start}–{end}</span> of{' '}
+        <span className="font-semibold text-zinc-700">{totalItems}</span>
       </p>
       <div className="flex items-center gap-1">
-        <button
+        <Button
+          variant="ghost"
+          size="icon"
           onClick={() => onPageChange(currentPage - 1)}
           disabled={currentPage <= 1}
-          className="inline-flex items-center justify-center rounded-lg px-2 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="rounded-lg disabled:opacity-40"
           aria-label="Previous page"
         >
           <ChevronLeft className="h-4 w-4" />
-        </button>
+        </Button>
         {pages.map((p, i) =>
           p === '...' ? (
-            <span key={`dots-${i}`} className="px-1 text-xs text-gray-400">…</span>
+            <span key={`dots-${i}`} className="px-1 text-xs text-zinc-500">…</span>
           ) : (
             <button
               key={p}
@@ -64,22 +67,24 @@ export function Pagination({
               className={cn(
                 'inline-flex items-center justify-center rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors min-w-[32px]',
                 currentPage === p
-                  ? 'bg-teal-600 text-white shadow-sm'
-                  : 'text-gray-600 hover:bg-gray-100'
+                  ? 'bg-[var(--brand-accent)] text-white shadow-sm'
+                  : 'text-zinc-600 hover:bg-zinc-100'
               )}
             >
               {p}
             </button>
           )
         )}
-        <button
+        <Button
+          variant="ghost"
+          size="icon"
           onClick={() => onPageChange(currentPage + 1)}
           disabled={currentPage >= totalPages}
-          className="inline-flex items-center justify-center rounded-lg px-2 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="rounded-lg disabled:opacity-40"
           aria-label="Next page"
         >
           <ChevronRight className="h-4 w-4" />
-        </button>
+        </Button>
       </div>
     </div>
   )

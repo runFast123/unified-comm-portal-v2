@@ -4,6 +4,7 @@ import React, { createContext, useCallback, useContext, useState, useEffect, use
 import { createPortal } from 'react-dom'
 import { CheckCircle2, XCircle, AlertTriangle, Info, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
 
 /* -------------------------------------------------------------------------- */
 /*  Types                                                                     */
@@ -56,28 +57,28 @@ const typeConfig: Record<
     bg: 'bg-teal-50',
     border: 'border-teal-200',
     text: 'text-teal-900',
-    iconColor: 'text-teal-600',
+    iconColor: 'text-emerald-700',
   },
   error: {
     icon: XCircle,
     bg: 'bg-red-50',
     border: 'border-red-200',
     text: 'text-red-900',
-    iconColor: 'text-red-600',
+    iconColor: 'text-red-700',
   },
   warning: {
     icon: AlertTriangle,
     bg: 'bg-amber-50',
     border: 'border-amber-200',
     text: 'text-amber-900',
-    iconColor: 'text-amber-600',
+    iconColor: 'text-amber-700',
   },
   info: {
     icon: Info,
     bg: 'bg-blue-50',
     border: 'border-blue-200',
     text: 'text-blue-900',
-    iconColor: 'text-blue-600',
+    iconColor: 'text-blue-700',
   },
 }
 
@@ -165,13 +166,15 @@ function Toast({
           {item.action.label}
         </button>
       )}
-      <button
+      <Button
+        variant="ghost"
+        size="icon"
         onClick={handleClose}
-        className="shrink-0 rounded p-0.5 text-gray-400 hover:bg-black/5 hover:text-gray-600 transition-colors"
+        className="shrink-0 text-zinc-500 hover:bg-black/5"
         aria-label="Dismiss"
       >
         <X className="h-4 w-4" />
-      </button>
+      </Button>
     </div>
   )
 }

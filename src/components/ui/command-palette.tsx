@@ -209,21 +209,21 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
       <div
         role="dialog"
         aria-modal="true"
-        className="relative z-10 w-full max-w-lg rounded-xl bg-white shadow-2xl ring-1 ring-gray-200 overflow-hidden"
+        className="relative z-10 w-full max-w-lg rounded-xl bg-card shadow-2xl ring-1 ring-border overflow-hidden"
         onKeyDown={handleKeyDown}
       >
         {/* Search input */}
-        <div className="flex items-center gap-3 border-b border-gray-100 px-4 py-3">
-          <Search className="h-5 w-5 text-gray-400 flex-shrink-0" />
+        <div className="flex items-center gap-3 border-b border-border px-4 py-3">
+          <Search className="h-5 w-5 text-zinc-500 flex-shrink-0" />
           <input
             ref={inputRef}
             type="text"
             placeholder="Search messages, accounts, pages..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            className="flex-1 bg-transparent text-sm text-gray-900 placeholder:text-gray-400 outline-none"
+            className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
           />
-          <kbd className="hidden sm:inline-flex items-center gap-0.5 rounded border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[10px] font-medium text-gray-400">
+          <kbd className="hidden sm:inline-flex items-center gap-0.5 rounded border border-border bg-zinc-50 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
             ESC
           </kbd>
         </div>
@@ -231,13 +231,13 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
         {/* Results */}
         <div className="max-h-80 overflow-y-auto py-2">
           {query.trim() === '' && (
-            <p className="px-4 py-6 text-center text-sm text-gray-400">
+            <p className="px-4 py-6 text-center text-sm text-muted-foreground">
               Start typing to search...
             </p>
           )}
 
           {query.trim() !== '' && results.length === 0 && !loading && (
-            <p className="px-4 py-6 text-center text-sm text-gray-400">
+            <p className="px-4 py-6 text-center text-sm text-muted-foreground">
               No results found.
             </p>
           )}
@@ -247,7 +247,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
             if (items.length === 0) return null
             return (
               <div key={type}>
-                <p className="px-4 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                <p className="px-4 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                   {groupLabels[type]}
                 </p>
                 {items.map((result) => {
@@ -260,13 +260,13 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
                       className={cn(
                         'flex w-full items-center gap-3 px-4 py-2 text-left text-sm transition-colors',
                         idx === activeIndex
-                          ? 'bg-teal-50 text-teal-900'
-                          : 'text-gray-700 hover:bg-gray-50'
+                          ? 'bg-[var(--brand-accent)]/10 text-[var(--brand-accent)]'
+                          : 'text-zinc-700 hover:bg-zinc-50'
                       )}
                     >
                       <span className={cn(
                         'flex-shrink-0',
-                        idx === activeIndex ? 'text-teal-600' : 'text-gray-400'
+                        idx === activeIndex ? 'text-[var(--brand-accent)]' : 'text-zinc-500'
                       )}>
                         {result.icon}
                       </span>
@@ -274,12 +274,12 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
                         {result.title}
                       </span>
                       {result.subtitle && (
-                        <span className="text-xs text-gray-400">
+                        <span className="text-xs text-muted-foreground">
                           {result.subtitle}
                         </span>
                       )}
                       {idx === activeIndex && (
-                        <ArrowRight className="h-3.5 w-3.5 text-teal-500 flex-shrink-0" />
+                        <ArrowRight className="h-3.5 w-3.5 text-[var(--brand-accent)] flex-shrink-0" />
                       )}
                     </button>
                   )
@@ -290,20 +290,20 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
 
           {loading && (
             <div className="flex items-center justify-center py-4">
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-teal-600 border-t-transparent" />
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--brand-accent)] border-t-transparent" />
             </div>
           )}
         </div>
 
         {/* Footer hint */}
-        <div className="flex items-center justify-between border-t border-gray-100 px-4 py-2 text-[11px] text-gray-400">
+        <div className="flex items-center justify-between border-t border-border px-4 py-2 text-[11px] text-muted-foreground">
           <span className="flex items-center gap-1">
             <Command className="h-3 w-3" /> K to toggle
           </span>
           <span>
-            <kbd className="rounded border border-gray-200 bg-gray-50 px-1 py-0.5 text-[10px]">&#8593;&#8595;</kbd>
+            <kbd className="rounded border border-border bg-zinc-50 px-1 py-0.5 text-[10px]">&#8593;&#8595;</kbd>
             {' '}navigate{' '}
-            <kbd className="rounded border border-gray-200 bg-gray-50 px-1 py-0.5 text-[10px]">&#9166;</kbd>
+            <kbd className="rounded border border-border bg-zinc-50 px-1 py-0.5 text-[10px]">&#9166;</kbd>
             {' '}select
           </span>
         </div>
