@@ -4,9 +4,6 @@ import {
   ArrowRight,
   Inbox,
   Sparkles,
-  Share2,
-  Gauge,
-  BookOpen,
   Building2,
   Mail,
   MessageSquare,
@@ -25,12 +22,12 @@ import {
   Facebook,
   Instagram,
   Smartphone,
-  KeyRound,
 } from 'lucide-react'
 import { Reveal } from '@/components/marketing/reveal'
 import { CountUp } from '@/components/marketing/count-up'
 import { Hero3D } from '@/components/marketing/hero-3d'
 import { Tilt } from '@/components/marketing/tilt'
+import { FeaturesShowcase } from '@/components/marketing/features-showcase'
 import { SITE_URL, SITE_NAME, SITE_DESCRIPTION } from '@/lib/site'
 
 export const metadata: Metadata = {
@@ -85,54 +82,6 @@ const softwareJsonLd = {
   description: SITE_DESCRIPTION,
   offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD', availability: 'https://schema.org/InStock' },
 }
-
-const FEATURES = [
-  {
-    icon: Inbox,
-    title: 'One shared inbox, 8 channels',
-    body: 'Email, Teams, WhatsApp, SMS, Telegram, Messenger, Instagram and website live chat — in a single threaded workspace. No more tab-hopping.',
-  },
-  {
-    icon: Sparkles,
-    title: 'AI-drafted replies',
-    body: 'The assistant writes a context-aware reply in seconds. Your agent reviews and approves — AI never sends on its own.',
-  },
-  {
-    icon: MessagesSquare,
-    title: 'Website live chat',
-    body: 'Drop a chat bubble on any site with one line of code. Visitor chats land in the same inbox; your replies stream back in real time.',
-  },
-  {
-    icon: Share2,
-    title: 'Smart routing & assignment',
-    body: 'Conversations land with the right person automatically, with assignment, statuses, tags and collision-free collaboration.',
-  },
-  {
-    icon: ShieldCheck,
-    title: 'Granular role-based access',
-    body: 'An admin console controls who can see which sections, channels, AI features and actions — per role and per user, enforced down to the database.',
-  },
-  {
-    icon: KeyRound,
-    title: 'Bring your own credentials',
-    body: 'Connect each tenant’s own email, WhatsApp, Twilio, Telegram and Meta accounts — encrypted, test-gated, with platform defaults as a fallback.',
-  },
-  {
-    icon: Gauge,
-    title: 'SLA & CSAT tracking',
-    body: 'See response times, keep promises with SLA timers, and measure happiness with built-in CSAT surveys.',
-  },
-  {
-    icon: BookOpen,
-    title: 'Knowledge base & templates',
-    body: 'Reusable reply templates and a shared knowledge base keep answers fast, on-brand and consistent.',
-  },
-  {
-    icon: Building2,
-    title: 'Multi-tenant by design',
-    body: 'Run many brands or clients from one platform. Every tenant is isolated at the database level — data never crosses.',
-  },
-]
 
 const STEPS = [
   {
@@ -401,19 +350,7 @@ export default function LandingPage() {
             </p>
           </Reveal>
 
-          <div className="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {FEATURES.map((f, i) => (
-              <Reveal key={f.title} delay={(i % 3) * 90}>
-                <div className="group h-full rounded-2xl border border-gray-200 bg-white p-7 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-teal-200 hover:shadow-xl hover:shadow-teal-900/5">
-                  <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-teal-50 to-emerald-50 text-teal-700 ring-1 ring-teal-100 transition-colors group-hover:from-teal-600 group-hover:to-teal-700 group-hover:text-white">
-                    <f.icon className="h-6 w-6" />
-                  </div>
-                  <h3 className="mt-5 text-lg font-semibold text-gray-900">{f.title}</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-gray-600">{f.body}</p>
-                </div>
-              </Reveal>
-            ))}
-          </div>
+          <FeaturesShowcase />
         </div>
       </section>
 
