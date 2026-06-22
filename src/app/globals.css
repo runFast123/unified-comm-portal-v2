@@ -334,14 +334,21 @@ a, button, input, select, textarea {
   background-size: 28px 28px;
 }
 
-/* A single message travelling a routing path (routing-diagram.tsx). Finite-feel
-   loop that encodes "message in transit"; reduced-motion collapses it via the
-   global reset, leaving the drawn lines + node as the static end state. */
-@keyframes route-dot {
-  0% { offset-distance: 0%; opacity: 0; }
-  12% { opacity: 1; }
-  88% { opacity: 1; }
+/* Messages travelling the routing paths (routing-diagram.tsx) — a steady,
+   staggered trickle of channel-coloured dots flowing into the unified inbox.
+   Reduced-motion collapses these via the global reset, leaving the drawn lines
+   + node as the static end state. */
+@keyframes route-flow {
+  0%   { offset-distance: 0%;   opacity: 0; }
+  18%  { opacity: 1; }
+  82%  { opacity: 1; }
   100% { offset-distance: 100%; opacity: 0; }
+}
+
+/* Gentle "receiving" pulse on the merge point where channels converge. */
+@keyframes merge-glow {
+  0%, 100% { opacity: 0.3; }
+  50%      { opacity: 0.9; }
 }
 
 /* Shine sweep on primary buttons / cards */
