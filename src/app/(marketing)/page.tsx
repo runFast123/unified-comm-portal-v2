@@ -29,6 +29,8 @@ import {
 } from 'lucide-react'
 import { Reveal } from '@/components/marketing/reveal'
 import { CountUp } from '@/components/marketing/count-up'
+import { Hero3D } from '@/components/marketing/hero-3d'
+import { Tilt } from '@/components/marketing/tilt'
 import { SITE_URL, SITE_NAME, SITE_DESCRIPTION } from '@/lib/site'
 
 export const metadata: Metadata = {
@@ -186,14 +188,12 @@ export default function LandingPage() {
       />
 
       {/* ───────────────────────── HERO ───────────────────────── */}
-      <section className="relative overflow-hidden bg-white" aria-labelledby="hero-heading">
+      <section className="relative isolate overflow-hidden bg-white" aria-labelledby="hero-heading">
         {/* animated background */}
         <div className="pointer-events-none absolute inset-0 -z-10 bg-dot-grid opacity-70" aria-hidden="true" />
-        <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden" aria-hidden="true">
-          <div className="animate-blob absolute -left-24 -top-24 h-96 w-96 rounded-full bg-teal-300/25 blur-3xl" />
-          <div className="animate-blob absolute right-0 top-10 h-80 w-80 rounded-full bg-emerald-300/25 blur-3xl [animation-delay:3s]" />
-          <div className="animate-blob absolute bottom-0 left-1/3 h-80 w-80 rounded-full bg-cyan-200/25 blur-3xl [animation-delay:6s]" />
-        </div>
+        {/* WebGL hero backdrop — a distorted teal orb + particle field (lazy,
+            reduced-motion/mobile-safe; falls back to a soft gradient glow). */}
+        <Hero3D className="pointer-events-none absolute inset-0 -z-10 overflow-hidden" />
         <div className="absolute inset-x-0 bottom-0 -z-10 h-40 bg-gradient-to-b from-transparent to-white" aria-hidden="true" />
 
         <div className="mx-auto max-w-7xl px-4 pb-20 pt-28 sm:px-6 sm:pt-32 lg:px-8 lg:pb-28">
@@ -251,7 +251,7 @@ export default function LandingPage() {
 
             {/* product mockup */}
             <div className="relative animate-rise [animation-delay:150ms]">
-              <div className="animate-float-slow rounded-2xl border border-gray-200 bg-white/90 p-3 shadow-2xl shadow-teal-900/10 backdrop-blur">
+              <Tilt max={6} className="rounded-2xl border border-gray-200 bg-white/90 p-3 shadow-2xl shadow-teal-900/10 backdrop-blur">
                 <div className="overflow-hidden rounded-xl border border-gray-100">
                   {/* window chrome */}
                   <div className="flex items-center gap-1.5 border-b border-gray-100 bg-gray-50 px-3 py-2.5">
@@ -317,7 +317,7 @@ export default function LandingPage() {
                     </div>
                   </div>
                 </div>
-              </div>
+              </Tilt>
               {/* floating channel chips */}
               <div className="animate-float absolute -left-4 top-10 hidden rounded-xl border border-gray-100 bg-white px-3 py-2 shadow-lg sm:block">
                 <ChannelBadge name="WhatsApp" />

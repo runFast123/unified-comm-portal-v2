@@ -283,6 +283,13 @@ a, button, input, select, textarea {
 .animate-float { animation: float-y 6s ease-in-out infinite; }
 .animate-float-slow { animation: float-y 9s ease-in-out infinite; }
 
+/* Hero orb — 3D-tilted orbiting rings (parent supplies the perspective),
+   counter-spinning on Z for a real depth cue without a WebGL canvas. */
+@keyframes ring-spin { from { transform: rotateX(72deg) rotateZ(0deg); } to { transform: rotateX(72deg) rotateZ(360deg); } }
+@keyframes ring-spin-rev { from { transform: rotateX(62deg) rotateZ(360deg); } to { transform: rotateX(62deg) rotateZ(0deg); } }
+.animate-ring { animation: ring-spin 22s linear infinite; }
+.animate-ring-rev { animation: ring-spin-rev 30s linear infinite; }
+
 /* Animated gradient text */
 @keyframes gradient-pan {
   0% { background-position: 0% 50%; }

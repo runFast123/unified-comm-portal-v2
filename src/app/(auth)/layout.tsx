@@ -7,9 +7,16 @@ export default function AuthLayout({
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-teal-800 via-teal-600 to-emerald-700 relative overflow-hidden">
       {/* Background decoration */}
       <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute -top-40 -right-40 h-80 w-80 rounded-full bg-teal-500/20 blur-3xl" />
-        <div className="absolute -bottom-40 -left-40 h-80 w-80 rounded-full bg-emerald-500/20 blur-3xl" />
+        <div className="animate-blob absolute -top-40 -right-40 h-80 w-80 rounded-full bg-teal-500/25 blur-3xl" />
+        <div className="animate-blob absolute -bottom-40 -left-40 h-80 w-80 rounded-full bg-emerald-500/25 blur-3xl [animation-delay:4s]" />
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-96 w-96 rounded-full bg-teal-400/10 blur-3xl" />
+        {/* orbiting-ring orb — subtle 3D depth behind the auth card */}
+        <div className="absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 [perspective:1000px] sm:block">
+          <div className="relative h-[34rem] w-[34rem]">
+            <div className="animate-ring absolute inset-0 rounded-full border-2 border-white/25" />
+            <div className="animate-ring-rev absolute inset-16 rounded-full border-2 border-white/20" />
+          </div>
+        </div>
       </div>
 
       <div className="relative w-full max-w-md px-4 animate-fade-in">
