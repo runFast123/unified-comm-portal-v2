@@ -17,23 +17,26 @@ const NODE_X = 540
 const NODE_CY = 193
 const LEN = 640
 
-// Each channel's connector path — a smooth S-curve from the chip's right edge
-// into the single merge point at the inbox node's left-centre.
 const pathFor = (cy: number) => `M168 ${cy} C 340 ${cy}, 430 ${NODE_CY}, ${NODE_X} ${NODE_CY}`
 const cyFor = (i: number) => 39 + i * 44
 
 /**
- * "Eight channels → one inbox" routing diagram (light Console theme). The
- * connector lines self-draw when the diagram scrolls into view; then a steady,
- * staggered trickle of channel-coloured message dots flows along every path
- * into the unified inbox, with a gentle pulse at the merge point — motion that
- * encodes the product's real data flow. Pure SVG + one IntersectionObserver;
- * under reduced-motion the global reset collapses every animation, leaving the
- * drawn lines + node as a clean static end state.
+ * Interactive "eight channels → one inbox" routing diagram (light Console theme).
+ * Lines self-draw when scrolled into view, then a steady staggered trickle of
+ * channel-coloured message dots flows into the unified inbox. The visitor can
+ * hover / focus / tap any channel to light up its route, fire a message along
+ * it, and tick the inbox's "routed" counter. Pure SVG + one IntersectionObserver;
+ * under reduced-motion the global reset collapses the ambient motion, leaving a
+ * clean static (still fully interactive) diagram.
  */
 export function RoutingDiagram() {
   const ref = useRef<SVGSVGElement | null>(null)
   const [drawn, setDrawn] = useState(false)
+  const [hover, setHover] = useState<number | null>(null)
+  const [pinned, setPinned] = useState<number | null>(null)
+  const [routed, setRouted] = useState(0)
+  // Hover previews a route; clicking pins it highlighted + routes a message.
+  const active = hover ?? pinned
 
   useEffect(() => {
     const el = ref.current
@@ -56,6 +59,7 @@ export function RoutingDiagram() {
   }, [])
 
   const mono = 'var(--font-geist-mono)'
+  const route = (i: number) => { setPinned(i); setRouted((n) => n + 1) }
 
   return (
     <svg
@@ -63,64 +67,89 @@ export function RoutingDiagram() {
       viewBox="0 0 700 380"
       className="w-full"
       role="img"
-      aria-label="Eight channels — email, Teams, WhatsApp, SMS, Telegram, Messenger, Instagram and live chat — converge through routing lines into a single unified inbox."
+      aria-label="Eight channels — email, Teams, WhatsApp, SMS, Telegram, Messenger, Instagram and live chat — converge through routing lines into a single unified inbox. Hover or tap a channel to route a message."
     >
-      {/* connector lines (drawn first, behind the chips/node) */}
-      <g fill="none" stroke="#d4d4d8" strokeWidth="1.5" strokeLinecap="round">
-        {CHANNELS.map((c, i) => (
-          <path
-            key={c.label}
-            d={pathFor(cyFor(i))}
-            style={{
-              strokeDasharray: LEN,
-              strokeDashoffset: drawn ? 0 : LEN,
-              transition: 'stroke-dashoffset 1.2s cubic-bezier(0.22,1,0.36,1)',
-              transitionDelay: `${i * 70}ms`,
-            }}
-          />
-        ))}
+      {/* connector lines — the active channel's route lights up */}
+      <g fill="none" strokeLinecap="round">
+        {CHANNELS.map((c, i) => {
+          const on = active === i
+          return (
+            <path
+              key={c.label}
+              d={pathFor(cyFor(i))}
+              stroke={on ? '#0f766e' : '#d4d4d8'}
+              strokeWidth={on ? 2.5 : 1.5}
+              style={{
+                strokeDasharray: LEN,
+                strokeDashoffset: drawn ? 0 : LEN,
+                transition: 'stroke-dashoffset 1.2s cubic-bezier(0.22,1,0.36,1), stroke 0.25s, stroke-width 0.25s',
+                transitionDelay: drawn ? '0ms' : `${i * 70}ms`,
+              }}
+            />
+          )
+        })}
       </g>
 
-      {/* flowing message dots — one per channel, staggered, channel-coloured */}
+      {/* ambient flowing message dots — one per channel, staggered */}
       {CHANNELS.map((c, i) => (
         <circle
           key={`flow-${c.label}`}
-          r="2.6"
+          r={active === i ? 3.6 : 2.6}
           fill={c.dot}
           style={{
             offsetPath: `path('${pathFor(cyFor(i))}')`,
             opacity: 0,
-            animation: drawn ? `route-flow 3.6s ${0.6 + i * 0.4}s linear infinite` : 'none',
+            animation: drawn ? `route-flow ${active === i ? '1.4s' : '3.6s'} ${active === i ? '0s' : `${0.6 + i * 0.4}s`} linear infinite` : 'none',
+            transition: 'r 0.2s',
           }}
         />
       ))}
 
       {/* merge point — gentle "receiving" pulse where channels converge */}
-      <circle
-        cx={NODE_X}
-        cy={NODE_CY}
-        r="9"
-        fill="#0f766e"
-        style={{ opacity: 0.18, animation: drawn ? 'merge-glow 2.6s ease-in-out infinite' : 'none' }}
-      />
+      <circle cx={NODE_X} cy={NODE_CY} r="9" fill="#0f766e" style={{ opacity: 0.18, animation: drawn ? 'merge-glow 2.6s ease-in-out infinite' : 'none' }} />
       <circle cx={NODE_X} cy={NODE_CY} r="3" fill="#0f766e" />
 
-      {/* channel chips */}
+      {/* channel chips — interactive: hover / focus / tap to route a message */}
       {CHANNELS.map((c, i) => {
         const y = cyFor(i) - 15
+        const on = active === i
         return (
-          <g key={c.label}>
-            <rect x="8" y={y} width="160" height="30" rx="6" fill="#ffffff" stroke="#e4e4e7" />
+          <g
+            key={c.label}
+            role="button"
+            tabIndex={0}
+            aria-label={`Route a ${c.label} message into the unified inbox`}
+            style={{ cursor: 'pointer' }}
+            onMouseEnter={() => setHover(i)}
+            onMouseLeave={() => setHover(null)}
+            onFocus={() => setHover(i)}
+            onBlur={() => setHover(null)}
+            onClick={() => route(i)}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); route(i) } }}
+          >
+            <rect
+              x="8"
+              y={y}
+              width="160"
+              height="30"
+              rx="6"
+              fill={on ? '#f0fdfa' : '#ffffff'}
+              stroke={on ? '#0f766e' : '#e4e4e7'}
+              style={{ transition: 'fill 0.2s, stroke 0.2s' }}
+            />
             <circle cx="26" cy={y + 15} r="3.5" fill={c.dot} />
-            <text x="42" y={y + 19} fontFamily={mono} fontSize="12" fill="#52525b">{c.label}</text>
+            <text x="42" y={y + 19} fontFamily={mono} fontSize="12" fill={on ? '#0f766e' : '#52525b'} style={{ transition: 'fill 0.2s' }}>{c.label}</text>
           </g>
         )
       })}
 
       {/* unified node */}
       <rect x={NODE_X} y={NODE_CY - 34} width="150" height="68" rx="8" fill="#f0fdfa" stroke="#0f766e" strokeWidth="1.5" />
-      <text x={NODE_X + 75} y={NODE_CY - 6} textAnchor="middle" fontSize="15" fontWeight="500" fill="#0f766e">Unified inbox</text>
-      <text x={NODE_X + 75} y={NODE_CY + 16} textAnchor="middle" fontFamily={mono} fontSize="11" fill="#71717a">one threaded queue</text>
+      <text x={NODE_X + 75} y={NODE_CY - 8} textAnchor="middle" fontSize="15" fontWeight="500" fill="#0f766e">Unified inbox</text>
+      <text x={NODE_X + 75} y={NODE_CY + 12} textAnchor="middle" fontFamily={mono} fontSize="10" fill="#71717a">one threaded queue</text>
+      <text x={NODE_X + 75} y={NODE_CY + 26} textAnchor="middle" fontFamily={mono} fontSize="10" fill="#0f766e">
+        {routed > 0 ? `${routed} routed` : 'hover a channel'}
+      </text>
     </svg>
   )
 }
