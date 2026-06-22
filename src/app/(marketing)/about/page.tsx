@@ -32,13 +32,13 @@ export default function AboutPage() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="grid items-center gap-12 lg:grid-cols-2">
             <Reveal>
-              <span className="inline-flex items-center gap-2 font-[family-name:var(--font-geist-mono)] text-[12px] tracking-tight text-teal-400">
+              <span className="inline-flex items-center gap-2 font-[family-name:var(--font-geist-mono)] text-[12px] tracking-tight text-teal-700">
                 <Target className="h-4 w-4" /> Our mission
               </span>
-              <h2 className="mt-3 text-3xl font-semibold tracking-[-0.02em] text-zinc-50 sm:text-4xl">
+              <h2 className="mt-3 text-3xl font-semibold tracking-[-0.02em] text-zinc-900 sm:text-4xl">
                 Make exceptional support effortless to deliver
               </h2>
-              <div className="mt-5 space-y-4 text-lg leading-relaxed text-zinc-400">
+              <div className="mt-5 space-y-4 text-lg leading-relaxed text-zinc-600">
                 <p>
                   Every day, teams lose time switching between an email client, a chat app and a
                   messaging tool — copying context, missing replies and guessing at who said what.
@@ -60,8 +60,8 @@ export default function AboutPage() {
                   { k: 'AI', v: 'Drafts, you approve' },
                   { k: '1', v: 'Platform, many brands' },
                 ].map((s) => (
-                  <div key={s.v} className="rounded-2xl border border-white/10 bg-[#141416] p-6 text-center transition-colors hover:border-white/20">
-                    <div className="text-3xl font-medium font-[family-name:var(--font-geist-mono)] tabular-nums text-teal-300">{s.k}</div>
+                  <div key={s.v} className="rounded-2xl border border-zinc-200 bg-white p-6 text-center transition-colors hover:border-zinc-300">
+                    <div className="text-3xl font-medium font-[family-name:var(--font-geist-mono)] tabular-nums text-teal-700">{s.k}</div>
                     <p className="mt-1 text-sm font-medium text-zinc-500">{s.v}</p>
                   </div>
                 ))}
@@ -75,20 +75,20 @@ export default function AboutPage() {
       <section className="py-20 sm:py-24" aria-labelledby="values-heading">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <Reveal className="mx-auto max-w-2xl text-center">
-            <h2 id="values-heading" className="text-3xl font-semibold tracking-[-0.02em] text-zinc-50 sm:text-4xl">
+            <h2 id="values-heading" className="text-3xl font-semibold tracking-[-0.02em] text-zinc-900 sm:text-4xl">
               What we believe
             </h2>
           </Reveal>
           <div className="mt-14 grid gap-6 sm:grid-cols-2">
             {VALUES.map((v, i) => (
               <Reveal key={v.title} delay={(i % 2) * 100}>
-                <div className="flex h-full gap-5 rounded-2xl border border-white/10 bg-[#141416] p-7 transition-colors hover:border-white/20">
-                  <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/[0.04] text-teal-300 ring-1 ring-white/10">
+                <div className="flex h-full gap-5 rounded-2xl border border-zinc-200 bg-white p-7 transition-colors hover:border-zinc-300">
+                  <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-teal-50 text-teal-700 ring-1 ring-teal-100">
                     <v.icon className="h-6 w-6" />
                   </span>
                   <div>
-                    <h3 className="text-lg font-semibold text-zinc-50">{v.title}</h3>
-                    <p className="mt-2 text-sm leading-relaxed text-zinc-400">{v.body}</p>
+                    <h3 className="text-lg font-semibold text-zinc-900">{v.title}</h3>
+                    <p className="mt-2 text-sm leading-relaxed text-zinc-600">{v.body}</p>
                   </div>
                 </div>
               </Reveal>
@@ -101,10 +101,10 @@ export default function AboutPage() {
       <section className="py-20 sm:py-24" aria-labelledby="who-heading">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <Reveal className="mx-auto max-w-2xl text-center">
-            <span className="inline-flex items-center gap-2 font-[family-name:var(--font-geist-mono)] text-[12px] tracking-tight text-teal-400">
+            <span className="inline-flex items-center gap-2 font-[family-name:var(--font-geist-mono)] text-[12px] tracking-tight text-teal-700">
               <Users className="h-4 w-4" /> Who it’s for
             </span>
-            <h2 id="who-heading" className="mt-3 text-3xl font-semibold tracking-[-0.02em] text-zinc-50 sm:text-4xl">
+            <h2 id="who-heading" className="mt-3 text-3xl font-semibold tracking-[-0.02em] text-zinc-900 sm:text-4xl">
               Made for the people on the front line
             </h2>
           </Reveal>
@@ -115,9 +115,9 @@ export default function AboutPage() {
               { t: 'Multi-brand operations', b: 'Keep separate inboxes for every brand while your team works in one place.' },
             ].map((c) => (
               <Reveal key={c.t}>
-                <div className="h-full rounded-2xl border border-white/10 bg-[#141416] p-7 transition-colors hover:border-white/20">
-                  <h3 className="text-base font-semibold text-zinc-50">{c.t}</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-zinc-400">{c.b}</p>
+                <div className="h-full rounded-2xl border border-zinc-200 bg-white p-7 transition-colors hover:border-zinc-300">
+                  <h3 className="text-base font-semibold text-zinc-900">{c.t}</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-zinc-600">{c.b}</p>
                 </div>
               </Reveal>
             ))}
@@ -129,13 +129,13 @@ export default function AboutPage() {
       <section className="py-20">
         <div className="mx-auto max-w-3xl px-4 text-center sm:px-6 lg:px-8">
           <Reveal>
-            <h2 className="text-3xl font-semibold tracking-[-0.02em] text-zinc-50 sm:text-4xl">
+            <h2 className="text-3xl font-semibold tracking-[-0.02em] text-zinc-900 sm:text-4xl">
               Let’s bring your conversations together
             </h2>
             <div className="mt-8">
               <Link
                 href="/contact"
-                className="group inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--brand-accent)] px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-teal-600"
+                className="group inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--brand-accent)] px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-teal-800"
               >
                 Request a demo
                 <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />

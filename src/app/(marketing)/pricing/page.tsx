@@ -69,36 +69,36 @@ export default function PricingPage() {
                 <div
                   className={`relative flex h-full flex-col rounded-2xl border p-8 transition-colors ${
                     t.highlight
-                      ? 'border-teal-500/40 bg-[#141416]'
-                      : 'border-white/10 bg-[#141416] hover:border-white/20'
+                      ? 'border-teal-500 bg-white'
+                      : 'border-zinc-200 bg-white hover:border-zinc-300'
                   }`}
                 >
                   {t.highlight && (
-                    <span className="absolute -top-3 left-1/2 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-teal-400/10 px-3.5 py-1 font-[family-name:var(--font-geist-mono)] text-[12px] tracking-tight text-teal-300 ring-1 ring-teal-500/40">
+                    <span className="absolute -top-3 left-1/2 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-teal-50 px-3.5 py-1 font-[family-name:var(--font-geist-mono)] text-[12px] tracking-tight text-teal-700 ring-1 ring-teal-500">
                       <Sparkles className="h-3.5 w-3.5" /> Most popular
                     </span>
                   )}
-                  <h2 className="text-lg font-semibold tracking-[-0.02em] text-zinc-50">{t.name}</h2>
+                  <h2 className="text-lg font-semibold tracking-[-0.02em] text-zinc-900">{t.name}</h2>
                   <p className="mt-1 text-sm text-zinc-500">{t.tagline}</p>
                   <div className="mt-6">
-                    <span className="text-4xl font-medium tracking-tight text-zinc-50 font-[family-name:var(--font-geist-mono)] tabular-nums">Custom</span>
+                    <span className="text-4xl font-medium tracking-tight text-zinc-900 font-[family-name:var(--font-geist-mono)] tabular-nums">Custom</span>
                     <p className="mt-1 text-sm text-zinc-500">Tailored to seats &amp; channels</p>
                   </div>
                   <Link
                     href="/contact"
                     className={
                       t.highlight
-                        ? 'group mt-6 inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--brand-accent)] px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-teal-600'
-                        : 'mt-6 inline-flex items-center justify-center gap-2 rounded-lg border border-white/15 px-5 py-3 text-sm font-medium text-zinc-200 transition-colors hover:border-white/30 hover:bg-white/[0.04]'
+                        ? 'group mt-6 inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--brand-accent)] px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-teal-800'
+                        : 'mt-6 inline-flex items-center justify-center gap-2 rounded-lg border border-zinc-300 px-5 py-3 text-sm font-medium text-zinc-800 transition-colors hover:border-zinc-300 hover:bg-zinc-50'
                     }
                   >
                     Request a demo
                     <ArrowRight className="h-4 w-4" />
                   </Link>
-                  <ul className="mt-8 space-y-3 border-t border-white/10 pt-6">
+                  <ul className="mt-8 space-y-3 border-t border-zinc-200 pt-6">
                     {t.features.map((f) => (
-                      <li key={f} className="flex items-start gap-2.5 text-sm text-zinc-300">
-                        <Check className="mt-0.5 h-4 w-4 shrink-0 text-teal-300" />
+                      <li key={f} className="flex items-start gap-2.5 text-sm text-zinc-700">
+                        <Check className="mt-0.5 h-4 w-4 shrink-0 text-teal-700" />
                         <span>{f}</span>
                       </li>
                     ))}
@@ -126,8 +126,8 @@ export default function PricingPage() {
             { q: 'Can we switch plans?', a: 'Yes. Move between Starter, Growth and Enterprise as your team and channel mix change.' },
           ].map((f) => (
             <Reveal key={f.q}>
-              <h3 className="text-base font-semibold tracking-[-0.02em] text-zinc-50">{f.q}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-zinc-400">{f.a}</p>
+              <h3 className="text-base font-semibold tracking-[-0.02em] text-zinc-900">{f.q}</h3>
+              <p className="mt-2 text-sm leading-relaxed text-zinc-600">{f.a}</p>
             </Reveal>
           ))}
         </div>

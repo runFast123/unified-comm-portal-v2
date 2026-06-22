@@ -1,8 +1,8 @@
 import { Inbox, Sparkles, ShieldCheck, Share2, Gauge, KeyRound, Building2, MessagesSquare, BookOpen } from 'lucide-react'
 
 const MONO = 'font-[family-name:var(--font-geist-mono)]'
-const CARD = 'rounded-xl border border-white/10 bg-[#141416] p-5 transition-colors hover:border-white/20'
-const ICON = 'flex h-8 w-8 items-center justify-center rounded-lg bg-white/[0.04] text-teal-300 ring-1 ring-white/10'
+const CARD = 'rounded-xl border border-zinc-200 bg-white p-5 transition-colors hover:border-zinc-300'
+const ICON = 'flex h-8 w-8 items-center justify-center rounded-lg bg-teal-50 text-teal-700 ring-1 ring-teal-100'
 
 const INBOX_ROWS = [
   { dot: '#25d366', name: 'Ava Chen', ch: 'whatsapp' },
@@ -27,8 +27,8 @@ function Small({
       <span className={ICON}>
         <Icon className="h-4 w-4" />
       </span>
-      <h3 className="mt-3.5 text-[15px] font-medium text-zinc-100">{title}</h3>
-      <p className="mt-1.5 text-[13px] leading-relaxed text-zinc-400">{body}</p>
+      <h3 className="mt-3.5 text-[15px] font-medium text-zinc-900">{title}</h3>
+      <p className="mt-1.5 text-[13px] leading-relaxed text-zinc-600">{body}</p>
       {meta ? <div className="mt-3">{meta}</div> : null}
     </div>
   )
@@ -51,14 +51,14 @@ export function FeaturesBento() {
             <span className={ICON}>
               <Inbox className="h-4 w-4" />
             </span>
-            <h3 className="mt-3.5 text-lg font-medium text-zinc-100">One shared inbox, 8 channels</h3>
-            <p className="mt-1.5 max-w-md text-sm leading-relaxed text-zinc-400">
+            <h3 className="mt-3.5 text-lg font-medium text-zinc-900">One shared inbox, 8 channels</h3>
+            <p className="mt-1.5 max-w-md text-sm leading-relaxed text-zinc-600">
               Email, Teams, WhatsApp, SMS, Telegram, Messenger, Instagram and website live chat —
               in a single threaded workspace. No more tab-hopping.
             </p>
           </div>
         </div>
-        <div className="mt-5 flex-1 rounded-lg border border-white/10 bg-[#0e0e10] p-3">
+        <div className="mt-5 flex-1 rounded-lg border border-zinc-200 bg-zinc-50 p-3">
           <div className={`${MONO} mb-2 flex items-center justify-between px-1 text-[11px] text-zinc-500`}>
             <span>all channels</span>
             <span className="tabular-nums">1,284 open</span>
@@ -67,10 +67,10 @@ export function FeaturesBento() {
             {INBOX_ROWS.map((r, i) => (
               <div
                 key={r.name}
-                className={`flex items-center gap-2.5 rounded-md px-2.5 py-2 ${i === 0 ? 'border-l-2 border-teal-400 bg-white/[0.05]' : 'border-l-2 border-transparent'}`}
+                className={`flex items-center gap-2.5 rounded-md px-2.5 py-2 ${i === 0 ? 'border-l-2 border-teal-600 bg-zinc-100' : 'border-l-2 border-transparent'}`}
               >
                 <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: r.dot }} />
-                <span className="flex-1 truncate text-[12px] font-medium text-zinc-200">{r.name}</span>
+                <span className="flex-1 truncate text-[12px] font-medium text-zinc-800">{r.name}</span>
                 <span className={`${MONO} text-[10px] text-zinc-500`}>{r.ch}</span>
               </div>
             ))}
@@ -82,7 +82,7 @@ export function FeaturesBento() {
         icon={Sparkles}
         title="AI-drafted replies"
         body="A context-aware reply in seconds. Your agent reviews and approves — AI never sends on its own."
-        meta={<span className={`${MONO} rounded bg-teal-400/10 px-2 py-1 text-[11px] text-teal-300`}>approval-gated</span>}
+        meta={<span className={`${MONO} rounded bg-teal-50 px-2 py-1 text-[11px] text-teal-700`}>approval-gated</span>}
       />
 
       <Small
@@ -104,7 +104,7 @@ export function FeaturesBento() {
         body="See response times, keep promises with SLA timers, measure happiness with CSAT."
         meta={
           <div className={`${MONO} flex items-center gap-2 text-[11px]`}>
-            <span className="rounded bg-amber-400/10 px-2 py-1 tabular-nums text-amber-300">SLA 00:42</span>
+            <span className="rounded bg-amber-50 px-2 py-1 tabular-nums text-amber-700">SLA 00:42</span>
             <span className="tabular-nums text-zinc-500">CSAT 4.8/5</span>
           </div>
         }

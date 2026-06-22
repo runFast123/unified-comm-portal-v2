@@ -4,15 +4,15 @@ export default function AuthLayout({
   children: React.ReactNode
 }) {
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#0a0a0b] text-zinc-100 antialiased font-[family-name:var(--font-geist-sans)]">
-      {/* Dark Console canvas — a single static hairline grid, no glow/gradient. */}
-      <div className="pointer-events-none absolute inset-0 bg-grid-dark opacity-50" aria-hidden="true" />
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" aria-hidden="true" />
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-zinc-50 text-zinc-900 antialiased font-[family-name:var(--font-geist-sans)]">
+      {/* Light Console canvas — a single static hairline dot grid, no glow/gradient. */}
+      <div className="pointer-events-none absolute inset-0 bg-dot-grid opacity-50" aria-hidden="true" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-zinc-200 to-transparent" aria-hidden="true" />
 
       <div className="relative w-full max-w-md px-4 animate-fade-in">
-        {/* Focused light card on the dark canvas — keeps the auth forms (styled
+        {/* Focused white card on the light canvas — keeps the auth forms (styled
             for a light surface) fully legible. */}
-        <div className="rounded-2xl border border-white/10 bg-white p-8 shadow-2xl shadow-black/40">
+        <div className="rounded-2xl border border-zinc-200 bg-white p-8 shadow-xl shadow-zinc-300/40">
           <div className="mb-8 text-center">
             <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--brand-accent)]">
               <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">

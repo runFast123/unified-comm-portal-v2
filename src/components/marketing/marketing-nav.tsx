@@ -34,19 +34,19 @@ export function MarketingNav() {
     <header
       className={`fixed inset-x-0 top-0 z-50 transition-all duration-300 ${
         scrolled
-          ? 'border-b border-white/10 bg-[#0a0a0b]/80 backdrop-blur-xl'
+          ? 'border-b border-zinc-200 bg-white/80 backdrop-blur-xl'
           : 'bg-transparent'
       }`}
     >
       <nav className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        <Logo textClassName="text-zinc-100" />
+        <Logo textClassName="text-zinc-900" />
 
         <div className="hidden items-center gap-1 md:flex">
           {NAV_LINKS.map((l) => (
             <Link
               key={l.href}
               href={l.href}
-              className="rounded-lg px-3 py-2 text-sm font-medium text-zinc-400 transition-colors hover:bg-white/5 hover:text-zinc-100"
+              className="rounded-lg px-3 py-2 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900"
             >
               {l.label}
             </Link>
@@ -56,13 +56,13 @@ export function MarketingNav() {
         <div className="hidden items-center gap-2 md:flex">
           <Link
             href="/login"
-            className="rounded-lg px-3.5 py-2 text-sm font-medium text-zinc-300 transition-colors hover:text-white"
+            className="rounded-lg px-3.5 py-2 text-sm font-medium text-zinc-700 transition-colors hover:text-zinc-900"
           >
             Sign in
           </Link>
           <Link
             href="/contact"
-            className="group inline-flex items-center gap-1.5 rounded-lg bg-[var(--brand-accent)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-teal-600"
+            className="group inline-flex items-center gap-1.5 rounded-lg bg-[var(--brand-accent)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-teal-800"
           >
             Request a demo
             <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
@@ -71,7 +71,7 @@ export function MarketingNav() {
 
         <button
           onClick={() => setOpen((v) => !v)}
-          className="rounded-lg p-2 text-zinc-300 hover:bg-white/5 md:hidden"
+          className="rounded-lg p-2 text-zinc-700 hover:bg-zinc-100 md:hidden"
           aria-label="Toggle menu"
           aria-expanded={open}
         >
@@ -80,14 +80,14 @@ export function MarketingNav() {
       </nav>
 
       {open && (
-        <div className="border-t border-white/10 bg-[#0a0a0b] px-4 pb-6 pt-2 md:hidden">
+        <div className="border-t border-zinc-200 bg-white px-4 pb-6 pt-2 md:hidden">
           <div className="flex flex-col gap-1">
             {NAV_LINKS.map((l) => (
               <Link
                 key={l.href}
                 href={l.href}
                 onClick={() => setOpen(false)}
-                className="rounded-lg px-3 py-2.5 text-base font-medium text-zinc-300 hover:bg-white/5"
+                className="rounded-lg px-3 py-2.5 text-base font-medium text-zinc-700 hover:bg-zinc-100"
               >
                 {l.label}
               </Link>
@@ -97,14 +97,14 @@ export function MarketingNav() {
             <Link
               href="/login"
               onClick={() => setOpen(false)}
-              className="rounded-lg border border-white/15 px-4 py-2.5 text-center text-sm font-medium text-zinc-200"
+              className="rounded-lg border border-zinc-300 px-4 py-2.5 text-center text-sm font-medium text-zinc-800"
             >
               Sign in
             </Link>
             <Link
               href="/contact"
               onClick={() => setOpen(false)}
-              className="rounded-lg bg-[var(--brand-accent)] px-4 py-2.5 text-center text-sm font-medium text-white hover:bg-teal-600"
+              className="rounded-lg bg-[var(--brand-accent)] px-4 py-2.5 text-center text-sm font-medium text-white hover:bg-teal-800"
             >
               Request a demo
             </Link>

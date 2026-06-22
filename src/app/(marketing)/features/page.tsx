@@ -97,25 +97,25 @@ export default function FeaturesPage() {
         {GROUPS.map((g, gi) => (
           <section key={g.title} className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8" aria-label={g.title}>
             <Reveal className="mx-auto max-w-2xl text-center">
-              <span className="font-[family-name:var(--font-geist-mono)] text-[12px] tracking-tight text-teal-400">{g.eyebrow}</span>
-              <h2 className="mt-3 text-3xl font-semibold tracking-[-0.02em] text-zinc-50 sm:text-4xl">{g.title}</h2>
-              <p className="mt-4 text-lg text-zinc-400">{g.body}</p>
+              <span className="font-[family-name:var(--font-geist-mono)] text-[12px] tracking-tight text-teal-700">{g.eyebrow}</span>
+              <h2 className="mt-3 text-3xl font-semibold tracking-[-0.02em] text-zinc-900 sm:text-4xl">{g.title}</h2>
+              <p className="mt-4 text-lg text-zinc-600">{g.body}</p>
             </Reveal>
             <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
               {g.items.map((item, i) => (
                 <Reveal key={item.title} delay={(i % 4) * 80}>
-                  <div className="group h-full rounded-xl border border-white/10 bg-[#141416] p-6 transition-colors hover:border-white/20">
-                    <div className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-white/[0.04] text-teal-300 ring-1 ring-white/10">
+                  <div className="group h-full rounded-xl border border-zinc-200 bg-white p-6 transition-colors hover:border-zinc-300">
+                    <div className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-teal-50 text-teal-700 ring-1 ring-teal-100">
                       <item.icon className="h-5 w-5" />
                     </div>
-                    <h3 className="mt-4 text-base font-semibold text-zinc-50">{item.title}</h3>
-                    <p className="mt-2 text-sm leading-relaxed text-zinc-400">{item.body}</p>
+                    <h3 className="mt-4 text-base font-semibold text-zinc-900">{item.title}</h3>
+                    <p className="mt-2 text-sm leading-relaxed text-zinc-600">{item.body}</p>
                   </div>
                 </Reveal>
               ))}
             </div>
             {gi < GROUPS.length - 1 && (
-              <div className="mx-auto mt-20 h-px max-w-5xl bg-white/10 sm:mt-28" />
+              <div className="mx-auto mt-20 h-px max-w-5xl bg-zinc-200 sm:mt-28" />
             )}
           </section>
         ))}
@@ -125,29 +125,29 @@ export default function FeaturesPage() {
       <section className="py-20">
         <div className="mx-auto max-w-3xl px-4 text-center sm:px-6 lg:px-8">
           <Reveal>
-            <h2 className="text-3xl font-semibold tracking-[-0.02em] text-zinc-50 sm:text-4xl">
+            <h2 className="text-3xl font-semibold tracking-[-0.02em] text-zinc-900 sm:text-4xl">
               See it on your own channels
             </h2>
-            <p className="mx-auto mt-4 max-w-xl text-lg text-zinc-400">
+            <p className="mx-auto mt-4 max-w-xl text-lg text-zinc-600">
               Request a demo and we’ll show you Unified connected to a live inbox.
             </p>
             <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
               <Link
                 href="/contact"
-                className="group inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--brand-accent)] px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-teal-600"
+                className="group inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--brand-accent)] px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-teal-800"
               >
                 Request a demo
                 <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
               </Link>
               <Link
                 href="/pricing"
-                className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/15 px-5 py-3 text-sm font-medium text-zinc-200 transition-colors hover:border-white/30 hover:bg-white/[0.04]"
+                className="inline-flex items-center justify-center gap-2 rounded-lg border border-zinc-300 px-5 py-3 text-sm font-medium text-zinc-800 transition-colors hover:border-zinc-300 hover:bg-zinc-50"
               >
                 View pricing
               </Link>
             </div>
             <p className="mt-6 inline-flex items-center justify-center gap-1.5 text-sm text-zinc-500">
-              <Check className="h-4 w-4 text-teal-400" /> Invite-only · onboarding included
+              <Check className="h-4 w-4 text-teal-700" /> Invite-only · onboarding included
             </p>
           </Reveal>
         </div>

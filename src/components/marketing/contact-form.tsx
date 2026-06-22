@@ -39,24 +39,24 @@ export function ContactForm({ contactEmail }: { contactEmail: string }) {
   }
 
   const fieldCls =
-    'w-full rounded-lg border border-white/10 bg-[#141416] px-4 py-3 text-sm text-zinc-100 outline-none transition-colors placeholder:text-zinc-500 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20'
+    'w-full rounded-lg border border-zinc-300 bg-white px-4 py-3 text-sm text-zinc-900 outline-none transition-colors placeholder:text-zinc-400 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20'
 
   if (sent) {
     return (
-      <div className="rounded-2xl border border-white/10 bg-[#141416] p-8 text-center">
-        <CheckCircle2 className="mx-auto h-12 w-12 text-teal-400" />
-        <h3 className="mt-4 text-lg font-medium text-zinc-100">Almost there!</h3>
-        <p className="mx-auto mt-2 max-w-sm text-sm text-zinc-400">
+      <div className="rounded-2xl border border-zinc-200 bg-white p-8 text-center">
+        <CheckCircle2 className="mx-auto h-12 w-12 text-teal-700" />
+        <h3 className="mt-4 text-lg font-medium text-zinc-900">Almost there!</h3>
+        <p className="mx-auto mt-2 max-w-sm text-sm text-zinc-600">
           Your email app should have opened with your request ready to send. If it didn’t, email us
           directly at{' '}
-          <a href={`mailto:${contactEmail}`} className="font-medium text-teal-400 underline">
+          <a href={`mailto:${contactEmail}`} className="font-medium text-teal-700 underline">
             {contactEmail}
           </a>
           .
         </p>
         <button
           onClick={() => setSent(false)}
-          className="mt-5 text-sm font-medium text-teal-400 hover:underline"
+          className="mt-5 text-sm font-medium text-teal-700 hover:underline"
         >
           ← Back to the form
         </button>
@@ -68,13 +68,13 @@ export function ContactForm({ contactEmail }: { contactEmail: string }) {
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <label htmlFor="name" className="mb-1.5 block text-sm font-medium text-zinc-300">
+          <label htmlFor="name" className="mb-1.5 block text-sm font-medium text-zinc-700">
             Name
           </label>
           <input id="name" name="name" type="text" required autoComplete="name" className={fieldCls} placeholder="Jane Doe" />
         </div>
         <div>
-          <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-zinc-300">
+          <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-zinc-700">
             Work email
           </label>
           <input id="email" name="email" type="email" required autoComplete="email" className={fieldCls} placeholder="jane@company.com" />
@@ -82,13 +82,13 @@ export function ContactForm({ contactEmail }: { contactEmail: string }) {
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <label htmlFor="company" className="mb-1.5 block text-sm font-medium text-zinc-300">
+          <label htmlFor="company" className="mb-1.5 block text-sm font-medium text-zinc-700">
             Company
           </label>
           <input id="company" name="company" type="text" autoComplete="organization" className={fieldCls} placeholder="Acme Inc." />
         </div>
         <div>
-          <label htmlFor="size" className="mb-1.5 block text-sm font-medium text-zinc-300">
+          <label htmlFor="size" className="mb-1.5 block text-sm font-medium text-zinc-700">
             Team size
           </label>
           <select id="size" name="size" className={fieldCls} defaultValue="">
@@ -104,7 +104,7 @@ export function ContactForm({ contactEmail }: { contactEmail: string }) {
         </div>
       </div>
       <div>
-        <label htmlFor="message" className="mb-1.5 block text-sm font-medium text-zinc-300">
+        <label htmlFor="message" className="mb-1.5 block text-sm font-medium text-zinc-700">
           How can we help?
         </label>
         <textarea
@@ -117,7 +117,7 @@ export function ContactForm({ contactEmail }: { contactEmail: string }) {
       </div>
       <button
         type="submit"
-        className="group inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--brand-accent)] px-6 py-3.5 text-base font-medium text-white transition-colors hover:bg-teal-600 sm:w-auto"
+        className="group inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--brand-accent)] px-6 py-3.5 text-base font-medium text-white transition-colors hover:bg-teal-800 sm:w-auto"
       >
         Send request
         <Send className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />

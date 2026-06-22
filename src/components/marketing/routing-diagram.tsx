@@ -60,7 +60,7 @@ export function RoutingDiagram() {
       aria-label="Eight channels — email, Teams, WhatsApp, SMS, Telegram, Messenger, Instagram and live chat — converge through routing lines into a single unified inbox."
     >
       {/* connector lines (drawn first, sit behind the chips/node) */}
-      <g fill="none" stroke="#3f3f46" strokeWidth="1.5">
+      <g fill="none" stroke="#d4d4d8" strokeWidth="1.5">
         {CHANNELS.map((c, i) => {
           const y = 28 + i * 44
           const d = `M168 ${y + 15} C 300 ${y + 15}, 320 ${NODE_CY}, ${NODE_X} ${NODE_CY}`
@@ -80,23 +80,23 @@ export function RoutingDiagram() {
       </g>
 
       {/* a single message travelling the active (WhatsApp) path */}
-      <circle r="3.5" fill="#2dd4bf" style={{ offsetPath: `path('M168 103 C 300 103, 320 ${NODE_CY}, ${NODE_X} ${NODE_CY}')`, animation: drawn ? 'route-dot 2.6s 1.2s ease-in-out infinite' : 'none' }} />
+      <circle r="3.5" fill="#0d9488" style={{ offsetPath: `path('M168 103 C 300 103, 320 ${NODE_CY}, ${NODE_X} ${NODE_CY}')`, animation: drawn ? 'route-dot 2.6s 1.2s ease-in-out infinite' : 'none' }} />
 
       {/* channel chips */}
       {CHANNELS.map((c, i) => {
         const y = 28 + i * 44
         return (
           <g key={c.label}>
-            <rect x="8" y={y} width="160" height="30" rx="6" fill="#141416" stroke="rgba(255,255,255,0.08)" />
+            <rect x="8" y={y} width="160" height="30" rx="6" fill="#ffffff" stroke="#e4e4e7" />
             <circle cx="26" cy={y + 15} r="3.5" fill={c.dot} />
-            <text x="42" y={y + 19} fontFamily={mono} fontSize="12" fill="#a1a1aa">{c.label}</text>
+            <text x="42" y={y + 19} fontFamily={mono} fontSize="12" fill="#52525b">{c.label}</text>
           </g>
         )
       })}
 
       {/* unified node */}
-      <rect x={NODE_X} y={NODE_CY - 34} width="180" height="68" rx="8" fill="#10201d" stroke="#2dd4bf" strokeWidth="1.5" />
-      <text x={NODE_X + 90} y={NODE_CY - 6} textAnchor="middle" fontSize="15" fontWeight="500" fill="#5eead4">Unified inbox</text>
+      <rect x={NODE_X} y={NODE_CY - 34} width="180" height="68" rx="8" fill="#f0fdfa" stroke="#0f766e" strokeWidth="1.5" />
+      <text x={NODE_X + 90} y={NODE_CY - 6} textAnchor="middle" fontSize="15" fontWeight="500" fill="#0f766e">Unified inbox</text>
       <text x={NODE_X + 90} y={NODE_CY + 16} textAnchor="middle" fontFamily={mono} fontSize="11" fill="#71717a">one threaded queue</text>
     </svg>
   )

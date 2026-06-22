@@ -104,23 +104,23 @@ export default function LandingPage() {
 
       {/* ───────────────────────── HERO ───────────────────────── */}
       <section className="relative isolate overflow-hidden" aria-labelledby="hero-heading">
-        <div className="pointer-events-none absolute inset-0 -z-10 bg-grid-dark opacity-60" aria-hidden="true" />
-        <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" aria-hidden="true" />
+        <div className="pointer-events-none absolute inset-0 -z-10 bg-dot-grid opacity-60" aria-hidden="true" />
+        <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-px bg-gradient-to-r from-transparent via-zinc-200 to-transparent" aria-hidden="true" />
 
         <div className="mx-auto max-w-7xl px-4 pb-24 pt-32 sm:px-6 sm:pt-36 lg:px-8 lg:pb-28">
           <div className="grid items-center gap-16 lg:grid-cols-2">
             <div className="animate-rise">
-              <span className={`${MONO} inline-flex items-center gap-2 text-[12px] tracking-tight text-zinc-400`}>
-                <span className="h-1.5 w-1.5 rounded-full bg-teal-400" />
+              <span className={`${MONO} inline-flex items-center gap-2 text-[12px] tracking-tight text-zinc-600`}>
+                <span className="h-1.5 w-1.5 rounded-full bg-teal-600" />
                 Support operations platform
               </span>
               <h1
                 id="hero-heading"
-                className="mt-6 text-balance text-5xl font-semibold leading-[1.02] tracking-[-0.03em] text-zinc-50 sm:text-6xl"
+                className="mt-6 text-balance text-5xl font-semibold leading-[1.02] tracking-[-0.03em] text-zinc-900 sm:text-6xl"
               >
                 Eight channels.<br />One inbox.
               </h1>
-              <p className="mt-6 max-w-xl text-pretty text-lg leading-relaxed text-zinc-400">
+              <p className="mt-6 max-w-xl text-pretty text-lg leading-relaxed text-zinc-600">
                 Every customer conversation — email, WhatsApp, Teams, SMS, Telegram, social DMs and
                 website live chat — in a single AI-assisted queue your whole team works from.
               </p>
@@ -128,14 +128,14 @@ export default function LandingPage() {
               <div className="mt-9 flex flex-col gap-3 sm:flex-row">
                 <Link
                   href="/contact"
-                  className="group inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--brand-accent)] px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-teal-600"
+                  className="group inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--brand-accent)] px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-teal-800"
                 >
                   Request a demo
                   <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
                 </Link>
                 <Link
                   href="/login"
-                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/15 px-5 py-3 text-sm font-medium text-zinc-200 transition-colors hover:border-white/30 hover:bg-white/[0.04]"
+                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-zinc-300 px-5 py-3 text-sm font-medium text-zinc-800 transition-colors hover:border-zinc-300 hover:bg-zinc-50"
                 >
                   Sign in
                 </Link>
@@ -143,9 +143,9 @@ export default function LandingPage() {
 
               <div className={`${MONO} mt-9 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[12px] text-zinc-500`}>
                 <span>8 channels</span>
-                <span className="text-zinc-700">·</span>
+                <span className="text-zinc-300">·</span>
                 <span>approval-gated AI</span>
-                <span className="text-zinc-700">·</span>
+                <span className="text-zinc-300">·</span>
                 <span>multi-tenant by design</span>
               </div>
             </div>
@@ -158,13 +158,13 @@ export default function LandingPage() {
       </section>
 
       {/* ──────────────── CHANNEL MARQUEE ──────────────── */}
-      <section className="border-y border-white/10 py-5" aria-label="Channels and capabilities">
+      <section className="border-y border-zinc-200 py-5" aria-label="Channels and capabilities">
         <div className="marquee-mask overflow-hidden">
           <div className={`${MONO} animate-marquee flex w-max items-center gap-8 whitespace-nowrap text-[13px] text-zinc-500`}>
             {Array.from({ length: 2 }).flatMap((_, dup) =>
               MARQUEE_ITEMS.map((item) => (
                 <span key={`${dup}-${item}`} className="inline-flex items-center gap-2">
-                  <span className="h-1 w-1 rounded-full bg-teal-400/70" />
+                  <span className="h-1 w-1 rounded-full bg-teal-500" />
                   {item}
                 </span>
               )),
@@ -176,7 +176,7 @@ export default function LandingPage() {
       {/* ──────────────── STATS ──────────────── */}
       <section className="py-16 sm:py-20" aria-label="At a glance">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-white/10 bg-white/10 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-zinc-200 bg-zinc-200 lg:grid-cols-4">
             {[
               { to: 8, suffix: '', label: 'Channels in one inbox' },
               { to: 100, suffix: '%', label: 'Tenant data isolation' },
@@ -184,10 +184,10 @@ export default function LandingPage() {
               { to: 1, suffix: '', label: 'Workspace, every brand' },
             ].map((s, i) => (
               <Reveal key={s.label} delay={i * 80}>
-                <div className="h-full bg-[#0a0a0b] p-6">
-                  <div className={`${MONO} text-4xl font-medium tabular-nums tracking-tight text-zinc-50 sm:text-5xl`}>
+                <div className="h-full bg-white p-6">
+                  <div className={`${MONO} text-4xl font-medium tabular-nums tracking-tight text-zinc-900 sm:text-5xl`}>
                     <CountUp to={s.to} />
-                    <span className="text-teal-400">{s.suffix}</span>
+                    <span className="text-teal-700">{s.suffix}</span>
                   </div>
                   <p className="mt-2 text-sm text-zinc-500">{s.label}</p>
                 </div>
@@ -201,11 +201,11 @@ export default function LandingPage() {
       <section id="features" className="py-20 sm:py-28" aria-labelledby="features-heading">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <Reveal className="max-w-2xl">
-            <span className={`${MONO} text-[12px] tracking-tight text-teal-400`}>Capabilities</span>
-            <h2 id="features-heading" className="mt-3 text-3xl font-semibold tracking-[-0.02em] text-zinc-50 sm:text-4xl">
+            <span className={`${MONO} text-[12px] tracking-tight text-teal-700`}>Capabilities</span>
+            <h2 id="features-heading" className="mt-3 text-3xl font-semibold tracking-[-0.02em] text-zinc-900 sm:text-4xl">
               Everything your team needs to answer faster
             </h2>
-            <p className="mt-4 text-lg text-zinc-400">
+            <p className="mt-4 text-lg text-zinc-600">
               One workspace replaces the patchwork of inboxes, chat apps and spreadsheets — with AI
               and automation built in.
             </p>
@@ -221,14 +221,14 @@ export default function LandingPage() {
       <section className="py-20 sm:py-28" aria-labelledby="how-heading">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <Reveal className="max-w-2xl">
-            <span className={`${MONO} text-[12px] tracking-tight text-teal-400`}>How it works</span>
-            <h2 id="how-heading" className="mt-3 text-3xl font-semibold tracking-[-0.02em] text-zinc-50 sm:text-4xl">
+            <span className={`${MONO} text-[12px] tracking-tight text-teal-700`}>How it works</span>
+            <h2 id="how-heading" className="mt-3 text-3xl font-semibold tracking-[-0.02em] text-zinc-900 sm:text-4xl">
               Many channels in. One thread out.
             </h2>
           </Reveal>
 
           <Reveal className="mt-12">
-            <div className="rounded-2xl border border-white/10 bg-[#0d0d0f] p-6 sm:p-10">
+            <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-6 sm:p-10">
               <RoutingDiagram />
             </div>
           </Reveal>
@@ -236,10 +236,10 @@ export default function LandingPage() {
           <div className="mt-12 grid gap-8 sm:grid-cols-3">
             {STEPS.map((s, i) => (
               <Reveal key={s.title} delay={i * 100}>
-                <div className="border-t border-white/10 pt-5">
-                  <span className={`${MONO} text-[12px] tabular-nums text-teal-400`}>{s.n}</span>
-                  <h3 className="mt-2 text-base font-medium text-zinc-100">{s.title}</h3>
-                  <p className="mt-1.5 text-sm leading-relaxed text-zinc-400">{s.body}</p>
+                <div className="border-t border-zinc-200 pt-5">
+                  <span className={`${MONO} text-[12px] tabular-nums text-teal-700`}>{s.n}</span>
+                  <h3 className="mt-2 text-base font-medium text-zinc-900">{s.title}</h3>
+                  <p className="mt-1.5 text-sm leading-relaxed text-zinc-600">{s.body}</p>
                 </div>
               </Reveal>
             ))}
@@ -248,16 +248,16 @@ export default function LandingPage() {
       </section>
 
       {/* ──────────────── AI SPOTLIGHT ──────────────── */}
-      <section className="border-y border-white/10 bg-[#0c0c0e] py-20 sm:py-28" aria-labelledby="ai-heading">
+      <section className="border-y border-zinc-200 bg-zinc-50 py-20 sm:py-28" aria-labelledby="ai-heading">
         <div className="mx-auto grid max-w-7xl items-center gap-14 px-4 sm:px-6 lg:grid-cols-2 lg:px-8">
           <Reveal>
-            <span className={`${MONO} inline-flex items-center gap-2 text-[12px] tracking-tight text-teal-400`}>
+            <span className={`${MONO} inline-flex items-center gap-2 text-[12px] tracking-tight text-teal-700`}>
               <Bot className="h-3.5 w-3.5" /> AI assistant
             </span>
-            <h2 id="ai-heading" className="mt-3 text-3xl font-semibold tracking-[-0.02em] text-zinc-50 sm:text-4xl">
+            <h2 id="ai-heading" className="mt-3 text-3xl font-semibold tracking-[-0.02em] text-zinc-900 sm:text-4xl">
               AI that drafts. People who decide.
             </h2>
-            <p className="mt-4 max-w-lg text-lg leading-relaxed text-zinc-400">
+            <p className="mt-4 max-w-lg text-lg leading-relaxed text-zinc-600">
               Generate a thoughtful, on-brand reply in seconds using the full conversation context.
               Your agent reviews, tweaks and approves — nothing reaches a customer without a human’s
               say-so.
@@ -270,8 +270,8 @@ export default function LandingPage() {
                 'Per-role AI model assignment by admins',
                 'Works across all eight channels',
               ].map((t) => (
-                <li key={t} className="flex items-start gap-3 text-zinc-300">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-teal-400" />
+                <li key={t} className="flex items-start gap-3 text-zinc-700">
+                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-teal-700" />
                   <span className="text-sm">{t}</span>
                 </li>
               ))}
@@ -279,11 +279,11 @@ export default function LandingPage() {
           </Reveal>
 
           <Reveal delay={120}>
-            <div className="rounded-2xl border border-white/10 bg-[#141416] p-5">
-              <div className={`${MONO} flex items-center gap-1.5 text-[12px] text-teal-300`}>
+            <div className="rounded-2xl border border-zinc-200 bg-white p-5">
+              <div className={`${MONO} flex items-center gap-1.5 text-[12px] text-teal-700`}>
                 <Bot className="h-3.5 w-3.5" /> suggested reply
               </div>
-              <p className="mt-3 text-sm leading-relaxed text-zinc-300">
+              <p className="mt-3 text-sm leading-relaxed text-zinc-700">
                 Hi Ava, I’m so sorry your order arrived damaged. I’ve issued a full refund to your
                 original payment method — you’ll see it within 3–5 business days. I’ve also emailed
                 a prepaid return label. Anything else I can help with?
@@ -292,8 +292,8 @@ export default function LandingPage() {
                 <span className="inline-flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-medium text-white">
                   <Check className="h-3.5 w-3.5" /> Approve &amp; send
                 </span>
-                <span className="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-medium text-zinc-300">Edit draft</span>
-                <span className="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-medium text-zinc-300">Regenerate</span>
+                <span className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700">Edit draft</span>
+                <span className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700">Regenerate</span>
               </div>
             </div>
           </Reveal>
@@ -305,42 +305,42 @@ export default function LandingPage() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="grid items-center gap-14 lg:grid-cols-2">
             <Reveal>
-              <span className={`${MONO} text-[12px] tracking-tight text-teal-400`}>Built for many brands</span>
-              <h2 id="security-heading" className="mt-3 text-3xl font-semibold tracking-[-0.02em] text-zinc-50 sm:text-4xl">
+              <span className={`${MONO} text-[12px] tracking-tight text-teal-700`}>Built for many brands</span>
+              <h2 id="security-heading" className="mt-3 text-3xl font-semibold tracking-[-0.02em] text-zinc-900 sm:text-4xl">
                 True multi-tenancy, isolation you can trust
               </h2>
-              <p className="mt-4 max-w-lg text-lg leading-relaxed text-zinc-400">
+              <p className="mt-4 max-w-lg text-lg leading-relaxed text-zinc-600">
                 Run a dozen brands or client accounts from a single platform. Every tenant’s data is
                 separated at the database layer with row-level security, so information never leaks
                 between companies — by accident or otherwise.
               </p>
               <div className="mt-8 grid gap-3 sm:grid-cols-2">
                 {TRUST.map((t) => (
-                  <div key={t.label} className="flex items-center gap-3 rounded-xl border border-white/10 bg-[#141416] p-4">
-                    <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/[0.04] text-teal-300 ring-1 ring-white/10">
+                  <div key={t.label} className="flex items-center gap-3 rounded-xl border border-zinc-200 bg-white p-4">
+                    <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-zinc-100 text-teal-700 ring-1 ring-zinc-200">
                       <t.icon className="h-4 w-4" />
                     </span>
-                    <span className="text-sm text-zinc-300">{t.label}</span>
+                    <span className="text-sm text-zinc-700">{t.label}</span>
                   </div>
                 ))}
               </div>
             </Reveal>
 
             <Reveal delay={120}>
-              <div className="rounded-2xl border border-white/10 bg-[#0d0d0f] p-6">
+              <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-6">
                 <div className="space-y-3">
                   {['Brand A', 'Brand B', 'Brand C'].map((b, i) => (
                     <div
                       key={b}
-                      className="flex items-center justify-between rounded-xl border border-white/10 bg-[#141416] p-4"
+                      className="flex items-center justify-between rounded-xl border border-zinc-200 bg-white p-4"
                       style={{ marginLeft: `${i * 14}px` }}
                     >
                       <div className="flex items-center gap-3">
-                        <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-white/[0.04] text-teal-300 ring-1 ring-white/10">
+                        <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-zinc-100 text-teal-700 ring-1 ring-zinc-200">
                           <Building2 className="h-4 w-4" />
                         </span>
                         <div>
-                          <p className="text-sm font-medium text-zinc-200">{b}</p>
+                          <p className="text-sm font-medium text-zinc-800">{b}</p>
                           <p className={`${MONO} text-[11px] text-zinc-500`}>isolated workspace</p>
                         </div>
                       </div>
@@ -361,21 +361,21 @@ export default function LandingPage() {
       <section className="py-20 sm:py-28" aria-labelledby="faq-heading">
         <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
           <Reveal>
-            <h2 id="faq-heading" className="text-3xl font-semibold tracking-[-0.02em] text-zinc-50 sm:text-4xl">
+            <h2 id="faq-heading" className="text-3xl font-semibold tracking-[-0.02em] text-zinc-900 sm:text-4xl">
               Frequently asked questions
             </h2>
           </Reveal>
           <div className="mt-10 space-y-2.5">
             {FAQ.map((f, i) => (
               <Reveal key={f.q} delay={i * 50}>
-                <details className="group rounded-xl border border-white/10 bg-[#141416] p-5 transition-colors open:border-white/20">
-                  <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-base font-medium text-zinc-100">
+                <details className="group rounded-xl border border-zinc-200 bg-white p-5 transition-colors open:border-zinc-300">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-base font-medium text-zinc-900">
                     {f.q}
-                    <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/10 text-zinc-400 transition-transform group-open:rotate-45">
+                    <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-zinc-200 text-zinc-600 transition-transform group-open:rotate-45">
                       <span className="text-lg leading-none">+</span>
                     </span>
                   </summary>
-                  <p className="mt-3 text-sm leading-relaxed text-zinc-400">{f.a}</p>
+                  <p className="mt-3 text-sm leading-relaxed text-zinc-600">{f.a}</p>
                 </details>
               </Reveal>
             ))}
@@ -387,26 +387,26 @@ export default function LandingPage() {
       <section className="py-20 sm:py-24" aria-labelledby="cta-heading">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <Reveal>
-            <div className="relative isolate overflow-hidden rounded-2xl border border-white/10 bg-[#0d0d0f] px-6 py-16 text-center sm:px-16">
-              <div className="pointer-events-none absolute inset-0 -z-10 bg-grid-dark opacity-40" aria-hidden="true" />
-              <h2 id="cta-heading" className="text-3xl font-semibold tracking-[-0.02em] text-zinc-50 sm:text-4xl">
+            <div className="relative isolate overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-50 px-6 py-16 text-center sm:px-16">
+              <div className="pointer-events-none absolute inset-0 -z-10 bg-dot-grid opacity-40" aria-hidden="true" />
+              <h2 id="cta-heading" className="text-3xl font-semibold tracking-[-0.02em] text-zinc-900 sm:text-4xl">
                 Bring every conversation together
               </h2>
-              <p className="mx-auto mt-4 max-w-xl text-lg text-zinc-400">
+              <p className="mx-auto mt-4 max-w-xl text-lg text-zinc-600">
                 See Unified in action. We’ll connect your channels, set up your workspace and onboard
                 your team.
               </p>
               <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
                 <Link
                   href="/contact"
-                  className="group inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--brand-accent)] px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-teal-600"
+                  className="group inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--brand-accent)] px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-teal-800"
                 >
                   Request a demo
                   <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
                 </Link>
                 <Link
                   href="/pricing"
-                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/15 px-5 py-3 text-sm font-medium text-zinc-200 transition-colors hover:border-white/30 hover:bg-white/[0.04]"
+                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-zinc-300 px-5 py-3 text-sm font-medium text-zinc-800 transition-colors hover:border-zinc-300 hover:bg-zinc-50"
                 >
                   View pricing
                 </Link>
