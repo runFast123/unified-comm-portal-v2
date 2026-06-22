@@ -1,33 +1,11 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import {
-  ArrowRight,
-  Inbox,
-  Sparkles,
-  Building2,
-  Mail,
-  MessageSquare,
-  MessagesSquare,
-  ShieldCheck,
-  Users,
-  Zap,
-  Check,
-  CheckCircle2,
-  Lock,
-  BarChart3,
-  Bot,
-  Workflow,
-  Plug,
-  Send,
-  Facebook,
-  Instagram,
-  Smartphone,
-} from 'lucide-react'
+import { ArrowRight, Bot, Check, Lock, ShieldCheck, BarChart3, Workflow, Building2 } from 'lucide-react'
 import { Reveal } from '@/components/marketing/reveal'
 import { CountUp } from '@/components/marketing/count-up'
-import { Hero3D } from '@/components/marketing/hero-3d'
-import { Tilt } from '@/components/marketing/tilt'
-import { FeaturesShowcase } from '@/components/marketing/features-showcase'
+import { HeroPanels } from '@/components/marketing/hero-panels'
+import { FeaturesBento } from '@/components/marketing/features-bento'
+import { RoutingDiagram } from '@/components/marketing/routing-diagram'
 import { SITE_URL, SITE_NAME, SITE_DESCRIPTION } from '@/lib/site'
 
 export const metadata: Metadata = {
@@ -35,6 +13,8 @@ export const metadata: Metadata = {
   alternates: { canonical: '/' },
   openGraph: { url: SITE_URL, title: `${SITE_NAME} — One AI inbox for every channel` },
 }
+
+const MONO = 'font-[family-name:var(--font-geist-mono)]'
 
 const FAQ = [
   {
@@ -85,17 +65,17 @@ const softwareJsonLd = {
 
 const STEPS = [
   {
-    icon: Plug,
+    n: '01',
     title: 'Connect your channels',
     body: 'Plug in email, chat, SMS and social — or drop the live-chat widget on your site. Messages flow into one place, threaded and de-duplicated.',
   },
   {
-    icon: Users,
+    n: '02',
     title: 'Collaborate in one inbox',
     body: 'Assign, tag, set statuses and reply together. Everyone sees the full history; nothing slips through the cracks.',
   },
   {
-    icon: Zap,
+    n: '03',
     title: 'Resolve faster with AI',
     body: 'Generate a draft, review it, and send. Track SLAs and CSAT so every customer gets a fast, quality answer.',
   },
@@ -108,25 +88,11 @@ const TRUST = [
   { icon: Workflow, label: 'Approval-gated AI sending' },
 ]
 
-function ChannelBadge({ name }: { name: string }) {
-  const map: Record<string, { cls: string; Icon: typeof Mail }> = {
-    Email: { cls: 'bg-[#ea4335]', Icon: Mail },
-    Teams: { cls: 'bg-[#6264a7]', Icon: MessagesSquare },
-    WhatsApp: { cls: 'bg-[#25d366]', Icon: MessageSquare },
-    SMS: { cls: 'bg-[#ec4899]', Icon: Smartphone },
-    Telegram: { cls: 'bg-[#0088cc]', Icon: Send },
-    Messenger: { cls: 'bg-[#0084ff]', Icon: Facebook },
-    Instagram: { cls: 'bg-[#e4405f]', Icon: Instagram },
-    'Live Chat': { cls: 'bg-[#16a34a]', Icon: MessagesSquare },
-  }
-  const { cls, Icon } = map[name]
-  return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold text-white ${cls}`}>
-      <Icon className="h-3.5 w-3.5" />
-      {name}
-    </span>
-  )
-}
+const MARQUEE_ITEMS = [
+  'Email', 'Microsoft Teams', 'WhatsApp', 'SMS', 'Telegram', 'Messenger', 'Instagram',
+  'Website live chat', 'AI drafted replies', 'Smart routing', 'SLA timers', 'CSAT surveys',
+  'Reply templates', 'Knowledge base', 'Multi-tenant', 'Role-based access', 'Bring your own credentials',
+]
 
 export default function LandingPage() {
   return (
@@ -137,174 +103,68 @@ export default function LandingPage() {
       />
 
       {/* ───────────────────────── HERO ───────────────────────── */}
-      <section className="relative isolate overflow-hidden bg-white" aria-labelledby="hero-heading">
-        {/* animated background */}
-        <div className="pointer-events-none absolute inset-0 -z-10 bg-dot-grid opacity-70" aria-hidden="true" />
-        {/* WebGL hero backdrop — a distorted teal orb + particle field (lazy,
-            reduced-motion/mobile-safe; falls back to a soft gradient glow). */}
-        <Hero3D className="pointer-events-none absolute inset-0 -z-10 overflow-hidden" />
-        <div className="absolute inset-x-0 bottom-0 -z-10 h-40 bg-gradient-to-b from-transparent to-white" aria-hidden="true" />
+      <section className="relative isolate overflow-hidden" aria-labelledby="hero-heading">
+        <div className="pointer-events-none absolute inset-0 -z-10 bg-grid-dark opacity-60" aria-hidden="true" />
+        <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" aria-hidden="true" />
 
-        <div className="mx-auto max-w-7xl px-4 pb-20 pt-28 sm:px-6 sm:pt-32 lg:px-8 lg:pb-28">
-          <div className="grid items-center gap-12 lg:grid-cols-2">
-            {/* copy */}
+        <div className="mx-auto max-w-7xl px-4 pb-24 pt-32 sm:px-6 sm:pt-36 lg:px-8 lg:pb-28">
+          <div className="grid items-center gap-16 lg:grid-cols-2">
             <div className="animate-rise">
-              <span className="inline-flex items-center gap-2 rounded-full border border-teal-200 bg-teal-50/80 px-3.5 py-1.5 text-xs font-semibold text-teal-700 shadow-sm">
-                <Sparkles className="h-3.5 w-3.5" />
-                AI-powered · Multi-channel · Multi-tenant
+              <span className={`${MONO} inline-flex items-center gap-2 text-[12px] tracking-tight text-zinc-400`}>
+                <span className="h-1.5 w-1.5 rounded-full bg-teal-400" />
+                Support operations platform
               </span>
               <h1
                 id="hero-heading"
-                className="mt-6 text-balance text-4xl font-extrabold leading-[1.08] tracking-tight text-gray-900 sm:text-5xl lg:text-6xl"
+                className="mt-6 text-balance text-5xl font-semibold leading-[1.02] tracking-[-0.03em] text-zinc-50 sm:text-6xl"
               >
-                Every customer conversation.{' '}
-                <span className="text-gradient">One intelligent inbox.</span>
+                Eight channels.<br />One inbox.
               </h1>
-              <p className="mt-6 max-w-xl text-balance text-lg leading-relaxed text-gray-600">
-                Unified brings email, Teams, WhatsApp, SMS, Telegram, social DMs and website
-                live chat into a single AI-powered workspace — so your team replies faster,
-                together, across every brand you run.
+              <p className="mt-6 max-w-xl text-pretty text-lg leading-relaxed text-zinc-400">
+                Every customer conversation — email, WhatsApp, Teams, SMS, Telegram, social DMs and
+                website live chat — in a single AI-assisted queue your whole team works from.
               </p>
 
-              <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              <div className="mt-9 flex flex-col gap-3 sm:flex-row">
                 <Link
                   href="/contact"
-                  className="shine group relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-xl bg-gradient-to-r from-teal-700 to-teal-600 px-6 py-3.5 text-base font-semibold text-white shadow-lg shadow-teal-700/25 transition-all hover:shadow-xl hover:shadow-teal-700/30"
+                  className="group inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--brand-accent)] px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-teal-600"
                 >
                   Request a demo
-                  <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
+                  <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
                 </Link>
                 <Link
                   href="/login"
-                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white px-6 py-3.5 text-base font-semibold text-gray-800 transition-colors hover:border-teal-300 hover:bg-teal-50/50 hover:text-teal-700"
+                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/15 px-5 py-3 text-sm font-medium text-zinc-200 transition-colors hover:border-white/30 hover:bg-white/[0.04]"
                 >
                   Sign in
                 </Link>
               </div>
 
-              <div className="mt-8 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-gray-500">
-                <span className="inline-flex items-center gap-1.5">
-                  <CheckCircle2 className="h-4 w-4 text-teal-600" />
-                  Invite-only access
-                </span>
-                <span className="inline-flex items-center gap-1.5">
-                  <CheckCircle2 className="h-4 w-4 text-teal-600" />
-                  Built for teams &amp; BPOs
-                </span>
-                <span className="inline-flex items-center gap-1.5">
-                  <CheckCircle2 className="h-4 w-4 text-teal-600" />
-                  AI you approve
-                </span>
+              <div className={`${MONO} mt-9 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[12px] text-zinc-500`}>
+                <span>8 channels</span>
+                <span className="text-zinc-700">·</span>
+                <span>approval-gated AI</span>
+                <span className="text-zinc-700">·</span>
+                <span>multi-tenant by design</span>
               </div>
             </div>
 
-            {/* product mockup */}
-            <div className="relative animate-rise [animation-delay:150ms]">
-              <Tilt max={6} className="rounded-2xl border border-gray-200 bg-white/90 p-3 shadow-2xl shadow-teal-900/10 backdrop-blur">
-                <div className="overflow-hidden rounded-xl border border-gray-100">
-                  {/* window chrome */}
-                  <div className="flex items-center gap-1.5 border-b border-gray-100 bg-gray-50 px-3 py-2.5">
-                    <span className="h-2.5 w-2.5 rounded-full bg-[#ff5f57]" />
-                    <span className="h-2.5 w-2.5 rounded-full bg-[#febc2e]" />
-                    <span className="h-2.5 w-2.5 rounded-full bg-[#28c840]" />
-                    <span className="ml-3 inline-flex items-center gap-1.5 text-xs font-medium text-gray-400">
-                      <Inbox className="h-3.5 w-3.5" /> Shared inbox
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-5">
-                    {/* conversation list */}
-                    <div className="col-span-2 border-r border-gray-100 bg-gray-50/60">
-                      {[
-                        { n: 'Ava Chen', c: 'Email', t: 'Refund on order #4821', cls: 'border-l-[#ea4335]', active: true },
-                        { n: 'Liam Patel', c: 'WhatsApp', t: 'Where is my delivery?', cls: 'border-l-[#25d366]' },
-                        { n: 'Website visitor', c: 'Live Chat', t: 'Is this in stock?', cls: 'border-l-[#16a34a]' },
-                        { n: 'Ops Team', c: 'Teams', t: 'Escalation: VIP account', cls: 'border-l-[#6264a7]' },
-                      ].map((m) => (
-                        <div
-                          key={m.n}
-                          className={`border-l-2 ${m.cls} px-3 py-3 ${m.active ? 'bg-white' : ''}`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-semibold text-gray-800">{m.n}</span>
-                            <span className="text-[10px] font-medium text-gray-400">{m.c}</span>
-                          </div>
-                          <p className="mt-0.5 truncate text-[11px] text-gray-500">{m.t}</p>
-                        </div>
-                      ))}
-                    </div>
-                    {/* conversation pane */}
-                    <div className="col-span-3 bg-white p-3.5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-semibold text-gray-800">Ava Chen</span>
-                        <ChannelBadge name="Email" />
-                      </div>
-                      <div className="mt-3 space-y-2">
-                        <div className="max-w-[85%] rounded-2xl rounded-tl-sm bg-gray-100 px-3 py-2 text-[11px] text-gray-700">
-                          Hi — I’d like a refund on order #4821, it arrived damaged.
-                        </div>
-                        <div className="ml-auto max-w-[85%] rounded-2xl rounded-tr-sm bg-teal-600 px-3 py-2 text-[11px] text-white">
-                          So sorry, Ava! I’ve started your refund — it’ll land in 3–5 days.
-                        </div>
-                      </div>
-                      {/* AI draft chip */}
-                      <div className="mt-3 rounded-lg border border-teal-200 bg-teal-50/70 p-2.5">
-                        <div className="flex items-center gap-1.5 text-[10px] font-semibold text-teal-700">
-                          <Bot className="h-3.5 w-3.5" /> AI draft · review before send
-                        </div>
-                        <p className="mt-1 text-[11px] leading-snug text-gray-600">
-                          Offer a prepaid return label and confirm the refund timeline…
-                        </p>
-                        <div className="mt-2 flex gap-1.5">
-                          <span className="rounded-md bg-teal-600 px-2 py-1 text-[10px] font-semibold text-white">
-                            Approve &amp; send
-                          </span>
-                          <span className="rounded-md border border-gray-200 bg-white px-2 py-1 text-[10px] font-medium text-gray-600">
-                            Edit
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </Tilt>
-              {/* floating channel chips */}
-              <div className="animate-float absolute -left-4 top-10 hidden rounded-xl border border-gray-100 bg-white px-3 py-2 shadow-lg sm:block">
-                <ChannelBadge name="WhatsApp" />
-              </div>
-              <div className="animate-float-slow absolute -right-3 bottom-16 hidden rounded-xl border border-gray-100 bg-white px-3 py-2 shadow-lg sm:block">
-                <ChannelBadge name="Teams" />
-              </div>
+            <div className="animate-rise [animation-delay:120ms]">
+              <HeroPanels />
             </div>
           </div>
         </div>
       </section>
 
       {/* ──────────────── CHANNEL MARQUEE ──────────────── */}
-      <section className="border-y border-gray-100 bg-gray-50/60 py-6" aria-label="Channels and capabilities">
+      <section className="border-y border-white/10 py-5" aria-label="Channels and capabilities">
         <div className="marquee-mask overflow-hidden">
-          <div className="animate-marquee flex w-max items-center gap-10 whitespace-nowrap text-sm font-semibold text-gray-400">
+          <div className={`${MONO} animate-marquee flex w-max items-center gap-8 whitespace-nowrap text-[13px] text-zinc-500`}>
             {Array.from({ length: 2 }).flatMap((_, dup) =>
-              [
-                'Email',
-                'Microsoft Teams',
-                'WhatsApp',
-                'SMS',
-                'Telegram',
-                'Messenger',
-                'Instagram',
-                'Website live chat',
-                'AI drafted replies',
-                'Smart routing',
-                'SLA timers',
-                'CSAT surveys',
-                'Reply templates',
-                'Knowledge base',
-                'Multi-tenant',
-                'Role-based access',
-                'Bring your own credentials',
-              ].map((item) => (
+              MARQUEE_ITEMS.map((item) => (
                 <span key={`${dup}-${item}`} className="inline-flex items-center gap-2">
-                  <span className="h-1.5 w-1.5 rounded-full bg-teal-400" />
+                  <span className="h-1 w-1 rounded-full bg-teal-400/70" />
                   {item}
                 </span>
               )),
@@ -314,9 +174,9 @@ export default function LandingPage() {
       </section>
 
       {/* ──────────────── STATS ──────────────── */}
-      <section className="bg-white py-16 sm:py-20" aria-label="At a glance">
+      <section className="py-16 sm:py-20" aria-label="At a glance">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-2 gap-6 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-white/10 bg-white/10 lg:grid-cols-4">
             {[
               { to: 8, suffix: '', label: 'Channels in one inbox' },
               { to: 100, suffix: '%', label: 'Tenant data isolation' },
@@ -324,11 +184,12 @@ export default function LandingPage() {
               { to: 1, suffix: '', label: 'Workspace, every brand' },
             ].map((s, i) => (
               <Reveal key={s.label} delay={i * 80}>
-                <div className="rounded-2xl border border-gray-100 bg-gradient-to-b from-gray-50 to-white p-6 text-center shadow-sm">
-                  <div className="text-4xl font-extrabold tracking-tight text-teal-700 sm:text-5xl">
-                    <CountUp to={s.to} suffix={s.suffix} />
+                <div className="h-full bg-[#0a0a0b] p-6">
+                  <div className={`${MONO} text-4xl font-medium tabular-nums tracking-tight text-zinc-50 sm:text-5xl`}>
+                    <CountUp to={s.to} />
+                    <span className="text-teal-400">{s.suffix}</span>
                   </div>
-                  <p className="mt-2 text-sm font-medium text-gray-500">{s.label}</p>
+                  <p className="mt-2 text-sm text-zinc-500">{s.label}</p>
                 </div>
               </Reveal>
             ))}
@@ -337,72 +198,69 @@ export default function LandingPage() {
       </section>
 
       {/* ──────────────── FEATURES ──────────────── */}
-      <section id="features" className="bg-gray-50/70 py-20 sm:py-28" aria-labelledby="features-heading">
+      <section id="features" className="py-20 sm:py-28" aria-labelledby="features-heading">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <Reveal className="mx-auto max-w-2xl text-center">
-            <h2 id="features-heading" className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
-              Everything your team needs to{' '}
-              <span className="text-gradient">answer faster</span>
+          <Reveal className="max-w-2xl">
+            <span className={`${MONO} text-[12px] tracking-tight text-teal-400`}>Capabilities</span>
+            <h2 id="features-heading" className="mt-3 text-3xl font-semibold tracking-[-0.02em] text-zinc-50 sm:text-4xl">
+              Everything your team needs to answer faster
             </h2>
-            <p className="mt-4 text-lg text-gray-600">
-              One workspace replaces the patchwork of inboxes, chat apps and spreadsheets — with
-              AI and automation built in.
+            <p className="mt-4 text-lg text-zinc-400">
+              One workspace replaces the patchwork of inboxes, chat apps and spreadsheets — with AI
+              and automation built in.
             </p>
           </Reveal>
 
-          <FeaturesShowcase />
+          <Reveal>
+            <FeaturesBento />
+          </Reveal>
         </div>
       </section>
 
-      {/* ──────────────── HOW IT WORKS ──────────────── */}
-      <section className="bg-white py-20 sm:py-28" aria-labelledby="how-heading">
+      {/* ──────────────── HOW IT WORKS / ROUTING ──────────────── */}
+      <section className="py-20 sm:py-28" aria-labelledby="how-heading">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <Reveal className="mx-auto max-w-2xl text-center">
-            <span className="text-sm font-semibold uppercase tracking-wider text-teal-600">How it works</span>
-            <h2 id="how-heading" className="mt-3 text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
-              Live in three steps
+          <Reveal className="max-w-2xl">
+            <span className={`${MONO} text-[12px] tracking-tight text-teal-400`}>How it works</span>
+            <h2 id="how-heading" className="mt-3 text-3xl font-semibold tracking-[-0.02em] text-zinc-50 sm:text-4xl">
+              Many channels in. One thread out.
             </h2>
           </Reveal>
 
-          <div className="relative mt-16">
-            {/* connecting line */}
-            <div className="absolute left-0 right-0 top-7 hidden h-px bg-gradient-to-r from-transparent via-teal-200 to-transparent lg:block" aria-hidden="true" />
-            <div className="grid gap-10 lg:grid-cols-3">
-              {STEPS.map((s, i) => (
-                <Reveal key={s.title} delay={i * 120} className="relative text-center">
-                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-teal-700 to-teal-600 text-white shadow-lg shadow-teal-700/25 ring-4 ring-white">
-                    <s.icon className="h-6 w-6" />
-                  </div>
-                  <div className="mx-auto mt-4 inline-flex h-6 w-6 items-center justify-center rounded-full bg-teal-50 text-xs font-bold text-teal-700 ring-1 ring-teal-100">
-                    {i + 1}
-                  </div>
-                  <h3 className="mt-4 text-lg font-semibold text-gray-900">{s.title}</h3>
-                  <p className="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-gray-600">{s.body}</p>
-                </Reveal>
-              ))}
+          <Reveal className="mt-12">
+            <div className="rounded-2xl border border-white/10 bg-[#0d0d0f] p-6 sm:p-10">
+              <RoutingDiagram />
             </div>
+          </Reveal>
+
+          <div className="mt-12 grid gap-8 sm:grid-cols-3">
+            {STEPS.map((s, i) => (
+              <Reveal key={s.title} delay={i * 100}>
+                <div className="border-t border-white/10 pt-5">
+                  <span className={`${MONO} text-[12px] tabular-nums text-teal-400`}>{s.n}</span>
+                  <h3 className="mt-2 text-base font-medium text-zinc-100">{s.title}</h3>
+                  <p className="mt-1.5 text-sm leading-relaxed text-zinc-400">{s.body}</p>
+                </div>
+              </Reveal>
+            ))}
           </div>
         </div>
       </section>
 
       {/* ──────────────── AI SPOTLIGHT ──────────────── */}
-      <section className="relative overflow-hidden bg-gradient-to-br from-teal-800 via-teal-700 to-emerald-700 py-20 text-white sm:py-28" aria-labelledby="ai-heading">
-        <div className="pointer-events-none absolute inset-0 -z-0 opacity-20" aria-hidden="true">
-          <div className="animate-blob absolute -left-20 top-0 h-80 w-80 rounded-full bg-white/30 blur-3xl" />
-          <div className="animate-blob absolute bottom-0 right-0 h-80 w-80 rounded-full bg-emerald-300/40 blur-3xl [animation-delay:4s]" />
-        </div>
-        <div className="relative mx-auto grid max-w-7xl items-center gap-12 px-4 sm:px-6 lg:grid-cols-2 lg:px-8">
+      <section className="border-y border-white/10 bg-[#0c0c0e] py-20 sm:py-28" aria-labelledby="ai-heading">
+        <div className="mx-auto grid max-w-7xl items-center gap-14 px-4 sm:px-6 lg:grid-cols-2 lg:px-8">
           <Reveal>
-            <span className="inline-flex items-center gap-2 rounded-full bg-white/15 px-3.5 py-1.5 text-xs font-semibold text-white ring-1 ring-white/20">
+            <span className={`${MONO} inline-flex items-center gap-2 text-[12px] tracking-tight text-teal-400`}>
               <Bot className="h-3.5 w-3.5" /> AI assistant
             </span>
-            <h2 id="ai-heading" className="mt-5 text-3xl font-bold tracking-tight sm:text-4xl">
+            <h2 id="ai-heading" className="mt-3 text-3xl font-semibold tracking-[-0.02em] text-zinc-50 sm:text-4xl">
               AI that drafts. People who decide.
             </h2>
-            <p className="mt-4 max-w-lg text-lg leading-relaxed text-teal-50">
-              Generate a thoughtful, on-brand reply in seconds using the full conversation
-              context. Your agent reviews, tweaks and approves — nothing reaches a customer
-              without a human’s say-so.
+            <p className="mt-4 max-w-lg text-lg leading-relaxed text-zinc-400">
+              Generate a thoughtful, on-brand reply in seconds using the full conversation context.
+              Your agent reviews, tweaks and approves — nothing reaches a customer without a human’s
+              say-so.
             </p>
             <ul className="mt-7 space-y-3">
               {[
@@ -412,8 +270,8 @@ export default function LandingPage() {
                 'Per-role AI model assignment by admins',
                 'Works across all eight channels',
               ].map((t) => (
-                <li key={t} className="flex items-start gap-3 text-teal-50">
-                  <Check className="mt-0.5 h-5 w-5 shrink-0 text-emerald-300" />
+                <li key={t} className="flex items-start gap-3 text-zinc-300">
+                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-teal-400" />
                   <span className="text-sm">{t}</span>
                 </li>
               ))}
@@ -421,27 +279,21 @@ export default function LandingPage() {
           </Reveal>
 
           <Reveal delay={120}>
-            <div className="rounded-2xl border border-white/15 bg-white/10 p-5 shadow-2xl backdrop-blur-md">
-              <div className="rounded-xl bg-white p-4 text-gray-800">
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-teal-700">
-                  <Sparkles className="h-4 w-4" /> Suggested reply
-                </div>
-                <p className="mt-3 text-sm leading-relaxed text-gray-700">
-                  Hi Ava, I’m so sorry your order arrived damaged. I’ve issued a full refund to
-                  your original payment method — you’ll see it within 3–5 business days. I’ve also
-                  emailed a prepaid return label. Anything else I can help with?
-                </p>
-                <div className="mt-4 flex items-center gap-2">
-                  <span className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-teal-700 to-teal-600 px-3 py-1.5 text-xs font-semibold text-white">
-                    <Check className="h-3.5 w-3.5" /> Approve &amp; send
-                  </span>
-                  <span className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600">
-                    Edit draft
-                  </span>
-                  <span className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600">
-                    Regenerate
-                  </span>
-                </div>
+            <div className="rounded-2xl border border-white/10 bg-[#141416] p-5">
+              <div className={`${MONO} flex items-center gap-1.5 text-[12px] text-teal-300`}>
+                <Bot className="h-3.5 w-3.5" /> suggested reply
+              </div>
+              <p className="mt-3 text-sm leading-relaxed text-zinc-300">
+                Hi Ava, I’m so sorry your order arrived damaged. I’ve issued a full refund to your
+                original payment method — you’ll see it within 3–5 business days. I’ve also emailed
+                a prepaid return label. Anything else I can help with?
+              </p>
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-medium text-white">
+                  <Check className="h-3.5 w-3.5" /> Approve &amp; send
+                </span>
+                <span className="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-medium text-zinc-300">Edit draft</span>
+                <span className="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-medium text-zinc-300">Regenerate</span>
               </div>
             </div>
           </Reveal>
@@ -449,57 +301,55 @@ export default function LandingPage() {
       </section>
 
       {/* ──────────────── SECURITY / MULTI-TENANT ──────────────── */}
-      <section className="bg-white py-20 sm:py-28" aria-labelledby="security-heading">
+      <section className="py-20 sm:py-28" aria-labelledby="security-heading">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="grid items-center gap-12 lg:grid-cols-2">
+          <div className="grid items-center gap-14 lg:grid-cols-2">
             <Reveal>
-              <span className="text-sm font-semibold uppercase tracking-wider text-teal-600">
-                Built for many brands
-              </span>
-              <h2 id="security-heading" className="mt-3 text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
+              <span className={`${MONO} text-[12px] tracking-tight text-teal-400`}>Built for many brands</span>
+              <h2 id="security-heading" className="mt-3 text-3xl font-semibold tracking-[-0.02em] text-zinc-50 sm:text-4xl">
                 True multi-tenancy, isolation you can trust
               </h2>
-              <p className="mt-4 max-w-lg text-lg leading-relaxed text-gray-600">
-                Run a dozen brands or client accounts from a single platform. Every tenant’s
-                data is separated at the database layer with row-level security, so information
-                never leaks between companies — by accident or otherwise.
+              <p className="mt-4 max-w-lg text-lg leading-relaxed text-zinc-400">
+                Run a dozen brands or client accounts from a single platform. Every tenant’s data is
+                separated at the database layer with row-level security, so information never leaks
+                between companies — by accident or otherwise.
               </p>
-              <div className="mt-8 grid gap-4 sm:grid-cols-2">
+              <div className="mt-8 grid gap-3 sm:grid-cols-2">
                 {TRUST.map((t) => (
-                  <div key={t.label} className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50/70 p-4">
-                    <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-teal-50 text-teal-700 ring-1 ring-teal-100">
-                      <t.icon className="h-5 w-5" />
+                  <div key={t.label} className="flex items-center gap-3 rounded-xl border border-white/10 bg-[#141416] p-4">
+                    <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/[0.04] text-teal-300 ring-1 ring-white/10">
+                      <t.icon className="h-4 w-4" />
                     </span>
-                    <span className="text-sm font-medium text-gray-700">{t.label}</span>
+                    <span className="text-sm text-zinc-300">{t.label}</span>
                   </div>
                 ))}
               </div>
             </Reveal>
 
             <Reveal delay={120}>
-              <div className="relative rounded-2xl border border-gray-200 bg-gradient-to-br from-gray-50 to-white p-6 shadow-lg">
+              <div className="rounded-2xl border border-white/10 bg-[#0d0d0f] p-6">
                 <div className="space-y-3">
                   {['Brand A', 'Brand B', 'Brand C'].map((b, i) => (
                     <div
                       key={b}
-                      className="flex items-center justify-between rounded-xl border border-gray-100 bg-white p-4 shadow-sm"
-                      style={{ marginLeft: `${i * 12}px` }}
+                      className="flex items-center justify-between rounded-xl border border-white/10 bg-[#141416] p-4"
+                      style={{ marginLeft: `${i * 14}px` }}
                     >
                       <div className="flex items-center gap-3">
-                        <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-teal-600 to-teal-700 text-white">
-                          <Building2 className="h-5 w-5" />
+                        <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-white/[0.04] text-teal-300 ring-1 ring-white/10">
+                          <Building2 className="h-4 w-4" />
                         </span>
                         <div>
-                          <p className="text-sm font-semibold text-gray-800">{b}</p>
-                          <p className="text-[11px] text-gray-400">Isolated workspace</p>
+                          <p className="text-sm font-medium text-zinc-200">{b}</p>
+                          <p className={`${MONO} text-[11px] text-zinc-500`}>isolated workspace</p>
                         </div>
                       </div>
-                      <Lock className="h-4 w-4 text-teal-600" />
+                      <Lock className="h-4 w-4 text-zinc-500" />
                     </div>
                   ))}
                 </div>
-                <p className="mt-5 text-center text-xs font-medium text-gray-400">
-                  One platform · separate, secure tenants
+                <p className={`${MONO} mt-5 text-center text-[11px] text-zinc-500`}>
+                  one platform · separate, secure tenants
                 </p>
               </div>
             </Reveal>
@@ -508,24 +358,24 @@ export default function LandingPage() {
       </section>
 
       {/* ──────────────── FAQ ──────────────── */}
-      <section className="bg-gray-50/70 py-20 sm:py-28" aria-labelledby="faq-heading">
+      <section className="py-20 sm:py-28" aria-labelledby="faq-heading">
         <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
-          <Reveal className="text-center">
-            <h2 id="faq-heading" className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
+          <Reveal>
+            <h2 id="faq-heading" className="text-3xl font-semibold tracking-[-0.02em] text-zinc-50 sm:text-4xl">
               Frequently asked questions
             </h2>
           </Reveal>
-          <div className="mt-12 space-y-3">
+          <div className="mt-10 space-y-2.5">
             {FAQ.map((f, i) => (
-              <Reveal key={f.q} delay={i * 60}>
-                <details className="group rounded-xl border border-gray-200 bg-white p-5 shadow-sm transition-colors open:border-teal-200 open:shadow-md">
-                  <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-base font-semibold text-gray-900">
+              <Reveal key={f.q} delay={i * 50}>
+                <details className="group rounded-xl border border-white/10 bg-[#141416] p-5 transition-colors open:border-white/20">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-base font-medium text-zinc-100">
                     {f.q}
-                    <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-teal-50 text-teal-700 transition-transform group-open:rotate-45">
+                    <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/10 text-zinc-400 transition-transform group-open:rotate-45">
                       <span className="text-lg leading-none">+</span>
                     </span>
                   </summary>
-                  <p className="mt-3 text-sm leading-relaxed text-gray-600">{f.a}</p>
+                  <p className="mt-3 text-sm leading-relaxed text-zinc-400">{f.a}</p>
                 </details>
               </Reveal>
             ))}
@@ -534,37 +384,32 @@ export default function LandingPage() {
       </section>
 
       {/* ──────────────── FINAL CTA ──────────────── */}
-      <section className="bg-white py-20 sm:py-24" aria-labelledby="cta-heading">
+      <section className="py-20 sm:py-24" aria-labelledby="cta-heading">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <Reveal>
-            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-teal-800 via-teal-700 to-emerald-700 px-6 py-16 text-center shadow-2xl shadow-teal-900/20 sm:px-16">
-              <div className="pointer-events-none absolute inset-0 -z-0 opacity-25" aria-hidden="true">
-                <div className="animate-blob absolute -left-10 -top-10 h-72 w-72 rounded-full bg-white/30 blur-3xl" />
-                <div className="animate-blob absolute -bottom-10 right-0 h-72 w-72 rounded-full bg-emerald-300/40 blur-3xl [animation-delay:4s]" />
-              </div>
-              <div className="relative">
-                <h2 id="cta-heading" className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
-                  Bring every conversation together
-                </h2>
-                <p className="mx-auto mt-4 max-w-xl text-lg text-teal-50">
-                  See Unified in action. We’ll connect your channels, set up your workspace and
-                  onboard your team.
-                </p>
-                <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-                  <Link
-                    href="/contact"
-                    className="group inline-flex items-center justify-center gap-2 rounded-xl bg-white px-6 py-3.5 text-base font-semibold text-teal-700 shadow-lg transition-all hover:shadow-xl"
-                  >
-                    Request a demo
-                    <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
-                  </Link>
-                  <Link
-                    href="/pricing"
-                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/30 bg-white/10 px-6 py-3.5 text-base font-semibold text-white backdrop-blur transition-colors hover:bg-white/20"
-                  >
-                    View pricing
-                  </Link>
-                </div>
+            <div className="relative isolate overflow-hidden rounded-2xl border border-white/10 bg-[#0d0d0f] px-6 py-16 text-center sm:px-16">
+              <div className="pointer-events-none absolute inset-0 -z-10 bg-grid-dark opacity-40" aria-hidden="true" />
+              <h2 id="cta-heading" className="text-3xl font-semibold tracking-[-0.02em] text-zinc-50 sm:text-4xl">
+                Bring every conversation together
+              </h2>
+              <p className="mx-auto mt-4 max-w-xl text-lg text-zinc-400">
+                See Unified in action. We’ll connect your channels, set up your workspace and onboard
+                your team.
+              </p>
+              <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+                <Link
+                  href="/contact"
+                  className="group inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--brand-accent)] px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-teal-600"
+                >
+                  Request a demo
+                  <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+                </Link>
+                <Link
+                  href="/pricing"
+                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/15 px-5 py-3 text-sm font-medium text-zinc-200 transition-colors hover:border-white/30 hover:bg-white/[0.04]"
+                >
+                  View pricing
+                </Link>
               </div>
             </div>
           </Reveal>

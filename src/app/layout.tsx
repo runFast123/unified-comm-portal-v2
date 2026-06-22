@@ -1,4 +1,6 @@
 import type { Metadata } from 'next'
+import { GeistSans } from 'geist/font/sans'
+import { GeistMono } from 'geist/font/mono'
 import { ToastWrapper } from '@/components/ui/toast-wrapper'
 import { SITE_URL, SITE_NAME, SITE_SHORT_NAME, SITE_TAGLINE, SITE_DESCRIPTION } from '@/lib/site'
 import './globals.css'
@@ -66,7 +68,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" data-scroll-behavior="smooth">
+    <html lang="en" data-scroll-behavior="smooth" className={`${GeistSans.variable} ${GeistMono.variable}`}>
       {/*
         suppressHydrationWarning is scoped to this single <body> element.
         It silences only the attribute-mismatch warning caused by browser

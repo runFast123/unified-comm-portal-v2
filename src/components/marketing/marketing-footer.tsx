@@ -30,12 +30,12 @@ const COLUMNS: { title: string; links: [string, string][] }[] = [
 export function MarketingFooter() {
   const year = new Date().getFullYear()
   return (
-    <footer className="border-t border-gray-200 bg-gray-50">
+    <footer className="border-t border-white/10 bg-[#0a0a0b]">
       <div className="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8">
         <div className="grid grid-cols-2 gap-8 md:grid-cols-5">
           <div className="col-span-2 md:col-span-2">
-            <Logo />
-            <p className="mt-4 max-w-xs text-sm leading-relaxed text-gray-500">
+            <Logo textClassName="text-zinc-100" />
+            <p className="mt-4 max-w-xs text-sm leading-relaxed text-zinc-400">
               One AI-powered inbox for email, Teams, WhatsApp, SMS, Telegram, social DMs
               &amp; website live chat — so your team answers every customer faster, together.
             </p>
@@ -62,7 +62,7 @@ export function MarketingFooter() {
 
           {COLUMNS.map((col) => (
             <div key={col.title}>
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
                 {col.title}
               </h3>
               <ul className="mt-4 space-y-3">
@@ -70,7 +70,7 @@ export function MarketingFooter() {
                   <li key={label}>
                     <Link
                       href={href}
-                      className="text-sm text-gray-600 transition-colors hover:text-teal-700"
+                      className="text-sm text-zinc-400 transition-colors hover:text-zinc-100"
                     >
                       {label}
                     </Link>
@@ -81,11 +81,11 @@ export function MarketingFooter() {
           ))}
         </div>
 
-        <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t border-gray-200 pt-8 sm:flex-row">
-          <p className="text-sm text-gray-500">
+        <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t border-white/10 pt-8 sm:flex-row">
+          <p className="text-sm text-zinc-500">
             &copy; {year} Unified Communication Portal. All rights reserved.
           </p>
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-zinc-600">
             Built for support teams, BPOs &amp; multi-brand operations.
           </p>
         </div>

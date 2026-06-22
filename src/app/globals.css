@@ -327,6 +327,23 @@ a, button, input, select, textarea {
   background-size: 22px 22px;
 }
 
+/* Dark Console dot grid — the marketing + auth dark canvas. A single, faint,
+   static hairline field; no glow, no gradient mesh (the rejected look). */
+.bg-grid-dark {
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+/* A single message travelling a routing path (routing-diagram.tsx). Finite-feel
+   loop that encodes "message in transit"; reduced-motion collapses it via the
+   global reset, leaving the drawn lines + node as the static end state. */
+@keyframes route-dot {
+  0% { offset-distance: 0%; opacity: 0; }
+  12% { opacity: 1; }
+  88% { opacity: 1; }
+  100% { offset-distance: 100%; opacity: 0; }
+}
+
 /* Shine sweep on primary buttons / cards */
 @keyframes shine-sweep {
   0% { transform: translateX(-120%) skewX(-15deg); }

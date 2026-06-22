@@ -28,7 +28,7 @@ const orgJsonLd = {
 
 export default function MarketingLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-screen flex-col bg-white text-gray-900">
+    <div className="flex min-h-screen flex-col bg-[#0a0a0b] text-zinc-100 antialiased font-[family-name:var(--font-geist-sans)]">
       {/* Forward stranded Supabase invite/recovery tokens (or expired-link
           errors) that land on the Site-URL root to the set-password page. */}
       <AuthHashRedirect />

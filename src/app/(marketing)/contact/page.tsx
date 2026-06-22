@@ -22,14 +22,14 @@ export default function ContactPage() {
         subtitle="Tell us a little about your team and we’ll show you Unified connected to a live inbox — then help you onboard."
       />
 
-      <section className="bg-white py-16 sm:py-20" aria-label="Contact form">
+      <section className="py-16 sm:py-20" aria-label="Contact form">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="grid gap-12 lg:grid-cols-5">
             {/* form */}
             <Reveal className="lg:col-span-3">
-              <div className="rounded-2xl border border-gray-200 bg-white p-7 shadow-lg sm:p-9">
-                <h2 className="text-xl font-bold text-gray-900">Request a demo</h2>
-                <p className="mt-1.5 text-sm text-gray-500">
+              <div className="rounded-2xl border border-white/10 bg-[#141416] p-7 transition-colors hover:border-white/20 sm:p-9">
+                <h2 className="text-xl font-semibold tracking-[-0.02em] text-zinc-50">Request a demo</h2>
+                <p className="mt-1.5 text-sm text-zinc-500">
                   We usually reply within one business day.
                 </p>
                 <div className="mt-6">
@@ -43,14 +43,14 @@ export default function ContactPage() {
               <Reveal delay={80}>
                 <a
                   href={`mailto:${CONTACT_EMAIL}`}
-                  className="flex items-start gap-4 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm transition-all hover:border-teal-200 hover:shadow-md"
+                  className="flex items-start gap-4 rounded-2xl border border-white/10 bg-[#141416] p-6 transition-colors hover:border-white/20"
                 >
-                  <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-700 ring-1 ring-teal-100">
+                  <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-white/[0.04] text-teal-300 ring-1 ring-white/10">
                     <Mail className="h-5 w-5" />
                   </span>
                   <div>
-                    <h3 className="text-base font-semibold text-gray-900">Email us</h3>
-                    <p className="mt-1 text-sm text-gray-600">{CONTACT_EMAIL}</p>
+                    <h3 className="text-base font-semibold tracking-[-0.02em] text-zinc-50">Email us</h3>
+                    <p className="mt-1 text-sm text-zinc-400 font-[family-name:var(--font-geist-mono)] tabular-nums">{CONTACT_EMAIL}</p>
                   </div>
                 </a>
               </Reveal>
@@ -58,34 +58,34 @@ export default function ContactPage() {
               <Reveal delay={160}>
                 <Link
                   href="/login"
-                  className="flex items-start gap-4 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm transition-all hover:border-teal-200 hover:shadow-md"
+                  className="flex items-start gap-4 rounded-2xl border border-white/10 bg-[#141416] p-6 transition-colors hover:border-white/20"
                 >
-                  <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-700 ring-1 ring-teal-100">
+                  <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-white/[0.04] text-teal-300 ring-1 ring-white/10">
                     <LogIn className="h-5 w-5" />
                   </span>
                   <div>
-                    <h3 className="text-base font-semibold text-gray-900">Already a customer?</h3>
-                    <p className="mt-1 text-sm text-gray-600">Sign in to your workspace.</p>
+                    <h3 className="text-base font-semibold tracking-[-0.02em] text-zinc-50">Already a customer?</h3>
+                    <p className="mt-1 text-sm text-zinc-400">Sign in to your workspace.</p>
                   </div>
                 </Link>
               </Reveal>
 
               <Reveal delay={240}>
-                <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-6">
-                  <h3 className="flex items-center gap-2 text-base font-semibold text-gray-900">
-                    <MessageSquareText className="h-5 w-5 text-teal-600" /> What to expect
+                <div className="rounded-2xl border border-white/10 bg-[#0d0d0f] p-6">
+                  <h3 className="flex items-center gap-2 text-base font-semibold tracking-[-0.02em] text-zinc-50">
+                    <MessageSquareText className="h-5 w-5 text-teal-300" /> What to expect
                   </h3>
-                  <ul className="mt-4 space-y-3 text-sm text-gray-600">
+                  <ul className="mt-4 space-y-3 text-sm text-zinc-400">
                     <li className="flex items-start gap-2.5">
-                      <Clock className="mt-0.5 h-4 w-4 shrink-0 text-teal-600" />
+                      <Clock className="mt-0.5 h-4 w-4 shrink-0 text-teal-300" />
                       A quick reply to schedule a walkthrough.
                     </li>
                     <li className="flex items-start gap-2.5">
-                      <MessageSquareText className="mt-0.5 h-4 w-4 shrink-0 text-teal-600" />
+                      <MessageSquareText className="mt-0.5 h-4 w-4 shrink-0 text-teal-300" />
                       A demo on your channels, not a generic deck.
                     </li>
                     <li className="flex items-start gap-2.5">
-                      <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-teal-600" />
+                      <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-teal-300" />
                       Guided onboarding with your data kept isolated.
                     </li>
                   </ul>
