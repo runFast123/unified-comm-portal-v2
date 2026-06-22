@@ -1,12 +1,13 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { ArrowRight, Bot, Check, Lock, ShieldCheck, BarChart3, Workflow, Building2 } from 'lucide-react'
+import { ArrowRight, Bot, Check, Lock, ShieldCheck, BarChart3, Workflow } from 'lucide-react'
 import { Reveal } from '@/components/marketing/reveal'
 import { CountUp } from '@/components/marketing/count-up'
 import { HeroPanels } from '@/components/marketing/hero-panels'
 import { FeaturesBento } from '@/components/marketing/features-bento'
 import { RoutingDiagram } from '@/components/marketing/routing-diagram'
 import { AiDraftDemo } from '@/components/marketing/ai-draft-demo'
+import { TenantSwitcher } from '@/components/marketing/tenant-switcher'
 import { SITE_URL, SITE_NAME, SITE_DESCRIPTION } from '@/lib/site'
 
 export const metadata: Metadata = {
@@ -310,31 +311,7 @@ export default function LandingPage() {
             </Reveal>
 
             <Reveal delay={120}>
-              <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-6">
-                <div className="space-y-3">
-                  {['Brand A', 'Brand B', 'Brand C'].map((b, i) => (
-                    <div
-                      key={b}
-                      className="flex items-center justify-between rounded-xl border border-zinc-200 bg-white p-4"
-                      style={{ marginLeft: `${i * 14}px` }}
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-zinc-100 text-teal-700 ring-1 ring-zinc-200">
-                          <Building2 className="h-4 w-4" />
-                        </span>
-                        <div>
-                          <p className="text-sm font-medium text-zinc-800">{b}</p>
-                          <p className={`${MONO} text-[11px] text-zinc-500`}>isolated workspace</p>
-                        </div>
-                      </div>
-                      <Lock className="h-4 w-4 text-zinc-500" />
-                    </div>
-                  ))}
-                </div>
-                <p className={`${MONO} mt-5 text-center text-[11px] text-zinc-500`}>
-                  one platform · separate, secure tenants
-                </p>
-              </div>
+              <TenantSwitcher />
             </Reveal>
           </div>
         </div>
