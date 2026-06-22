@@ -211,9 +211,7 @@ export default function LandingPage() {
             </p>
           </Reveal>
 
-          <Reveal>
-            <FeaturesBento />
-          </Reveal>
+          <FeaturesBento />
         </div>
       </section>
 
