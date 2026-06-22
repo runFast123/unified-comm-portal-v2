@@ -1,18 +1,12 @@
 import { Inbox, Sparkles, ShieldCheck, Share2, Gauge, KeyRound, Building2, MessagesSquare, BookOpen } from 'lucide-react'
 import { Reveal } from './reveal'
+import { InboxPreview } from './inbox-preview'
 
 const MONO = 'font-[family-name:var(--font-geist-mono)]'
 const CARD =
   'group flex h-full flex-col rounded-xl border border-zinc-200 bg-white p-5 transition-all duration-300 hover:-translate-y-0.5 hover:border-teal-200 hover:shadow-md hover:shadow-teal-900/5'
 const ICON =
   'flex h-8 w-8 items-center justify-center rounded-lg bg-teal-50 text-teal-700 ring-1 ring-teal-100 transition-colors group-hover:bg-teal-600 group-hover:text-white group-hover:ring-teal-600'
-
-const INBOX_ROWS = [
-  { dot: '#25d366', name: 'Ava Chen', ch: 'whatsapp' },
-  { dot: '#ea4335', name: 'Liam Patel', ch: 'email' },
-  { dot: '#6264a7', name: 'Ops team', ch: 'teams' },
-  { dot: '#16a34a', name: 'Visitor', ch: 'live-chat' },
-]
 
 function Small({
   icon: Icon,
@@ -61,26 +55,8 @@ export function FeaturesBento() {
               in a single threaded workspace. No more tab-hopping.
             </p>
           </div>
-          <div className="mt-5 flex-1 rounded-lg border border-zinc-200 bg-zinc-50 p-3">
-            <div className={`${MONO} mb-2 flex items-center justify-between px-1 text-[11px] text-zinc-500`}>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-teal-500 animate-pulse" />
-                all channels · live
-              </span>
-              <span className="tabular-nums">1,284 open</span>
-            </div>
-            <div className="space-y-0.5">
-              {INBOX_ROWS.map((r, i) => (
-                <div
-                  key={r.name}
-                  className={`flex items-center gap-2.5 rounded-md px-2.5 py-2 ${i === 0 ? 'border-l-2 border-teal-600 bg-white' : 'border-l-2 border-transparent'}`}
-                >
-                  <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: r.dot }} />
-                  <span className="flex-1 truncate text-[12px] font-medium text-zinc-800">{r.name}</span>
-                  <span className={`${MONO} text-[10px] text-zinc-500`}>{r.ch}</span>
-                </div>
-              ))}
-            </div>
+          <div className="mt-5 flex-1">
+            <InboxPreview />
           </div>
         </div>
       </Reveal>

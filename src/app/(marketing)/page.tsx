@@ -6,6 +6,7 @@ import { CountUp } from '@/components/marketing/count-up'
 import { HeroPanels } from '@/components/marketing/hero-panels'
 import { FeaturesBento } from '@/components/marketing/features-bento'
 import { RoutingDiagram } from '@/components/marketing/routing-diagram'
+import { AiDraftDemo } from '@/components/marketing/ai-draft-demo'
 import { SITE_URL, SITE_NAME, SITE_DESCRIPTION } from '@/lib/site'
 
 export const metadata: Metadata = {
@@ -277,23 +278,7 @@ export default function LandingPage() {
           </Reveal>
 
           <Reveal delay={120}>
-            <div className="rounded-2xl border border-zinc-200 bg-white p-5">
-              <div className={`${MONO} flex items-center gap-1.5 text-[12px] text-teal-700`}>
-                <Bot className="h-3.5 w-3.5" /> suggested reply
-              </div>
-              <p className="mt-3 text-sm leading-relaxed text-zinc-700">
-                Hi Ava, I’m so sorry your order arrived damaged. I’ve issued a full refund to your
-                original payment method — you’ll see it within 3–5 business days. I’ve also emailed
-                a prepaid return label. Anything else I can help with?
-              </p>
-              <div className="mt-4 flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-medium text-white">
-                  <Check className="h-3.5 w-3.5" /> Approve &amp; send
-                </span>
-                <span className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700">Edit draft</span>
-                <span className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700">Regenerate</span>
-              </div>
-            </div>
+            <AiDraftDemo />
           </Reveal>
         </div>
       </section>
