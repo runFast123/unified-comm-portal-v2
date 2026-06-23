@@ -20,6 +20,7 @@ interface Conv {
   status?: string
   secondary_status?: string | null
   secondary_status_color?: string | null
+  priority?: string | null
   assigned_to?: string | null
 }
 
@@ -236,6 +237,75 @@ describe('POST /api/conversations/[id]/status', () => {
     )
     expect(audit).toBeTruthy()
     expect((audit?.payload.details as any)?.to).toBe('awaiting_legal')
+  })
+
+  // ── priority (the conversation-detail "Escalate" action sets priority via
+  //    this route now, instead of a direct RBAC-bypassing browser write) ──
+  it('400 when priority is invalid', async () => {
+    const res = await POST_STATUS(
+      jsonReq('http://localhost/api/conversations/conv-1/status', { priority: 'wat' }),
+      ctx('conv-1'),
+    )
+    expect(res.status).toBe(400)
+  })
+
+  it('200 priority-only: updates priority and writes a priority_changed audit row', async () => {
+    fixture.conversation = {
+      id: 'conv-1',
+      account_id: 'acct-1',
+      status: 'active',
+      secondary_status: null,
+      secondary_status_color: null,
+      priority: 'low',
+      assigned_to: null,
+    }
+    const res = await POST_STATUS(
+      jsonReq('http://localhost/api/conversations/conv-1/status', { priority: 'urgent' }),
+      ctx('conv-1'),
+    )
+    expect(res.status).toBe(200)
+    const update = fixture.updates.find((u) => u.table === 'conversations')
+    expect(update?.payload).toEqual({ priority: 'urgent' })
+    const audit = fixture.inserts.find(
+      (i) => i.table === 'audit_log' && i.payload.action === 'conversation.priority_changed',
+    )
+    expect(audit).toBeTruthy()
+    expect((audit?.payload.details as any)?.from).toBe('low')
+    expect((audit?.payload.details as any)?.to).toBe('urgent')
+  })
+
+  it('200 escalate shape: status+priority update + single conversation.escalated audit (no separate priority row)', async () => {
+    const res = await POST_STATUS(
+      jsonReq('http://localhost/api/conversations/conv-1/status', {
+        status: 'escalated',
+        priority: 'urgent',
+      }),
+      ctx('conv-1'),
+    )
+    expect(res.status).toBe(200)
+    const update = fixture.updates.find((u) => u.table === 'conversations')
+    expect(update?.payload).toEqual({ status: 'escalated', priority: 'urgent' })
+    // Escalation logs the dedicated `conversation.escalated` action (the
+    // activity timeline renders it with an Escalated icon/label), carrying the
+    // new priority in its details.
+    const escAudit = fixture.inserts.find(
+      (i) => i.table === 'audit_log' && i.payload.action === 'conversation.escalated',
+    )
+    expect(escAudit).toBeTruthy()
+    expect((escAudit?.payload.details as any)?.to).toBe('escalated')
+    expect((escAudit?.payload.details as any)?.priority).toBe('urgent')
+    // The generic status_changed action is NOT used for an escalate transition…
+    expect(
+      fixture.inserts.find(
+        (i) => i.table === 'audit_log' && i.payload.action === 'conversation.status_changed',
+      ),
+    ).toBeUndefined()
+    // …and the priority bump is folded into the escalated entry, not a second row.
+    expect(
+      fixture.inserts.find(
+        (i) => i.table === 'audit_log' && i.payload.action === 'conversation.priority_changed',
+      ),
+    ).toBeUndefined()
   })
 })
 

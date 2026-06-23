@@ -100,6 +100,15 @@ export function ConversationActions({
   // sees the full toolbar. The corresponding API routes enforce the same
   // check server-side — this just hides UI we know would 403.
   const canApproveAI = isSupervisor(viewerRole)
+  // RBAC gates for the conversation write actions. Defense-in-depth — the
+  // server-side routes (status / mark-replied / assign) are the real
+  // enforcement, but we also disable the buttons so a within-company user whom
+  // an admin restricted (e.g. denied action:message.send via a per-user
+  // override in /admin/roles) isn't offered an action that will only 403.
+  // `can()` returns true when no permission set is present (provider used
+  // outside the dashboard layout), so this never blanks the controls.
+  const canSend = can('action:message.send')
+  const canAssign = can('action:conversation.assign')
   const [loading, setLoading] = useState<string | null>(null)
 
   // ── Realtime presence: who else is viewing this conversation ────────
@@ -115,23 +124,44 @@ export function ConversationActions({
   )
   const composingOthers = presenceOthers.filter((u) => u.composing)
 
-  // Helper: update conversation status + mark inbound messages as replied
+  // POST to a guarded per-conversation route. Routes the detail-view write
+  // actions through the same server-side RBAC / channel gates (and audit /
+  // CSAT / webhook side-effects) the inbox bulk actions use, instead of writing
+  // the conversations / messages tables directly from the browser Supabase
+  // client. The conversations/messages UPDATE RLS is intentionally only
+  // company+channel scoped, so a restricted within-company user could otherwise
+  // still mutate from here. Resolves the parsed error message for the toast.
+  const postConversationAction = useCallback(
+    async (path: string, body: Record<string, unknown>): Promise<{ ok: boolean; error?: string }> => {
+      try {
+        const res = await fetch(`/api/conversations/${conversationId}/${path}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+        if (res.ok) return { ok: true }
+        let error = `HTTP ${res.status}`
+        try {
+          const j = await res.json()
+          if (j?.error) error = j.error
+        } catch { /* non-JSON */ }
+        return { ok: false, error }
+      } catch (err) {
+        return { ok: false, error: (err as Error).message }
+      }
+    },
+    [conversationId]
+  )
+
+  // Helper: after a reply is sent, flip the conversation to waiting_on_customer
+  // and mark its inbound messages replied. Routed through the guarded /status +
+  // /mark-replied routes (both gated by action:message.send) rather than direct
+  // table writes. Best-effort — the caller just sent (so it holds message.send),
+  // and a hiccup here must never surface as an error after a successful send.
   const markWaitingOnCustomer = useCallback(async () => {
-    try {
-      const supabase = createClient()
-      await supabase
-        .from('conversations')
-        .update({ status: 'waiting_on_customer' })
-        .eq('id', conversationId)
-      // Mark all unreplied inbound messages as replied
-      await supabase
-        .from('messages')
-        .update({ replied: true })
-        .eq('conversation_id', conversationId)
-        .eq('direction', 'inbound')
-        .eq('replied', false)
-    } catch { /* non-critical */ }
-  }, [conversationId])
+    await postConversationAction('status', { status: 'waiting_on_customer' })
+    await postConversationAction('mark-replied', {})
+  }, [postConversationAction])
   const isActiveConvo = conversationStatus === 'active' || conversationStatus === 'in_progress' || conversationStatus === 'escalated' || conversationStatus === 'waiting_on_customer'
   // Composer starts CLOSED so the message thread is the hero on load. An open
   // composer (textarea + signature + action bar) consumes ~280px and, stacked
@@ -1293,23 +1323,23 @@ export function ConversationActions({
   }, [conversationId, router])
 
   const handleMarkReplied = useCallback(async () => {
+    // Mirror the server gate client-side so the keyboard path is also covered;
+    // the buttons are already disabled when !canSend.
+    if (!canSend) {
+      toast.warning('You do not have permission to update conversations.')
+      return
+    }
     setLoading('mark_replied')
     try {
-      const supabase = createClient()
-      // Mark all unreplied inbound messages in this conversation as replied
-      const { error } = await supabase
-        .from('messages')
-        .update({ replied: true, reply_required: false })
-        .eq('conversation_id', conversationId)
-        .eq('direction', 'inbound')
-        .eq('replied', false)
-      if (error) throw error
+      // Mark inbound messages replied via the guarded route (action:message.send
+      // + channel access + audit). This is the primary action.
+      const replied = await postConversationAction('mark-replied', {})
+      if (!replied.ok) throw new Error(replied.error || 'Failed to mark replied')
 
-      // Update conversation status to resolved
-      await supabase
-        .from('conversations')
-        .update({ status: 'resolved' })
-        .eq('id', conversationId)
+      // Resolve is secondary — best-effort through the guarded /status route
+      // (which also fires CSAT/webhook/audit on resolve). A resolve-permission
+      // edge case must not undo the "replied" mark above.
+      await postConversationAction('status', { status: 'resolved' })
 
       toast.success('Marked as replied (replied outside portal)')
       router.refresh()
@@ -1318,25 +1348,31 @@ export function ConversationActions({
     } finally {
       setLoading(null)
     }
-  }, [conversationId, router, toast])
+  }, [canSend, postConversationAction, router, toast])
 
   const handleEscalate = useCallback(async () => {
+    if (!canSend) {
+      toast.warning('You do not have permission to update conversations.')
+      return
+    }
     setLoading('escalate')
     try {
+      // 1. Status → escalated + priority → urgent in ONE guarded /status call
+      //    (the route accepts an optional `priority` and writes the escalation
+      //    audit server-side). Enforces action:message.send + channel access.
+      //    This is the critical step — abort on failure.
+      const statusRes = await postConversationAction('status', {
+        status: 'escalated',
+        priority: 'urgent',
+      })
+      if (!statusRes.ok) throw new Error(statusRes.error || 'Failed to escalate')
+
+      // 2. Find a company admin to route the urgent ticket to. Read-only query;
+      //    RLS scopes it to the caller's own company. Match the full admin-role
+      //    catalogue (modern `company_admin` + legacy `admin`) — hard-coding
+      //    'admin' meant escalations on tenants using the modern role names
+      //    found nobody.
       const supabase = createClient()
-
-      // 1. Update conversation status + priority
-      const { error } = await supabase
-        .from('conversations')
-        .update({ status: 'escalated', priority: 'urgent' })
-        .eq('id', conversationId)
-      if (error) throw error
-
-      // 2. Auto-assign to a company admin. Match the full admin-role catalogue
-      //    (modern `company_admin` + legacy `admin`) — hard-coding 'admin' meant
-      //    escalations on tenants using the modern role names found nobody, so
-      //    the urgent ticket sat unassigned with no alert sent. RLS scopes this
-      //    client query to the caller's own company.
       const { data: adminUser } = await supabase
         .from('users')
         .select('id, email, full_name')
@@ -1345,31 +1381,19 @@ export function ConversationActions({
         .limit(1)
         .maybeSingle()
 
-      if (adminUser) {
-        await supabase
-          .from('conversations')
-          .update({ assigned_to: adminUser.id })
-          .eq('id', conversationId)
+      // 3. Auto-assign to that admin THROUGH the guarded /assign route. Assigning
+      //    to another user requires action:conversation.assign + supervisor tier
+      //    (enforced server-side AND mirrored here), so only attempt it when the
+      //    caller qualifies — a member's escalation still flags urgent + notifies
+      //    the admin, just without the auto-assign. Best-effort: a failed assign
+      //    must not fail the escalation.
+      let assigned = false
+      if (adminUser && canAssign && isSupervisor(viewerRole)) {
+        const assignRes = await postConversationAction('assign', { user_id: adminUser.id })
+        assigned = assignRes.ok
       }
 
-      // 3. Log to audit trail
-      const { data: { user: currentUser } } = await supabase.auth.getUser()
-      try {
-        await supabase.from('audit_log').insert({
-          user_id: currentUser?.id || null,
-          action: 'conversation_escalated',
-          entity_type: 'conversation',
-          entity_id: conversationId,
-          details: {
-            account_name: accountName,
-            channel,
-            participant_email: participantEmail,
-            assigned_to_admin: adminUser?.email || null,
-          },
-        })
-      } catch { /* fire-and-forget */ }
-
-      // 4. Send email notification to admin
+      // 4. Send email notification to the admin (guarded route, unchanged).
       if (adminUser?.email) {
         fetch('/api/notifications/send', {
           method: 'POST',
@@ -1382,31 +1406,36 @@ export function ConversationActions({
             account_name: accountName,
             channel,
             subject: emailSubject || 'Escalated Conversation',
-            message_preview: `This conversation has been escalated to urgent priority and assigned to you.`,
+            message_preview: assigned
+              ? `This conversation has been escalated to urgent priority and assigned to you.`
+              : `This conversation has been escalated to urgent priority.`,
             conversation_id: conversationId,
             priority: 'urgent',
           }),
         }).catch(() => {}) // fire-and-forget
       }
 
-      toast.success(`Conversation escalated!${adminUser ? ` Assigned to ${adminUser.full_name || adminUser.email}` : ''}`)
+      toast.success(`Conversation escalated!${assigned && adminUser ? ` Assigned to ${adminUser.full_name || adminUser.email}` : ''}`)
       router.refresh()
     } catch (err: any) {
       toast.error('Failed to escalate: ' + err.message)
     } finally {
       setLoading(null)
     }
-  }, [conversationId, accountName, channel, participantEmail, emailSubject, router, toast])
+  }, [canSend, canAssign, viewerRole, postConversationAction, conversationId, accountName, channel, participantEmail, emailSubject, router, toast])
 
   const handleResolve = useCallback(async () => {
+    if (!canSend) {
+      toast.warning('You do not have permission to update conversations.')
+      return
+    }
     setLoading('resolve')
     try {
-      const supabase = createClient()
-      const { error } = await supabase
-        .from('conversations')
-        .update({ status: 'resolved' })
-        .eq('id', conversationId)
-      if (error) throw error
+      // Route through the guarded /status route (action:message.send + channel
+      // access; also fires CSAT/webhook/audit on resolve) instead of a direct
+      // conversations write.
+      const res = await postConversationAction('status', { status: 'resolved' })
+      if (!res.ok) throw new Error(res.error || 'Failed to resolve')
       toast.success('Conversation resolved!')
       autoAdvanceAfterStatusChange()
     } catch (err: any) {
@@ -1415,7 +1444,7 @@ export function ConversationActions({
       setLoading(null)
     }
     // `router` is reached via autoAdvanceAfterStatusChange, not directly here.
-  }, [conversationId, toast, autoAdvanceAfterStatusChange])
+  }, [canSend, postConversationAction, toast, autoAdvanceAfterStatusChange])
 
   // Global keyboard shortcuts for conversation actions
   useEffect(() => {
@@ -1836,9 +1865,9 @@ export function ConversationActions({
               size="sm"
               variant="primary"
               onClick={guardedManualReply}
-              disabled={loading === 'manual'}
+              disabled={loading === 'manual' || !canSend}
               className="whitespace-nowrap"
-              title="Send (Ctrl+Enter)"
+              title={!canSend ? 'You do not have permission to send replies' : 'Send (Ctrl+Enter)'}
             >
               {loading === 'manual' ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
               Send Reply
@@ -1907,7 +1936,13 @@ export function ConversationActions({
             <Button size="sm" variant="ghost" onClick={() => setShowEditReply(false)}>
               <X size={14} /> Cancel
             </Button>
-            <Button size="sm" variant="primary" onClick={handleEditSend} disabled={loading === 'edit'}>
+            <Button
+              size="sm"
+              variant="primary"
+              onClick={handleEditSend}
+              disabled={loading === 'edit' || !canSend}
+              title={!canSend ? 'You do not have permission to send replies' : undefined}
+            >
               {loading === 'edit' ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
               Send Edited Reply
             </Button>
@@ -1931,7 +1966,13 @@ export function ConversationActions({
             still see the AI draft in the sidebar (read-only) and reply
             manually, but can't approve/send it as-is or edit it. */}
         {aiReplyId && aiReplyStatus === 'pending_approval' && canApproveAI && (
-          <Button size="sm" variant="primary" onClick={handleApprove} disabled={loading === 'approve'}>
+          <Button
+            size="sm"
+            variant="primary"
+            onClick={handleApprove}
+            disabled={loading === 'approve' || !canSend}
+            title={!canSend ? 'You do not have permission to send replies' : undefined}
+          >
             {loading === 'approve' ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={14} />}
             Approve &amp; Send
           </Button>
@@ -2073,7 +2114,8 @@ export function ConversationActions({
             size="sm"
             variant="secondary"
             onClick={handleMarkReplied}
-            disabled={loading === 'mark_replied'}
+            disabled={loading === 'mark_replied' || !canSend}
+            title={!canSend ? 'You do not have permission to update conversations' : undefined}
           >
             {loading === 'mark_replied' ? <Loader2 size={14} className="animate-spin" /> : <CheckCheck size={14} />}
             Mark as Replied
@@ -2082,7 +2124,8 @@ export function ConversationActions({
             size="sm"
             variant="danger"
             onClick={handleEscalate}
-            disabled={loading === 'escalate'}
+            disabled={loading === 'escalate' || !canSend}
+            title={!canSend ? 'You do not have permission to update conversations' : undefined}
           >
             {loading === 'escalate' ? <Loader2 size={14} className="animate-spin" /> : <AlertTriangle size={14} />}
             Escalate
@@ -2091,7 +2134,8 @@ export function ConversationActions({
             size="sm"
             variant="success"
             onClick={handleResolve}
-            disabled={loading === 'resolve'}
+            disabled={loading === 'resolve' || !canSend}
+            title={!canSend ? 'You do not have permission to update conversations' : undefined}
           >
             {loading === 'resolve' ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={14} />}
             Resolve

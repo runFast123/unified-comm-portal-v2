@@ -26,7 +26,7 @@ import { userIdCan } from '@/lib/permissions/server'
 import { userCanAccessConversationChannel } from '@/lib/permissions/channel-access'
 import { fireWebhook } from '@/lib/webhook-dispatcher'
 import { maybeAutoSendCSAT } from './csat-hook'
-import type { ConversationStatus } from '@/types/database'
+import type { ConversationStatus, Priority } from '@/types/database'
 
 const VALID_STATUSES: readonly ConversationStatus[] = [
   'active',
@@ -37,10 +37,21 @@ const VALID_STATUSES: readonly ConversationStatus[] = [
   'archived',
 ]
 
+// Conversation lifecycle priorities (the `priority_type` enum). Mirrors
+// VALID_PRIORITIES in `@/lib/macros` — kept local so this route stays
+// self-contained like VALID_STATUSES above.
+const VALID_PRIORITIES: readonly Priority[] = ['low', 'medium', 'high', 'urgent']
+
 interface PostBody {
   status?: ConversationStatus
   secondary_status?: string | null
   secondary_status_color?: string | null
+  /**
+   * Optional priority bump. Added so the conversation-detail "Escalate" action
+   * can set status='escalated' + priority='urgent' in ONE guarded call instead
+   * of a direct (RBAC-bypassing) browser write to `conversations.priority`.
+   */
+  priority?: Priority
 }
 
 export async function POST(
@@ -62,9 +73,10 @@ export async function POST(
     const body = (await request.json().catch(() => ({}))) as PostBody
     const hasStatus = body.status !== undefined
     const hasSecondary = body.secondary_status !== undefined
-    if (!hasStatus && !hasSecondary) {
+    const hasPriority = body.priority !== undefined
+    if (!hasStatus && !hasSecondary && !hasPriority) {
       return NextResponse.json(
-        { error: 'Provide `status` and/or `secondary_status`' },
+        { error: 'Provide `status`, `secondary_status`, and/or `priority`' },
         { status: 400 }
       )
     }
@@ -76,11 +88,18 @@ export async function POST(
       )
     }
 
+    if (hasPriority && (typeof body.priority !== 'string' || !VALID_PRIORITIES.includes(body.priority))) {
+      return NextResponse.json(
+        { error: `Invalid priority. Must be one of: ${VALID_PRIORITIES.join(', ')}` },
+        { status: 400 }
+      )
+    }
+
     const admin = await createServiceRoleClient()
 
     const { data: conv, error: convErr } = await admin
       .from('conversations')
-      .select('id, account_id, status, secondary_status, secondary_status_color, channel')
+      .select('id, account_id, status, secondary_status, secondary_status_color, priority, channel')
       .eq('id', conversationId)
       .maybeSingle()
     if (convErr || !conv) {
@@ -125,6 +144,7 @@ export async function POST(
       update.secondary_status = body.secondary_status ?? null
       update.secondary_status_color = body.secondary_status_color ?? null
     }
+    if (hasPriority) update.priority = body.priority
 
     const { error: updateErr } = await admin
       .from('conversations')
@@ -136,18 +156,45 @@ export async function POST(
 
     // Best-effort audit. Activity timeline reads from audit_log and surfaces
     // these as "Status changed" entries.
+    // A transition TO `escalated` is logged as `conversation.escalated` (the
+    // activity timeline renders it with a dedicated Escalated icon/label) — this
+    // preserves the marker the old client-side escalate handler wrote directly,
+    // now that the detail-view "Escalate" action routes through this guarded
+    // route instead of a raw browser write.
+    const escalating = hasStatus && body.status === 'escalated' && conv.status !== 'escalated'
     try {
       if (hasStatus && body.status !== conv.status) {
         await admin.from('audit_log').insert({
           user_id: user.id,
-          action: 'conversation.status_changed',
+          action: escalating ? 'conversation.escalated' : 'conversation.status_changed',
           entity_type: 'conversation',
           entity_id: conversationId,
           details: {
             from: conv.status,
             to: body.status,
+            // When escalating, priority is bumped in the same call — record it
+            // on this entry so we don't double-log a separate priority row.
+            ...(escalating && hasPriority ? { priority: body.priority } : {}),
             account_id: conv.account_id,
-            summary: `Status changed from ${conv.status} to ${body.status}`,
+            summary: escalating
+              ? 'Escalated'
+              : `Status changed from ${conv.status} to ${body.status}`,
+          },
+        })
+      }
+      // Standalone priority change (skipped when it was folded into an escalate
+      // entry above) — surfaces on the timeline as a "Priority changed" row.
+      if (hasPriority && body.priority !== conv.priority && !escalating) {
+        await admin.from('audit_log').insert({
+          user_id: user.id,
+          action: 'conversation.priority_changed',
+          entity_type: 'conversation',
+          entity_id: conversationId,
+          details: {
+            from: conv.priority ?? null,
+            to: body.priority,
+            account_id: conv.account_id,
+            summary: `Priority changed to ${body.priority}`,
           },
         })
       }
