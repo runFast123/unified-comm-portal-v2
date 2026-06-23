@@ -106,7 +106,7 @@ async function fetchMatchingMessageIds(
     conversation_id: string
   }>
   classifications: Map<string, { category: string | null; sentiment: string | null; urgency: string | null }>
-  conversations: Map<string, { status: string | null; assigned_to: string | null }>
+  conversations: Map<string, { status: string | null; assigned_to: string | null; merged_into_id: string | null }>
 }> {
   // Step 1 — pull inbound, non-spam messages for the allowed accounts.
   let mq = admin
@@ -176,19 +176,24 @@ async function fetchMatchingMessageIds(
 
   // Step 3 — pull conversation status / assignment for the affected convs.
   const convIds = Array.from(new Set(messages.map((m) => m.conversation_id))).filter(Boolean)
-  const conversations = new Map<string, { status: string | null; assigned_to: string | null }>()
+  const conversations = new Map<string, { status: string | null; assigned_to: string | null; merged_into_id: string | null }>()
   if (convIds.length > 0) {
     const { data: convRows, error: convErr } = await admin
       .from('conversations')
-      .select('id, status, assigned_to')
+      .select('id, status, assigned_to, merged_into_id')
       .in('id', convIds)
     if (convErr) throw convErr
     for (const row of (convRows ?? []) as Array<{
       id: string
       status: string | null
       assigned_to: string | null
+      merged_into_id: string | null
     }>) {
-      conversations.set(row.id, { status: row.status, assigned_to: row.assigned_to })
+      conversations.set(row.id, {
+        status: row.status,
+        assigned_to: row.assigned_to,
+        merged_into_id: row.merged_into_id,
+      })
     }
   }
 
@@ -197,6 +202,13 @@ async function fetchMatchingMessageIds(
   const filtered = messages.filter((m) => {
     const classification = classifications.get(m.id)
     const conv = conversations.get(m.conversation_id)
+    // Drop merged-away conversations (merged_into_id IS NOT NULL) so the facet
+    // counts reconcile with the inbox list + tab badges, which filter them out
+    // (page.tsx applyInboxFilters / visibleMessages). A merged secondary can
+    // re-attach later inbound messages — the merge RPC doesn't change its
+    // status, so findOrCreateConversation can still match it — and without this
+    // drop those messages inflate every bucket ("facets say 30, list shows 27").
+    if (conv?.merged_into_id) return false
     if (filters.category && excludeKey !== 'category') {
       if ((classification?.category ?? null) !== filters.category) return false
     }
