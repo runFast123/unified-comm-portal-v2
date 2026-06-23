@@ -109,11 +109,30 @@ export function decodeHtmlEntities(input: string | null | undefined): string {
   return input
     .replace(/&#x([0-9a-fA-F]+);/g, (_m, hex) => fromCodePoint(parseInt(hex, 16)))
     .replace(/&#(\d+);/g, (_m, dec) => fromCodePoint(parseInt(dec, 10)))
+    // Soft hyphen (named form): an invisible line-break hint with no display
+    // value here. Some senders (e.g. Framer) stuff hundreds into the hidden
+    // email preheader; strip them rather than leaving literal "&shy;" on screen.
+    .replace(/&shy;/gi, '')
     .replace(/&nbsp;/gi, ' ')
+    // Common typographic named entities that would otherwise render literally.
+    .replace(/&mdash;/gi, '—')
+    .replace(/&ndash;/gi, '–')
+    .replace(/&hellip;/gi, '…')
+    .replace(/&lsquo;/gi, '‘')
+    .replace(/&rsquo;/gi, '’')
+    .replace(/&ldquo;/gi, '“')
+    .replace(/&rdquo;/gi, '”')
+    .replace(/&trade;/gi, '™')
+    .replace(/&copy;/gi, '©')
+    .replace(/&reg;/gi, '®')
     .replace(/&lt;/gi, '<')
     .replace(/&gt;/gi, '>')
     .replace(/&quot;/gi, '"')
     .replace(/&apos;/gi, "'")
     .replace(/&amp;/gi, '&')
+    // Strip any actual soft-hyphen chars (incl. those decoded from &#173;/&#xAD;
+    // above) plus zero-width chars — invisible clutter common in HTML emails.
+    .replace(/­/g, '')
+    .replace(/[​‌‍﻿]/g, '')
     .replace(/ /g, ' ')
 }
