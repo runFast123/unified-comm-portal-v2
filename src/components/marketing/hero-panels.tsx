@@ -78,7 +78,6 @@ export function HeroPanels() {
                   key={r.id}
                   type="button"
                   onClick={() => select(i)}
-                  onMouseEnter={() => select(i)}
                   aria-pressed={on}
                   className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors ${
                     on ? 'border-l-2 border-teal-600 bg-teal-50/70' : 'border-l-2 border-transparent hover:bg-zinc-50'

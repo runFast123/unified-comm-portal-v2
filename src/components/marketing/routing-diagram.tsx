@@ -118,6 +118,7 @@ export function RoutingDiagram() {
             key={c.label}
             role="button"
             tabIndex={0}
+            aria-pressed={pinned === i}
             aria-label={`Route a ${c.label} message into the unified inbox`}
             style={{ cursor: 'pointer' }}
             onMouseEnter={() => setHover(i)}

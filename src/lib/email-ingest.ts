@@ -172,23 +172,41 @@ export async function ingestInboundEmail(
   // Instead we match the migration's canonical no-ID key: same account +
   // sender + subject + exact body. Identical content from the same sender is
   // treated as the same email, exactly as the dedupe migration does.
-  if (!emailMessageId && plainTextBody && plainTextBody.trim().length > 0) {
-    let dedupQuery = supabase
-      .from('messages')
-      .select('id')
-      .eq('account_id', account_id)
-      .eq('channel', 'email')
-      .eq('direction', 'inbound')
-      .eq('sender_name', senderName || sender)
-      .eq('message_text', plainTextBody)
-    // Match the stored `email_subject` exactly — note an empty subject is
-    // persisted as NULL on insert, so use IS NULL rather than `= ''`.
-    dedupQuery = subject ? dedupQuery.eq('email_subject', subject) : dedupQuery.is('email_subject', null)
-    const { data: existingMsg } = await dedupQuery.limit(1).maybeSingle()
+  if (!emailMessageId) {
+    // Common filters for the no-ID match: same account + sender + subject.
+    // Empty subject is persisted as NULL on insert → use IS NULL, not `= ''`.
+    const baseMatch = () => {
+      const q = supabase
+        .from('messages')
+        .select('id')
+        .eq('account_id', account_id)
+        .eq('channel', 'email')
+        .eq('direction', 'inbound')
+        .eq('sender_name', senderName || sender)
+      return subject ? q.eq('email_subject', subject) : q.is('email_subject', null)
+    }
 
-    if (existingMsg) {
+    // Key (a): exact body. Handles mail with no usable Date header (where the
+    // received timestamp falls back to now() and isn't stable across re-feeds).
+    let existingId: string | null = null
+    if (plainTextBody && plainTextBody.trim().length > 0) {
+      const { data } = await baseMatch().eq('message_text', plainTextBody).limit(1).maybeSingle()
+      existingId = data?.id ?? null
+    }
+
+    // Key (b): exact RFC Date timestamp — only when the email actually carried a
+    // Date header (so receivedAtIso is the stable send time, not now()). This is
+    // DECODE-INDEPENDENT: it still matches a re-fetched message after a
+    // decodeHtmlEntities change re-normalises message_text, so reconciled rows
+    // stored before such a change aren't re-inserted as duplicates.
+    if (!existingId && payload.received_at) {
+      const { data } = await baseMatch().eq('timestamp', receivedAtIso).limit(1).maybeSingle()
+      existingId = data?.id ?? null
+    }
+
+    if (existingId) {
       void bumpLastPolledAt(supabase, account_id)
-      return { ok: true, status: 'duplicate', message_id: existingMsg.id, http_code: 200 }
+      return { ok: true, status: 'duplicate', message_id: existingId, http_code: 200 }
     }
   }
 
