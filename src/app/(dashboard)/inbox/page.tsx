@@ -99,8 +99,63 @@ function derivePriority(urgency: string | null | undefined): Priority {
   }
 }
 
+/**
+ * Run an async op over a list of ids with bounded concurrency, partitioning
+ * them into the ones that succeeded and the ones that failed. The bulk inbox
+ * actions use this to fan each mutation out across the guarded per-conversation
+ * API routes (one request per conversation) instead of a single direct client
+ * write — so the server-side RBAC / channel gates and audit/CSAT/webhook
+ * side-effects run for every row. `op` resolves true on success, false on a
+ * handled failure (e.g. a 403); a thrown error is treated as a failure too.
+ */
+async function runBatch<T>(
+  ids: T[],
+  op: (id: T) => Promise<boolean>,
+  concurrency = 6
+): Promise<{ succeeded: T[]; failed: T[] }> {
+  const succeeded: T[] = []
+  const failed: T[] = []
+  let cursor = 0
+  async function worker() {
+    while (cursor < ids.length) {
+      const id = ids[cursor++]
+      try {
+        if (await op(id)) succeeded.push(id)
+        else failed.push(id)
+      } catch {
+        failed.push(id)
+      }
+    }
+  }
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, ids.length) }, worker)
+  )
+  return { succeeded, failed }
+}
+
+/** POST helper for the guarded conversation routes. Resolves true on 2xx. */
+async function postConversationAction(
+  conversationId: string,
+  path: string,
+  body: Record<string, unknown>
+): Promise<boolean> {
+  const res = await fetch(`/api/conversations/${conversationId}/${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  return res.ok
+}
+
 export default function InboxPage() {
-  const { isAdmin, account_id: userAccountId, companyAccountIds, activeCompanyId, permissions } = useUser()
+  const { isAdmin, account_id: userAccountId, companyAccountIds, activeCompanyId, permissions, can } = useUser()
+  // RBAC gates for the bulk write actions. Defense-in-depth — the server-side
+  // routes (status / assign / mark-replied) are the real enforcement, but we
+  // also disable the buttons so a restricted user isn't offered an action that
+  // will only 403. `can()` returns true when no permission set is present
+  // (provider outside the dashboard), so this never blanks the controls.
+  const canSend = can('action:message.send')
+  const canAssign = can('action:conversation.assign')
   const { toast } = useToast()
   const searchParams = useSearchParams()
   // RBAC channel visibility: the channels this user may see. When no permission
@@ -1111,19 +1166,14 @@ export default function InboxPage() {
   }, [items, filters.priority, activeView, showSnoozed])
 
   // ─── Bulk-action handlers ────────────────────────────────────────────
-  // Each handler runs one bulk operation. Where applicable we use .select()
-  // so we can compare the count of rows actually updated to the count we
-  // asked for, and surface a partial-success warning instead of silently
-  // claiming "all succeeded" (e.g., when RLS blocks some rows).
-
-  const selectedMessageIds = useCallback(() => (
-    Array.from(new Set(
-      filteredItems
-        .filter((item) => selectedIds.has(item.id))
-        .map((item) => item.message_id)
-        .filter(Boolean)
-    ))
-  ), [filteredItems, selectedIds])
+  // Each handler fans its operation out across the guarded per-conversation
+  // API routes — one request per selected conversation via `runBatch` — rather
+  // than writing the conversations/messages tables directly from the browser.
+  // This routes every mutation through the server-side RBAC / channel gates
+  // (and the audit / CSAT / webhook side-effects) those routes enforce. We then
+  // compare the count that actually succeeded to the count requested and
+  // surface a partial-success warning via `reportPartial` instead of silently
+  // claiming "all succeeded" (e.g. when the server returns 403 for some rows).
 
   const selectedConversationIds = useCallback(() => (
     Array.from(new Set(
@@ -1194,91 +1244,69 @@ export default function InboxPage() {
       toast.warning('Select messages first.')
       return
     }
-    const supabase = createClient()
-    const messageIds = selectedMessageIds()
-    if (messageIds.length === 0) {
+    const convIds = selectedConversationIds()
+    if (convIds.length === 0) {
       toast.warning('Nothing to mark.')
       return
     }
-    const { data, error } = await supabase
-      .from('messages')
-      .update({ replied: true, reply_required: false })
-      .in('id', messageIds)
-      .select('id')
-    if (error) {
-      toast.error('Failed to mark as replied: ' + error.message)
-      return
-    }
-    const updatedIds = new Set((data ?? []).map((r: { id: string }) => r.id))
-    reportPartial(messageIds.length, updatedIds.size, 'mark replied')
-    if (updatedIds.size > 0) {
-      setItems((prev) => prev.filter((item) => !updatedIds.has(item.message_id)))
+    // One guarded request per conversation (POST .../mark-replied) instead of a
+    // direct `messages` write — enforces action:message.send server-side and
+    // records an audit entry. Optimistic removal is reconciled against the set
+    // that actually succeeded.
+    const { succeeded } = await runBatch(convIds, (cid) =>
+      postConversationAction(cid, 'mark-replied', {})
+    )
+    if (succeeded.length > 0) {
+      const okSet = new Set(succeeded)
+      setItems((prev) => prev.filter((item) => !okSet.has(item.conversation_id)))
       clearSelection()
     }
-  }, [filteredItems, selectedIds, selectedMessageIds, toast, clearSelection, reportPartial])
+    reportPartial(convIds.length, succeeded.length, 'mark replied')
+  }, [selectedIds, selectedConversationIds, toast, clearSelection, reportPartial])
 
   const handleResolveBulk = useCallback(async () => {
-    const supabase = createClient()
     const convIds = selectedConversationIds()
     if (convIds.length === 0) {
       toast.warning('Nothing to resolve.')
       return
     }
-    const { data: resolvedConvs, error: convErr } = await supabase
-      .from('conversations')
-      .update({ status: 'resolved' })
-      .in('id', convIds)
-      .select('id')
-    if (convErr) {
-      toast.error('Failed to resolve: ' + convErr.message)
-      return
+    // Per conversation: flip status→resolved through the guarded /status route
+    // (which also fires CSAT + the conversation.resolved webhook + audit), then
+    // best-effort clear reply_required via /mark-replied so a resolved thread
+    // leaves the pending / SLA pipeline. A conversation counts as resolved only
+    // when the status call itself succeeds.
+    const { succeeded } = await runBatch(convIds, async (cid) => {
+      const ok = await postConversationAction(cid, 'status', { status: 'resolved' })
+      if (!ok) return false
+      await postConversationAction(cid, 'mark-replied', {}).catch(() => false)
+      return true
+    })
+    if (succeeded.length > 0) {
+      const okSet = new Set(succeeded)
+      setItems((prev) => prev.filter((item) => !okSet.has(item.conversation_id)))
+      clearSelection()
     }
-    const resolvedSet = new Set((resolvedConvs ?? []).map((r: { id: string }) => r.id))
-    if (resolvedSet.size === 0) {
-      toast.error(`Failed to resolve (0 of ${convIds.length} conversations updated — likely permission/RLS).`)
-      return
-    }
-    // Mark messages replied for the conversations that actually got resolved
-    const msgIds = filteredItems
-      .filter((item) => selectedIds.has(item.id) && resolvedSet.has(item.conversation_id))
-      .map((item) => item.message_id)
-    if (msgIds.length > 0) {
-      await supabase
-        .from('messages')
-        .update({ replied: true, reply_required: false })
-        .in('id', msgIds)
-      setItems((prev) => prev.filter((item) => !msgIds.includes(item.message_id)))
-    }
-    if (resolvedSet.size < convIds.length) {
-      toast.warning(`Resolved ${resolvedSet.size} of ${convIds.length} conversation(s).`)
-    } else {
-      toast.success(`Resolved ${resolvedSet.size} conversation(s).`)
-    }
-    clearSelection()
-  }, [filteredItems, selectedIds, selectedConversationIds, toast, clearSelection])
+    reportPartial(convIds.length, succeeded.length, 'resolve')
+  }, [selectedConversationIds, toast, clearSelection, reportPartial])
 
   const handleAssignMeBulk = useCallback(async () => {
     if (!currentUserId) {
       toast.error('Not signed in.')
       return
     }
-    const supabase = createClient()
     const convIds = selectedConversationIds()
     if (convIds.length === 0) {
       toast.warning('Nothing to assign.')
       return
     }
-    const { data, error } = await supabase
-      .from('conversations')
-      .update({ assigned_to: currentUserId })
-      .in('id', convIds)
-      .select('id')
-    if (error) {
-      toast.error('Failed to assign: ' + error.message)
-      return
-    }
-    reportPartial(convIds.length, data?.length ?? 0, 'assign')
-    if ((data?.length ?? 0) > 0) {
+    // One guarded request per conversation (POST .../assign, self-assign) —
+    // enforces action:conversation.assign server-side and writes an audit
+    // entry. Self-assign always passes the route's supervisor-tier check.
+    const { succeeded } = await runBatch(convIds, (cid) =>
+      postConversationAction(cid, 'assign', { user_id: currentUserId })
+    )
+    reportPartial(convIds.length, succeeded.length, 'assign')
+    if (succeeded.length > 0) {
       clearSelection()
       fetchInboxItems()
     }
@@ -1289,37 +1317,31 @@ export default function InboxPage() {
       toast.warning('Select messages first.')
       return
     }
-    const supabase = createClient()
-    const messageIds = selectedMessageIds()
-    if (messageIds.length === 0) {
+    const convIds = selectedConversationIds()
+    if (convIds.length === 0) {
       toast.warning('Nothing to archive.')
       return
     }
-    // When archiving spam/newsletter messages, also clear is_spam so they don't reappear
-    const updateFields = inboxView !== 'inbox'
-      ? { replied: true, reply_required: false, is_spam: false }
-      : { replied: true, reply_required: false }
-    const { data, error } = await supabase
-      .from('messages')
-      .update(updateFields)
-      .in('id', messageIds)
-      .select('id')
-    if (error) {
-      toast.error('Failed to archive: ' + error.message)
-      return
-    }
-    const updatedIds = new Set((data ?? []).map((r: { id: string }) => r.id))
-    reportPartial(messageIds.length, updatedIds.size, 'archive')
-    if (updatedIds.size > 0) {
-      setItems((prev) => prev.filter((item) => !updatedIds.has(item.message_id)))
+    // One guarded request per conversation (POST .../mark-replied) instead of a
+    // direct `messages` write — enforces action:message.send server-side. When
+    // archiving from the spam/newsletter views, clear_spam also flips is_spam
+    // off so the thread doesn't reappear there.
+    const clearSpam = inboxView !== 'inbox'
+    const { succeeded } = await runBatch(convIds, (cid) =>
+      postConversationAction(cid, 'mark-replied', { clear_spam: clearSpam })
+    )
+    if (succeeded.length > 0) {
+      const okSet = new Set(succeeded)
+      setItems((prev) => prev.filter((item) => !okSet.has(item.conversation_id)))
       if (inboxView === 'newsletter') {
-        setNewsletterCount((prev) => Math.max(0, prev - updatedIds.size))
+        setNewsletterCount((prev) => Math.max(0, prev - succeeded.length))
       } else if (inboxView === 'spam') {
-        setSpamCount((prev) => Math.max(0, prev - updatedIds.size))
+        setSpamCount((prev) => Math.max(0, prev - succeeded.length))
       }
       clearSelection()
     }
-  }, [filteredItems, selectedIds, selectedMessageIds, inboxView, toast, clearSelection, reportPartial])
+    reportPartial(convIds.length, succeeded.length, 'archive')
+  }, [selectedIds, selectedConversationIds, inboxView, toast, clearSelection, reportPartial])
 
   const handleMarkNotSpam = useCallback(async (messageId: string) => {
     const supabase = createClient()
@@ -1722,21 +1744,13 @@ export default function InboxPage() {
             variant="secondary"
             size="sm"
             className="hidden sm:inline-flex"
-            onClick={async () => {
-              const ids = selectedIds.size > 0
-                ? filteredItems.filter(i => selectedIds.has(i.id)).map(i => i.conversation_id)
-                : []
-              if (ids.length === 0) { toast.warning('Select messages first'); return }
-              const supabase = createClient()
-              // Assign to current user
-              const { data: { user } } = await supabase.auth.getUser()
-              if (!user) return
-              const { error } = await supabase
-                .from('conversations')
-                .update({ assigned_to: user.id })
-                .in('id', ids)
-              if (error) toast.error('Failed to assign')
-              else { toast.success(`Assigned ${ids.length} conversation(s) to you`); clearSelection() }
+            disabled={selectedIds.size === 0 || !canAssign}
+            title={!canAssign ? 'You do not have permission to assign conversations' : undefined}
+            onClick={() => {
+              if (selectedIds.size === 0) { toast.warning('Select messages first'); return }
+              // Routes through the guarded POST /api/conversations/[id]/assign
+              // (self-assign) — same handler the floating bar's "Assign to me" uses.
+              handleAssignMeBulk()
             }}
           >
             <UserPlus className="h-4 w-4" />
@@ -1745,7 +1759,8 @@ export default function InboxPage() {
           <Button
             variant="secondary"
             size="sm"
-            disabled={selectedIds.size === 0}
+            disabled={selectedIds.size === 0 || !canSend}
+            title={!canSend ? 'You do not have permission to update conversations' : undefined}
             onClick={() => {
               if (selectedIds.size === 0) {
                 toast.warning('Select messages first.')
@@ -1767,7 +1782,8 @@ export default function InboxPage() {
           <Button
             variant="secondary"
             size="sm"
-            disabled={selectedIds.size === 0}
+            disabled={selectedIds.size === 0 || !canSend}
+            title={!canSend ? 'You do not have permission to update conversations' : undefined}
             onClick={() => {
               if (selectedIds.size === 0) {
                 toast.warning('Select messages first.')
@@ -1878,6 +1894,8 @@ export default function InboxPage() {
             <Button
               variant="primary"
               size="sm"
+              disabled={!canSend}
+              title={!canSend ? 'You do not have permission to update conversations' : undefined}
               onClick={() => {
                 setConfirmAction({ type: 'mark_replied', count: selectedIds.size })
               }}
@@ -1889,6 +1907,8 @@ export default function InboxPage() {
             <Button
               variant="success"
               size="sm"
+              disabled={!canSend}
+              title={!canSend ? 'You do not have permission to update conversations' : undefined}
               onClick={() => {
                 setConfirmAction({ type: 'resolve', count: selectedIds.size })
               }}
@@ -1900,6 +1920,8 @@ export default function InboxPage() {
             <Button
               variant="danger"
               size="sm"
+              disabled={!canSend}
+              title={!canSend ? 'You do not have permission to update conversations' : undefined}
               onClick={() => {
                 setConfirmAction({ type: 'archive', count: selectedIds.size })
               }}
@@ -1911,6 +1933,8 @@ export default function InboxPage() {
             <Button
               variant="secondary"
               size="sm"
+              disabled={!canAssign}
+              title={!canAssign ? 'You do not have permission to assign conversations' : undefined}
               onClick={() => {
                 if (!currentUserId) {
                   toast.error('Not signed in.')
