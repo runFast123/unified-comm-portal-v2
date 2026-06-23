@@ -17,6 +17,7 @@ const COLUMNS = [
   { key: 'waiting_on_customer', label: 'Waiting', color: 'border-t-amber-500 bg-amber-50/30' },
   { key: 'escalated', label: 'Escalated', color: 'border-t-red-500 bg-red-50/30' },
   { key: 'resolved', label: 'Resolved', color: 'border-t-teal-500 bg-teal-50/30' },
+  { key: 'archived', label: 'Archived', color: 'border-t-gray-400 bg-gray-50/30' },
 ]
 
 function cleanName(raw: string | null): string {
@@ -31,8 +32,8 @@ export function InboxKanban({ items }: InboxKanbanProps) {
 
   items.forEach(item => {
     const status = item.conversation_status || 'active'
+    // Only bucket KNOWN statuses; never dump archived/unknown into Active.
     if (grouped[status]) grouped[status].push(item)
-    else grouped['active'].push(item)
   })
 
   return (

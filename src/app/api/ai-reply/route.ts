@@ -10,6 +10,7 @@ import { getRequestId } from '@/lib/request-id'
 import type { ChannelType, AIReplyStatus } from '@/types/database'
 import { checkAiQuota, checkCompanyRateLimit } from '@/lib/tenant-quota'
 import { retrieveKbContext } from '@/lib/kb-retrieval'
+import { userIdCan } from '@/lib/permissions/server'
 
 const CHANNEL_SYSTEM_PROMPTS: Record<ChannelType, string> = {
   email: `You are a professional customer service agent replying to a customer email for a telecommunications company.
@@ -90,6 +91,11 @@ export async function POST(request: Request) {
       const hasAccess = await verifyAccountAccess(authenticatedUserId, account_id)
       if (!hasAccess) {
         return NextResponse.json({ error: 'Access denied to this account' }, { status: 403 })
+      }
+      // RBAC: a role/user denied AI features must not generate drafts here
+      // (mirrors /api/ai-compose). Internal/webhook calls stay exempt.
+      if (!(await userIdCan(authenticatedUserId, 'action:ai.compose'))) {
+        return NextResponse.json({ error: 'AI reply generation is not enabled for your role' }, { status: 403 })
       }
     }
 

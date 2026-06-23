@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase-server'
-import { callAI } from '@/lib/api-helpers'
+import { callAI, verifyAccountAccess } from '@/lib/api-helpers'
 import { AIBudgetExceededError } from '@/lib/ai-usage'
 import { CircuitBreakerOpenError } from '@/lib/ai-circuit-breaker'
 import { checkAiQuota } from '@/lib/tenant-quota'
@@ -34,7 +34,16 @@ Example output: ["Thank you for reaching out. I'll look into this right away.", 
       .select('account_id')
       .eq('id', conversation_id)
       .maybeSingle()
-    const accountIdForBudget = convRow?.account_id ?? undefined
+    if (!convRow?.account_id) {
+      return NextResponse.json({ error: 'Conversation not found' }, { status: 404 })
+    }
+    // Authorize the caller for this conversation's account BEFORE any quota or
+    // AI spend — otherwise a user in tenant A could burn tenant B's AI budget
+    // and monthly quota just by passing one of B's conversation ids.
+    if (!(await verifyAccountAccess(user.id, convRow.account_id))) {
+      return NextResponse.json({ error: 'Access denied to this conversation' }, { status: 403 })
+    }
+    const accountIdForBudget: string = convRow.account_id
 
     // Resolve the conversation's company once (used for the AI quota + KB grounding).
     let companyId: string | null = null
