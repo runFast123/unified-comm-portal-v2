@@ -15,6 +15,7 @@ import { NextResponse } from 'next/server'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase-server'
 import { verifyAccountAccess } from '@/lib/api-helpers'
 import { userIdCan } from '@/lib/permissions/server'
+import { userCanAccessConversationChannel } from '@/lib/permissions/channel-access'
 import { getCurrentUser, isSupervisor } from '@/lib/auth'
 
 interface PostBody {
@@ -49,7 +50,7 @@ export async function POST(
 
     const { data: conv, error: convErr } = await admin
       .from('conversations')
-      .select('id, account_id, assigned_to')
+      .select('id, account_id, assigned_to, channel')
       .eq('id', conversationId)
       .maybeSingle()
     if (convErr || !conv) {
@@ -62,6 +63,11 @@ export async function POST(
     }
     if (!(await userIdCan(user.id, 'action:conversation.assign'))) {
       return NextResponse.json({ error: 'Missing permission: action:conversation.assign' }, { status: 403 })
+    }
+    // Channel segmentation: a channel-restricted user must not assign a
+    // conversation on a channel they can't see (service-role bypasses RLS).
+    if (!(await userCanAccessConversationChannel(user.id, conv.channel))) {
+      return NextResponse.json({ error: 'Forbidden: missing channel permission' }, { status: 403 })
     }
 
     // ── Phase 2: role-tier enforcement ──

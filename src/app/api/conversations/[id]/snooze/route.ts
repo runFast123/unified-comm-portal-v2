@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase-server'
 import { verifyAccountAccess, checkRateLimit } from '@/lib/api-helpers'
 import { userIdCan } from '@/lib/permissions/server'
+import { userCanAccessConversationChannel } from '@/lib/permissions/channel-access'
 
 // Hard cap: don't accept anything more than 1 year out. Same horizon used by
 // scheduled-messages for parity.
@@ -152,7 +153,7 @@ export async function POST(
     // Look up the conversation's account so we can scope-check.
     const { data: conv, error: convErr } = await admin
       .from('conversations')
-      .select('id, account_id')
+      .select('id, account_id, channel')
       .eq('id', conversationId)
       .maybeSingle()
     if (convErr || !conv) {
@@ -167,6 +168,10 @@ export async function POST(
     // RBAC: snoozing is an agent write action.
     if (!(await userIdCan(user.id, 'action:message.send'))) {
       return NextResponse.json({ error: 'Forbidden: missing permission' }, { status: 403 })
+    }
+    // Channel segmentation: respect the caller's channel grants (service-role bypasses RLS).
+    if (!(await userCanAccessConversationChannel(user.id, conv.channel))) {
+      return NextResponse.json({ error: 'Forbidden: missing channel permission' }, { status: 403 })
     }
 
     const { error: updateErr } = await admin
@@ -237,7 +242,7 @@ export async function DELETE(
 
     const { data: conv, error: convErr } = await admin
       .from('conversations')
-      .select('id, account_id, snoozed_until')
+      .select('id, account_id, snoozed_until, channel')
       .eq('id', conversationId)
       .maybeSingle()
     if (convErr || !conv) {
@@ -252,6 +257,10 @@ export async function DELETE(
     // RBAC: clearing a snooze is an agent write action.
     if (!(await userIdCan(user.id, 'action:message.send'))) {
       return NextResponse.json({ error: 'Forbidden: missing permission' }, { status: 403 })
+    }
+    // Channel segmentation: respect the caller's channel grants (service-role bypasses RLS).
+    if (!(await userCanAccessConversationChannel(user.id, conv.channel))) {
+      return NextResponse.json({ error: 'Forbidden: missing channel permission' }, { status: 403 })
     }
 
     // No-op when already not snoozed — but still return success so the client

@@ -22,8 +22,11 @@ import { NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase-server'
 import { requireUser, assertAccountAccess } from '@/lib/tenant-guard'
 import { userIdCan } from '@/lib/permissions/server'
+import { userCanAccessConversationChannel } from '@/lib/permissions/channel-access'
+import { isSupervisor } from '@/lib/auth'
 import {
   applyMacro,
+  normalizeMacroActions,
   resolveConversationCompanyId,
   MacroValidationError,
   type MacroRecord,
@@ -35,7 +38,7 @@ interface PostBody {
 }
 
 const CONVERSATION_COLUMNS =
-  'id, account_id, status, secondary_status, priority, tags, assigned_to'
+  'id, account_id, status, secondary_status, priority, tags, assigned_to, channel'
 
 export async function POST(
   request: Request,
@@ -82,6 +85,11 @@ export async function POST(
     if (!(await userIdCan(ctx.userId, 'action:message.send'))) {
       return NextResponse.json({ error: 'Forbidden: missing permission' }, { status: 403 })
     }
+    // Channel segmentation: a channel-restricted user must not mutate a
+    // conversation on a channel they can't see (service-role bypasses RLS).
+    if (!(await userCanAccessConversationChannel(ctx.userId, (conv as { channel?: string | null }).channel))) {
+      return NextResponse.json({ error: 'Forbidden: missing channel permission' }, { status: 403 })
+    }
 
     // Load the macro.
     const { data: macroRow, error: macroErr } = await admin
@@ -112,6 +120,29 @@ export async function POST(
         { error: 'Macro belongs to a different company than the conversation' },
         { status: 403 },
       )
+    }
+
+    // RBAC: a macro that REASSIGNS must satisfy the same assign-permission +
+    // supervisor-tier gate as the dedicated /assign route — otherwise a user
+    // denied action:conversation.assign (or a non-supervisor) could reassign a
+    // conversation via a macro's `assign_to`, bypassing those checks.
+    const macroActions = normalizeMacroActions(macro.actions)
+    if (macroActions.assign_to !== undefined) {
+      if (!(await userIdCan(ctx.userId, 'action:conversation.assign'))) {
+        return NextResponse.json(
+          { error: 'Forbidden: missing permission action:conversation.assign' },
+          { status: 403 },
+        )
+      }
+      const target = macroActions.assign_to ?? null
+      const isSelfAssign = target !== null && target === ctx.userId
+      const isSelfUnassign = target === null && conversation.assigned_to === ctx.userId
+      if (!isSelfAssign && !isSelfUnassign && !ctx.isSuperAdmin && !isSupervisor(ctx.role)) {
+        return NextResponse.json(
+          { error: 'Only supervisors and admins can reassign conversations to other users' },
+          { status: 403 },
+        )
+      }
     }
 
     // Apply the actions (validates each; never sends a message).

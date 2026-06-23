@@ -23,6 +23,7 @@ import { NextResponse, after } from 'next/server'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase-server'
 import { verifyAccountAccess } from '@/lib/api-helpers'
 import { userIdCan } from '@/lib/permissions/server'
+import { userCanAccessConversationChannel } from '@/lib/permissions/channel-access'
 import { fireWebhook } from '@/lib/webhook-dispatcher'
 import { maybeAutoSendCSAT } from './csat-hook'
 import type { ConversationStatus } from '@/types/database'
@@ -79,7 +80,7 @@ export async function POST(
 
     const { data: conv, error: convErr } = await admin
       .from('conversations')
-      .select('id, account_id, status, secondary_status, secondary_status_color')
+      .select('id, account_id, status, secondary_status, secondary_status_color, channel')
       .eq('id', conversationId)
       .maybeSingle()
     if (convErr || !conv) {
@@ -94,6 +95,11 @@ export async function POST(
     // RBAC: changing a conversation's status is an agent write action.
     if (!(await userIdCan(user.id, 'action:message.send'))) {
       return NextResponse.json({ error: 'Forbidden: missing permission' }, { status: 403 })
+    }
+    // Channel segmentation: a channel-restricted user must not mutate a
+    // conversation on a channel they can't see (service-role bypasses RLS).
+    if (!(await userCanAccessConversationChannel(user.id, conv.channel))) {
+      return NextResponse.json({ error: 'Forbidden: missing channel permission' }, { status: 403 })
     }
 
     // M4 fix: validate secondary_status_color shape. Without this anyone
