@@ -249,6 +249,12 @@ a, button, input, select, textarea {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+  /* Decorative infinite loops: stop fully rather than freeze a partial cycle
+     (the global rule above would leave e.g. the marquee shifted mid-track). */
+  .animate-marquee, .animate-blob, .animate-float, .animate-float-slow,
+  .animate-ring, .animate-ring-rev {
+    animation: none !important;
+  }
 }
 
 /* ============================================

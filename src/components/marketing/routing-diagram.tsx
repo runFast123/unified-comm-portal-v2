@@ -35,6 +35,9 @@ export function RoutingDiagram() {
   const [hover, setHover] = useState<number | null>(null)
   const [pinned, setPinned] = useState<number | null>(null)
   const [routed, setRouted] = useState(0)
+  // Announced to screen readers when a route fires — the SVG's static aria-label
+  // can't convey the dynamic "N routed" node text.
+  const [lastRouted, setLastRouted] = useState<string | null>(null)
   // Hover previews a route; clicking pins it highlighted + routes a message.
   const active = hover ?? pinned
 
@@ -59,13 +62,23 @@ export function RoutingDiagram() {
   }, [])
 
   const mono = 'var(--font-geist-mono)'
-  const route = (i: number) => { setPinned(i); setRouted((n) => n + 1) }
+  // Click pins the channel + routes a message; clicking the already-pinned
+  // channel toggles back to the ambient (unpinned) state.
+  const route = (i: number) => {
+    const willUnpin = pinned === i
+    setPinned(willUnpin ? null : i)
+    if (!willUnpin) {
+      setRouted((n) => n + 1)
+      setLastRouted(CHANNELS[i].label)
+    }
+  }
 
   return (
+    <div className="overflow-x-auto">
     <svg
       ref={ref}
       viewBox="0 0 700 380"
-      className="w-full"
+      className="w-full min-w-[600px]"
       role="img"
       aria-label="Eight channels — email, Teams, WhatsApp, SMS, Telegram, Messenger, Instagram and live chat — converge through routing lines into a single unified inbox. Hover or tap a channel to route a message."
     >
@@ -152,5 +165,9 @@ export function RoutingDiagram() {
         {routed > 0 ? `${routed} routed` : 'hover a channel'}
       </text>
     </svg>
+      <span className="sr-only" role="status" aria-live="polite">
+        {lastRouted ? `Routed a ${lastRouted} message into the unified inbox — ${routed} routed.` : ''}
+      </span>
+    </div>
   )
 }

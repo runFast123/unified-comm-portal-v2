@@ -129,7 +129,7 @@ export function HeroPanels() {
                   >
                     Approve &amp; send
                   </button>
-                  <span className="rounded-md border border-zinc-200 px-2 py-1 text-[10px] font-medium text-zinc-500">Edit</span>
+                  <span aria-hidden="true" className="rounded-md border border-zinc-200 px-2 py-1 text-[10px] font-medium text-zinc-500">Edit</span>
                 </div>
               </div>
             )}

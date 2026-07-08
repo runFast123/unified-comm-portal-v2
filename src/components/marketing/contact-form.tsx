@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Send, CheckCircle2 } from 'lucide-react'
 
 /**
@@ -11,6 +11,13 @@ import { Send, CheckCircle2 } from 'lucide-react'
  */
 export function ContactForm({ contactEmail }: { contactEmail: string }) {
   const [sent, setSent] = useState(false)
+  const successRef = useRef<HTMLDivElement>(null)
+
+  // Move focus to the confirmation so screen-reader + keyboard users land on
+  // the new state (role="status" also announces it politely).
+  useEffect(() => {
+    if (sent) successRef.current?.focus()
+  }, [sent])
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -43,7 +50,12 @@ export function ContactForm({ contactEmail }: { contactEmail: string }) {
 
   if (sent) {
     return (
-      <div className="rounded-2xl border border-zinc-200 bg-white p-8 text-center">
+      <div
+        ref={successRef}
+        role="status"
+        tabIndex={-1}
+        className="rounded-2xl border border-zinc-200 bg-white p-8 text-center focus:outline-none"
+      >
         <CheckCircle2 className="mx-auto h-12 w-12 text-teal-700" />
         <h3 className="mt-4 text-lg font-medium text-zinc-900">Almost there!</h3>
         <p className="mx-auto mt-2 max-w-sm text-sm text-zinc-600">
@@ -69,13 +81,13 @@ export function ContactForm({ contactEmail }: { contactEmail: string }) {
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <label htmlFor="name" className="mb-1.5 block text-sm font-medium text-zinc-700">
-            Name
+            Name <span className="text-red-600" aria-hidden="true">*</span>
           </label>
           <input id="name" name="name" type="text" required autoComplete="name" className={fieldCls} placeholder="Jane Doe" />
         </div>
         <div>
           <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-zinc-700">
-            Work email
+            Work email <span className="text-red-600" aria-hidden="true">*</span>
           </label>
           <input id="email" name="email" type="email" required autoComplete="email" className={fieldCls} placeholder="jane@company.com" />
         </div>
