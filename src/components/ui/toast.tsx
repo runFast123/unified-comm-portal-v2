@@ -138,7 +138,7 @@ function Toast({
 
   return (
     <div
-      role="alert"
+      role={item.type === 'error' || item.type === 'warning' ? 'alert' : 'status'}
       className={cn(
         'pointer-events-auto flex w-80 items-start gap-3 rounded-lg border px-4 py-3 shadow-lg transition-all duration-300',
         config.bg,
@@ -244,7 +244,6 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       {mounted &&
         createPortal(
           <div
-            aria-live="polite"
             aria-label="Notifications"
             className="pointer-events-none fixed right-4 top-4 z-[100] flex flex-col gap-2"
           >

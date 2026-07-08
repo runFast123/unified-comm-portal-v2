@@ -37,6 +37,16 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
     ],
   },
   {
+    label: 'Inbox triage',
+    shortcuts: [
+      { keys: ['j'], description: 'Next conversation (or ↓)' },
+      { keys: ['k'], description: 'Previous conversation (or ↑)' },
+      { keys: ['Enter'], description: 'Open focused conversation (or o)' },
+      { keys: ['x'], description: 'Select / deselect conversation' },
+      { keys: ['e'], description: 'Archive focused conversation' },
+    ],
+  },
+  {
     label: 'Templates',
     shortcuts: [
       { keys: ['/'], description: 'Open template shortcuts in reply box' },

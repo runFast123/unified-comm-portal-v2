@@ -161,7 +161,7 @@ export default function LandingPage() {
 
       {/* ──────────────── CHANNEL MARQUEE ──────────────── */}
       <section className="border-y border-zinc-200 py-5" aria-label="Channels and capabilities">
-        <div className="marquee-mask overflow-hidden">
+        <div className="marquee-mask overflow-hidden" aria-hidden="true">
           <div className={`${MONO} animate-marquee flex w-max items-center gap-8 whitespace-nowrap text-[13px] text-zinc-500`}>
             {Array.from({ length: 2 }).flatMap((_, dup) =>
               MARQUEE_ITEMS.map((item) => (

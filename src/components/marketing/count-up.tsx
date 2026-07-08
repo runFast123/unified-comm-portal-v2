@@ -28,6 +28,13 @@ export function CountUp({
   useEffect(() => {
     const el = ref.current
     if (!el) return
+    // Respect prefers-reduced-motion: the global CSS reset only neutralises CSS
+    // animation, not this JS requestAnimationFrame counter — jump to the final
+    // value instead of ticking (mirrors the guard in hero-panels/routing-diagram).
+    if (typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+      setVal(to)
+      return
+    }
     const run = () => {
       if (started.current) return
       started.current = true
