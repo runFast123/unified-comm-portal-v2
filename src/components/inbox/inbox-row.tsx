@@ -1,6 +1,6 @@
 'use client'
 
-import { forwardRef, useEffect, useImperativeHandle, useState } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Archive, AlertTriangle, CheckCheck, Sparkles, Clock, User } from 'lucide-react'
 import { useToast } from '@/components/ui/toast'
@@ -21,9 +21,12 @@ const READ_ONLY_ROLES = new Set(['viewer'])
 
 // Imperative surface the parent (InboxList) drives for keyboard triage, so the
 // keyboard `e` archive reuses this row's exact Supabase write + toast +
-// onItemRemoved call instead of duplicating the archive logic.
+// onItemRemoved call instead of duplicating the archive logic. `focus()` moves
+// real DOM focus to the row's outer (`group`) div so screen readers announce it
+// and the hover actions reveal via `group-focus-within` as the j/k cursor moves.
 export interface InboxRowHandle {
   archive: () => Promise<void>
+  focus: () => void
 }
 
 interface InboxRowProps {
@@ -37,6 +40,12 @@ interface InboxRowProps {
   // Keyboard-triage focus highlight — distinct from `selected`/`isActive` so
   // the focused row is visible even when also selected or open in split view.
   isFocused?: boolean
+  // Roving tabindex: true for exactly ONE row (the focused row, or the first
+  // row when nothing is focused yet) so Tab reaches the list ONCE instead of
+  // stepping through all N rows. Every other row is tabIndex=-1. Kept separate
+  // from `isFocused` because the very first Tab lands on the tab-stop row
+  // *before* it becomes the focused row.
+  isTabStop?: boolean
   // Optimistic list callbacks: fired AFTER a successful Supabase write so the
   // row leaves / updates immediately rather than lingering until a refetch.
   // Keyed by `message_id` (the inbox row's mutation key), NOT `id`.
@@ -220,13 +229,16 @@ function getSentimentDot(sentiment: InboxItem['sentiment']) {
 }
 
 export const InboxRow = forwardRef<InboxRowHandle, InboxRowProps>(function InboxRow(
-  { item, selected, onSelect, onItemClick, isActive, isFocused, onItemRemoved, onItemUpdated, onNavigate }: InboxRowProps,
+  { item, selected, onSelect, onItemClick, isActive, isFocused, isTabStop, onItemRemoved, onItemUpdated, onNavigate }: InboxRowProps,
   ref
 ) {
   const router = useRouter()
   const { toast } = useToast()
   const { role: viewerRole } = useUser()
   const isReadOnly = READ_ONLY_ROLES.has(viewerRole)
+  // DOM node of the outer `group` div — InboxList drives focus() through the
+  // imperative handle below so DOM focus follows the j/k cursor.
+  const rowRef = useRef<HTMLDivElement>(null)
 
   const handleRowClick = () => {
     if (onItemClick) {
@@ -269,8 +281,13 @@ export const InboxRow = forwardRef<InboxRowHandle, InboxRowProps>(function Inbox
     }
   }
 
-  // Expose the archive action to InboxList's keyboard handler.
-  useImperativeHandle(ref, () => ({ archive }))
+  // Expose the archive action + DOM focus() to InboxList. `preventScroll` lets
+  // InboxList's focus effect keep its gentler scrollIntoView({ block: 'nearest' })
+  // as the sole scroller instead of focus()'s default (often centering) scroll.
+  useImperativeHandle(ref, () => ({
+    archive,
+    focus: () => rowRef.current?.focus({ preventScroll: true }),
+  }))
 
   const handleArchive = async (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -375,17 +392,40 @@ export const InboxRow = forwardRef<InboxRowHandle, InboxRowProps>(function Inbox
   const channelChipClass = getChannelChipClass(item.channel)
   const channelChipTitle = getChannelChipTitle(item.channel)
 
+  // Accessible name for the whole focusable row, so a screen reader announces
+  // who the message is from, the channel, a subject snippet, unread state and
+  // priority as focus moves (j/k or Tab). `unread` is gated on `mounted` (same
+  // as the visual unread affordances) so SSR and the first client render agree
+  // and this doesn't introduce a hydration mismatch.
+  const rowAriaLabel = [
+    unread ? 'Unread' : null,
+    `${channelChipTitle} from ${senderName}`,
+    truncate(item.subject_or_preview, 60),
+    priorityBarLabel,
+  ]
+    .filter(Boolean)
+    .join('. ')
+
   return (
     <div
+      ref={rowRef}
       onClick={handleRowClick}
-      // The colored left bar communicates priority/urgency. We surface it via
-      // `aria-label` + `title` so the meaning is discoverable rather than
-      // purely decorative.
-      aria-label={priorityBarLabel}
+      // Focusable row: `aria-label` gives it a meaningful accessible name (who /
+      // channel / subject / unread / priority) so screen readers announce it as
+      // focus moves, and the roving `tabIndex` makes Tab reach the list once.
+      // NOTE: no onKeyDown here on purpose — Enter/j/k/x/e are owned by the
+      // single window keydown handler in inbox-list, so a row-level Enter would
+      // double-open. `title` still explains the colored priority bar on hover.
+      tabIndex={isTabStop ? 0 : -1}
+      aria-label={rowAriaLabel}
       title={`${priorityBarLabel} — colored left bar reflects message priority`}
       className={cn(
         'group relative flex items-center gap-4 px-5 py-4 border-b border-gray-100 min-h-[64px]',
         'hover:bg-gray-50/80 transition-colors cursor-pointer',
+        // Suppress the default outline (we render our own teal ring) and show a
+        // focus-visible ring for keyboard focus even in the microtask before the
+        // isFocused state below catches up.
+        'focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-400',
         getPriorityBorderClass(item.priority),
         selected && 'bg-teal-50 hover:bg-teal-50',
         isActive && 'bg-blue-50 hover:bg-blue-50 ring-1 ring-blue-300',
@@ -394,13 +434,19 @@ export const InboxRow = forwardRef<InboxRowHandle, InboxRowProps>(function Inbox
         isFocused && 'bg-teal-50/40 ring-2 ring-inset ring-teal-400'
       )}
     >
-      {/* Checkbox — hidden for read-only roles since bulk actions also 403. */}
+      {/* Checkbox — hidden for read-only roles since bulk actions also 403.
+          Roving tabindex (0 only while this row is focused, else -1) keeps the
+          nested checkbox + action buttons out of the page tab order until you're
+          on the row — otherwise Tab would step through 50 checkboxes + 200
+          buttons. Reachable via Tab once the row is focused; still mouse- and
+          `x`-shortcut-operable regardless. */}
       {!isReadOnly && (
         <div onClick={handleCheckboxClick} className="flex-shrink-0">
           <input
             type="checkbox"
             checked={selected}
             onChange={(e) => onSelect(item.id, e.target.checked)}
+            tabIndex={isFocused ? 0 : -1}
             className="h-4 w-4 rounded border-border text-[var(--brand-accent)] focus:ring-[var(--brand-accent)] cursor-pointer"
           />
         </div>
@@ -549,10 +595,17 @@ export const InboxRow = forwardRef<InboxRowHandle, InboxRowProps>(function Inbox
           overlap. Hidden entirely for read-only roles so we don't tease
           buttons whose underlying API mutations would 403. */}
       {!isReadOnly && (
+        // Same roving-tabindex treatment as the checkbox: these reveal on
+        // hover/`group-focus-within` and are Tab-reachable only while the row is
+        // focused (isFocused), so keyboard users can operate them without every
+        // row's 4 buttons flooding the page tab order. Enter/Space on a focused
+        // button activates it natively; the window keydown handler stands down
+        // because its `isTypingTarget` guard treats a focused BUTTON as off-limits.
         <div className="absolute right-2 top-1/2 -translate-y-1/2 hidden group-hover:flex group-focus-within:flex items-center gap-0.5 bg-card rounded-lg px-1.5 py-1 shadow-lg border border-border z-10">
           {(item.ai_status === 'no_draft' || item.ai_status === 'classify_only') && (
             <button
               onClick={handleGenerateReply}
+              tabIndex={isFocused ? 0 : -1}
               className="p-2 rounded-md text-[var(--brand-accent)] hover:bg-[var(--brand-accent)]/10 transition-colors"
               title="Generate AI reply"
               aria-label="Generate AI reply"
@@ -562,6 +615,7 @@ export const InboxRow = forwardRef<InboxRowHandle, InboxRowProps>(function Inbox
           )}
           <button
             onClick={handleMarkReplied}
+            tabIndex={isFocused ? 0 : -1}
             className="p-2 rounded-md text-zinc-500 hover:text-green-600 hover:bg-green-50 transition-colors"
             title="Mark as Replied"
             aria-label="Mark as Replied"
@@ -570,6 +624,7 @@ export const InboxRow = forwardRef<InboxRowHandle, InboxRowProps>(function Inbox
           </button>
           <button
             onClick={handleArchive}
+            tabIndex={isFocused ? 0 : -1}
             className="p-2 rounded-md text-zinc-500 hover:text-[var(--brand-accent)] hover:bg-[var(--brand-accent)]/10 transition-colors"
             title="Archive"
             aria-label="Archive"
@@ -578,6 +633,7 @@ export const InboxRow = forwardRef<InboxRowHandle, InboxRowProps>(function Inbox
           </button>
           <button
             onClick={handleEscalate}
+            tabIndex={isFocused ? 0 : -1}
             className="p-2 rounded-md text-zinc-500 hover:text-orange-600 hover:bg-orange-50 transition-colors"
             title="Escalate"
             aria-label="Escalate"

@@ -169,15 +169,21 @@ export function InboxList({ items, onItemClick, selectedItemId, selectedIds: ext
     })
   }, [sortedItems])
 
-  // Scroll the focused row into view ONLY when focus moves (j/k/↑/↓) — not when
-  // the list re-renders from a background refetch, which would otherwise yank a
-  // row the user has scrolled away from. Read the current list via the ref so
-  // this doesn't need `sortedItems` in its deps.
+  // Move DOM focus to — and scroll into view — the focused row ONLY when focus
+  // moves (j/k/↑/↓), not when the list re-renders from a background refetch,
+  // which would otherwise yank focus/scroll onto a row the user scrolled away
+  // from. Keyed on `focusedIndex` alone (same rationale as the scroll); the
+  // current list is read via the ref so `sortedItems` stays out of the deps.
+  // Driving real DOM focus (not just the visual ring) is what makes a screen
+  // reader announce the row and reveals its hover actions via
+  // `group-focus-within`. focus() uses preventScroll so it doesn't fight the
+  // gentler scrollIntoView({ block: 'nearest' }) here.
   useEffect(() => {
     if (focusedIndex < 0) return
     const item = kbStateRef.current.sortedItems[focusedIndex]
     if (!item) return
     rowEls.current.get(item.id)?.scrollIntoView({ block: 'nearest' })
+    rowHandles.current.get(item.id)?.focus()
   }, [focusedIndex])
 
   useEffect(() => {
@@ -288,13 +294,19 @@ export function InboxList({ items, onItemClick, selectedItemId, selectedIds: ext
       ) : (
         sortedItems.map((item, index) => (
           // Wrapper captures the row DOM node for scrollIntoView; the imperative
-          // ref on <InboxRow> exposes its archive() to the keyboard handler.
+          // ref on <InboxRow> exposes its archive()/focus() to the keyboard
+          // handler. onFocus here fires for the row div AND its inner controls
+          // (focusin bubbles), so Tab-focusing anywhere in the row syncs the
+          // keyboard model's `focusedIndex` to it — keeping DOM focus and the
+          // j/k cursor one source of truth (else Enter, which reads focusedIndex,
+          // could open a different row than the one the user tabbed to).
           <div
             key={item.id}
             ref={(el) => {
               if (el) rowEls.current.set(item.id, el)
               else rowEls.current.delete(item.id)
             }}
+            onFocus={() => setFocusedIndex(index)}
           >
             <InboxRow
               ref={(h) => {
@@ -307,6 +319,10 @@ export function InboxList({ items, onItemClick, selectedItemId, selectedIds: ext
               onItemClick={onItemClick}
               isActive={selectedItemId === item.id}
               isFocused={index === focusedIndex}
+              // Roving tabindex: exactly one row is Tab-reachable — the focused
+              // row, or the first row when nothing is focused yet — so Tab hits
+              // the list once instead of stepping through every row.
+              isTabStop={focusedIndex < 0 ? index === 0 : index === focusedIndex}
               onItemRemoved={onItemRemoved}
               onItemUpdated={onItemUpdated}
               onNavigate={writeNavContract}
