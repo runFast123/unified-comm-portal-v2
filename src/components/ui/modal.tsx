@@ -15,12 +15,18 @@ export interface ModalProps {
   children: React.ReactNode
   footer?: React.ReactNode
   className?: string
+  /**
+   * Classes for the body wrapper around `children`. Defaults to `px-6 py-4`.
+   * Pass `"p-0"` (and usually add `overflow-hidden` via `className`) when the
+   * caller renders its own full-bleed header / body / footer as children.
+   */
+  bodyClassName?: string
 }
 
 const FOCUSABLE =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
-export function Modal({ open, onClose, title, ariaLabel, children, footer, className }: ModalProps) {
+export function Modal({ open, onClose, title, ariaLabel, children, footer, className, bodyClassName = 'px-6 py-4' }: ModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null)
   // The element focused before the dialog opened, so we can restore focus on close.
   const restoreRef = useRef<HTMLElement | null>(null)
@@ -124,7 +130,7 @@ export function Modal({ open, onClose, title, ariaLabel, children, footer, class
           </div>
         )}
         {/* Body */}
-        <div className="px-6 py-4">{children}</div>
+        <div className={bodyClassName}>{children}</div>
         {/* Footer */}
         {footer && (
           <div className="flex items-center justify-end gap-3 border-t border-border px-6 py-3">

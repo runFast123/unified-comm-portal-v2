@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { CheckSquare, CheckCheck, Archive, UserPlus, Loader2, Inbox, List, Columns, LayoutGrid, X, Sparkles, User, ShieldAlert, ShieldCheck, Mail, CircleCheck, RefreshCw, Bookmark, BookmarkPlus, Clock, ChevronLeft, Filter } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Modal } from '@/components/ui/modal'
 import { EmptyState } from '@/components/ui/empty-state'
 import { InboxRowSkeleton } from '@/components/ui/skeleton'
 import { InboxList } from '@/components/inbox/inbox-list'
@@ -1805,26 +1806,19 @@ export default function InboxPage() {
         </div>
       </div>
 
-      {/* Confirmation Dialog */}
+      {/* Confirmation Dialog — routed through the shared <Modal> so it gets the
+          focus trap, Escape, scroll-lock, and (crucially) role="dialog" +
+          aria-modal="true". Those attributes also make InboxList's isModalOpen()
+          guard fire, so keyboard triage (e/x/j/k) no longer acts on rows BEHIND
+          this prompt. Backdrop/Escape close are suppressed while the bulk action
+          is in flight (mirrors the disabled Cancel button). */}
       {confirmAction && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="mx-4 w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-xl">
-            <h3 className="text-lg font-semibold text-foreground">Confirm Action</h3>
-            <p className="mt-2 text-sm text-zinc-600">
-              {confirmAction.type === 'smart-approve' &&
-                `Approve ${confirmAction.count} of ${confirmAction.totalCount} messages with >85% AI confidence?`}
-              {confirmAction.type === 'approve' &&
-                `Are you sure you want to approve ${confirmAction.count} selected message${confirmAction.count > 1 ? 's' : ''}?`}
-              {confirmAction.type === 'archive' &&
-                `Are you sure you want to archive ${confirmAction.count} message${confirmAction.count > 1 ? 's' : ''}? This cannot be undone.`}
-              {confirmAction.type === 'mark_replied' &&
-                `Mark ${confirmAction.count} message${confirmAction.count > 1 ? 's' : ''} as replied? Use this if you replied from Gmail directly.`}
-              {confirmAction.type === 'resolve' &&
-                `Resolve the conversation${confirmAction.count > 1 ? 's' : ''} for ${confirmAction.count} selected message${confirmAction.count > 1 ? 's' : ''}? The conversation status will change to "resolved" and the messages will be marked replied.`}
-              {confirmAction.type === 'assign_me' &&
-                `Assign the conversation${confirmAction.count > 1 ? 's' : ''} for ${confirmAction.count} selected message${confirmAction.count > 1 ? 's' : ''} to you?`}
-            </p>
-            <div className="mt-5 flex justify-end gap-3">
+        <Modal
+          open
+          onClose={() => { if (!bulkActionLoading) setConfirmAction(null) }}
+          title="Confirm Action"
+          footer={
+            <>
               <Button
                 variant="secondary"
                 size="sm"
@@ -1860,9 +1854,24 @@ export default function InboxPage() {
                   : confirmAction.type === 'assign_me' ? 'Assign to me'
                   : 'Approve'}
               </Button>
-            </div>
-          </div>
-        </div>
+            </>
+          }
+        >
+          <p className="text-sm text-zinc-600">
+            {confirmAction.type === 'smart-approve' &&
+              `Approve ${confirmAction.count} of ${confirmAction.totalCount} messages with >85% AI confidence?`}
+            {confirmAction.type === 'approve' &&
+              `Are you sure you want to approve ${confirmAction.count} selected message${confirmAction.count > 1 ? 's' : ''}?`}
+            {confirmAction.type === 'archive' &&
+              `Are you sure you want to archive ${confirmAction.count} message${confirmAction.count > 1 ? 's' : ''}? This cannot be undone.`}
+            {confirmAction.type === 'mark_replied' &&
+              `Mark ${confirmAction.count} message${confirmAction.count > 1 ? 's' : ''} as replied? Use this if you replied from Gmail directly.`}
+            {confirmAction.type === 'resolve' &&
+              `Resolve the conversation${confirmAction.count > 1 ? 's' : ''} for ${confirmAction.count} selected message${confirmAction.count > 1 ? 's' : ''}? The conversation status will change to "resolved" and the messages will be marked replied.`}
+            {confirmAction.type === 'assign_me' &&
+              `Assign the conversation${confirmAction.count > 1 ? 's' : ''} for ${confirmAction.count} selected message${confirmAction.count > 1 ? 's' : ''} to you?`}
+          </p>
+        </Modal>
       )}
 
       {/* Floating bulk action bar */}

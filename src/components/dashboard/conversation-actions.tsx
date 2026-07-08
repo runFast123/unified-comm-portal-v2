@@ -25,6 +25,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Modal } from '@/components/ui/modal'
 import { createClient } from '@/lib/supabase-client'
 import { useToast } from '@/components/ui/toast'
 import { useConversationPresence } from '@/hooks/useConversationPresence'
@@ -1551,13 +1552,17 @@ export function ConversationActions({
         )
       })}
 
-      {/* Schedule-send modal */}
-      {showScheduleModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-          onClick={(e) => { if (e.target === e.currentTarget) setShowScheduleModal(false) }}
-        >
-          <div className="w-full max-w-md overflow-hidden rounded-2xl border border-border bg-white shadow-[0_20px_60px_rgba(16,24,40,0.18),0_4px_12px_rgba(16,24,40,0.08)]">
+      {/* Schedule-send modal — routed through the shared <Modal> so it inherits
+          the focus trap, Escape, scroll-lock, and role="dialog"/aria-modal
+          wiring. The bespoke header/body/footer render full-bleed via
+          bodyClassName="p-0"; Modal owns the backdrop + centering. */}
+      <Modal
+        open={showScheduleModal}
+        onClose={() => setShowScheduleModal(false)}
+        ariaLabel="Schedule reply"
+        className="overflow-hidden"
+        bodyClassName="p-0"
+      >
             {/* Header */}
             <div className="flex items-start justify-between gap-4 border-b border-border bg-gradient-to-b from-indigo-50/40 to-transparent px-6 py-4">
               <div className="flex min-w-0 items-center gap-3">
@@ -1648,9 +1653,8 @@ export function ConversationActions({
                 Schedule
               </Button>
             </div>
-          </div>
-        </div>
-      )}
+      </Modal>
+
 
       {/* Info banner — only show for active/unreplied conversations.
          Was previously styled as `amber-50/700` (warning yellow) which

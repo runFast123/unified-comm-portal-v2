@@ -22,6 +22,7 @@ import {
 import { useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Modal } from '@/components/ui/modal'
 import { cn, getSentimentColor, getUrgencyColor } from '@/lib/utils'
 import type { MessageClassification, AIReply } from '@/types/database'
 import { ThreadSummary } from '@/components/dashboard/thread-summary'
@@ -210,10 +211,17 @@ function SentimentSection({ trendLabel, trendColor, TrendIcon, trend, posCount, 
 
       </button>
 
-      {/* Floating table window — overlay, not inline */}
-      {showDetails && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20" onClick={() => setShowDetails(false)}>
-          <div className="bg-card rounded-2xl shadow-xl border border-border w-[500px] max-w-[90vw] max-h-[70vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+      {/* Floating table window — routed through the shared <Modal> so it inherits
+          the focus trap, Escape, scroll-lock, and role="dialog"/aria-modal
+          wiring. The bespoke header/table/footer render full-bleed via
+          bodyClassName="p-0"; Modal owns the backdrop + centering. */}
+      <Modal
+        open={showDetails}
+        onClose={() => setShowDetails(false)}
+        ariaLabel="Sentiment analysis details"
+        className="overflow-hidden max-h-[70vh]"
+        bodyClassName="p-0"
+      >
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-3 border-b border-border bg-muted">
               <h3 className="text-sm font-bold text-zinc-700">Sentiment Analysis Details</h3>
@@ -268,9 +276,7 @@ function SentimentSection({ trendLabel, trendColor, TrendIcon, trend, posCount, 
                 <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-red-500" /> {negCount}</span>
               </div>
             </div>
-          </div>
-        </div>
-      )}
+      </Modal>
     </div>
   )
 }

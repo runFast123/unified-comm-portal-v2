@@ -9,7 +9,7 @@
 // Layout: collapsible drawer on mobile (off-canvas), persistent panel from
 // `md:` and up. Each section is a list of clickable chips with counts.
 
-import { useMemo } from 'react'
+import { useEffect, useId, useMemo, useRef } from 'react'
 import {
   ChevronDown,
   ChevronRight,
@@ -162,6 +162,46 @@ export function InboxFacetsSidebar({
     [activeFilters],
   )
 
+  // ── Mobile off-canvas drawer semantics ────────────────────────────────
+  // From `md:` up this is a persistent <aside> landmark. Only when the caller
+  // opens it as an off-canvas overlay (`open === true`, mobile) does it become
+  // a modal dialog: role/aria-modal (so assistive tech AND InboxList's
+  // isModalOpen() keyboard-triage guard treat it as modal), Escape-to-close,
+  // initial focus moved inside, and the background scroll-locked. A bespoke
+  // shell (not the shared <Modal>) because it's a left-anchored full-height
+  // drawer, not a centered dialog.
+  const titleId = useId()
+  const asideRef = useRef<HTMLElement>(null)
+  const closeButtonRef = useRef<HTMLButtonElement>(null)
+  const isDrawer = open === true
+  // Hold the latest onClose without making it an effect dependency (the caller
+  // passes an inline arrow) so the effect runs only when `open` toggles — not
+  // on every parent render, which would keep stealing focus back inside.
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
+
+  useEffect(() => {
+    if (!isDrawer) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        onCloseRef.current?.()
+      }
+    }
+    document.addEventListener('keydown', onKeyDown)
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    // rAF so the off-canvas panel has painted before we move focus into it.
+    const raf = requestAnimationFrame(() => {
+      (closeButtonRef.current ?? asideRef.current)?.focus()
+    })
+    return () => {
+      document.removeEventListener('keydown', onKeyDown)
+      document.body.style.overflow = prevOverflow
+      cancelAnimationFrame(raf)
+    }
+  }, [isDrawer])
+
   const handleChipClick = (key: FacetFilterKey, value: string) => {
     const isActive = activeFilters[key] === value
     const next = { ...activeFilters }
@@ -184,15 +224,23 @@ export function InboxFacetsSidebar({
 
   return (
     <aside
+      ref={asideRef}
       className={containerClasses}
-      aria-label="Inbox filters"
+      // Landmark name when it's a persistent sidebar; in drawer mode the dialog
+      // is named by the "Filters" heading via aria-labelledby, so we drop
+      // aria-label there to avoid two competing accessible names.
+      aria-label={isDrawer ? undefined : 'Inbox filters'}
+      role={isDrawer ? 'dialog' : undefined}
+      aria-modal={isDrawer ? true : undefined}
+      aria-labelledby={isDrawer ? titleId : undefined}
+      tabIndex={isDrawer ? -1 : undefined}
       data-testid="inbox-facets-sidebar"
     >
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <div className="flex items-center gap-2 text-sm font-semibold text-zinc-700">
           <Filter className="h-4 w-4 text-[var(--brand-accent)]" />
-          Filters
+          <span id={titleId}>Filters</span>
           {facets && (
             <span className="ml-1 rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600">
               {facets.total}
@@ -212,6 +260,7 @@ export function InboxFacetsSidebar({
           {onClose && (
             <button
               type="button"
+              ref={closeButtonRef}
               onClick={onClose}
               className="md:hidden rounded p-1 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700"
               aria-label="Close filters"
