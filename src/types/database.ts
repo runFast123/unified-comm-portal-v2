@@ -119,6 +119,13 @@ export interface Account {
   whatsapp_phone: string | null
   phase1_enabled: boolean
   phase2_enabled: boolean
+  /**
+   * @deprecated Vestigial. No server code has ever read this column — whether AI
+   * drafts a reply is gated by `phase2_enabled`, which every webhook and the
+   * email ingester read. Its admin toggle and status pill were removed because
+   * they described Phase 2's behaviour while doing nothing. Kept here only
+   * because the column still exists in the DB; do not build UI on it.
+   */
   ai_auto_reply: boolean
   ai_trust_mode: boolean
   ai_system_prompt: string | null

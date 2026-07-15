@@ -8,7 +8,16 @@ import nextCoreWebVitals from 'eslint-config-next/core-web-vitals'
 const eslintConfig = [
   {
     ignores: [
+      // Root-relative, so this alone does NOT cover build output nested inside
+      // agent worktrees — hence the two globs below it.
       '.next/**',
+      // Build output anywhere (e.g. .claude/worktrees/<name>/.next/**). Without
+      // this, a worktree that has been built leaks ~50 minified-bundle errors
+      // into the lint gate and drowns real source findings.
+      '**/.next/**',
+      // Agent worktrees are throwaway checkouts of this same repo; linting them
+      // double-reports every finding against a stale copy of the source.
+      '.claude/**',
       'node_modules/**',
       'next-env.d.ts',
       'coverage/**',

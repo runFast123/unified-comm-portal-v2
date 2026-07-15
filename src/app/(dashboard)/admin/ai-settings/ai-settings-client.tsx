@@ -6,7 +6,6 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { Select } from '@/components/ui/select'
 import { Toggle } from '@/components/ui/toggle'
 import { AIProvidersManager } from '@/components/dashboard/ai-providers-manager'
 import type { Account, Category, ChannelType } from '@/types/database'
@@ -65,8 +64,6 @@ export default function AISettingsClient({ companyAccountIds, companyId }: AISet
     new Set(allCategories)
   )
   const [confidenceThreshold, setConfidenceThreshold] = useState(80)
-  const [trustThreshold, setTrustThreshold] = useState(5)
-  const [fallbackBehavior, setFallbackBehavior] = useState('escalate')
   // Default to false to mirror the DB column default. The active row may be
   // overridden via the toggle below; loadData will hydrate the actual value.
   const [autoResolveMarketing, setAutoResolveMarketing] = useState(false)
@@ -102,8 +99,6 @@ export default function AISettingsClient({ companyAccountIds, companyId }: AISet
   }, [
     loading,
     confidenceThreshold,
-    trustThreshold,
-    fallbackBehavior,
     autoResolveMarketing,
     prompts.email,
     prompts.teams,
@@ -145,12 +140,13 @@ export default function AISettingsClient({ companyAccountIds, companyId }: AISet
         if (aiConfig.confidence_threshold) {
           setConfidenceThreshold(Math.round(Number(aiConfig.confidence_threshold) * 100))
         }
-        if (aiConfig.trust_threshold !== undefined && aiConfig.trust_threshold !== null) {
-          setTrustThreshold(aiConfig.trust_threshold)
-        }
-        if (aiConfig.fallback_behavior) {
-          setFallbackBehavior(aiConfig.fallback_behavior)
-        }
+        // NOTE: ai_config.trust_threshold and .fallback_behavior are deliberately
+        // NOT hydrated here. No server code has ever read either column, and the
+        // "threshold" was silently coerced to `ai_trust_mode = trust_threshold > 0`
+        // on save — so merely saving this page armed autonomous customer-facing
+        // sending across every account. Auto-send is now controlled only by the
+        // explicit per-account toggle in Admin → Accounts. See the read-only
+        // "Auto-send status" card below.
         if (aiConfig.auto_resolve_marketing !== undefined && aiConfig.auto_resolve_marketing !== null) {
           setAutoResolveMarketing(aiConfig.auto_resolve_marketing)
         }
@@ -197,13 +193,18 @@ export default function AISettingsClient({ companyAccountIds, companyId }: AISet
     })
   }
 
+  // Which accounts currently have autonomous sending armed. Derived from the
+  // accounts themselves — the same column ai-reply actually gates on — rather
+  // than from ai_config, whose trust_threshold never gated anything. Read-only:
+  // see the "Auto-send status" card below for why this page cannot set it.
+  const autoSendAccounts = accounts.filter((a) => a.ai_trust_mode)
+
   const handleSave = useCallback(async () => {
     setSaving(true)
     setSaveResult(null)
 
     try {
       const thresholdDecimal = confidenceThreshold / 100
-      const enableTrustMode = trustThreshold > 0
       const errors: string[] = []
 
       // 1. Save ALL settings to ai_config (provider + prompts + thresholds)
@@ -222,8 +223,6 @@ export default function AISettingsClient({ companyAccountIds, companyId }: AISet
             teams_prompt: prompts.teams,
             whatsapp_prompt: prompts.whatsapp,
             confidence_threshold: thresholdDecimal,
-            trust_threshold: trustThreshold,
-            fallback_behavior: fallbackBehavior,
             auto_resolve_marketing: autoResolveMarketing,
           })
           .eq('is_active', true)
@@ -235,6 +234,12 @@ export default function AISettingsClient({ companyAccountIds, companyId }: AISet
       }
 
       // 2. Sync prompts to accounts table for API routes to read.
+      //
+      // SAFETY: this block must never write `ai_trust_mode`. That column is the
+      // sole gate on sending an AI reply to a customer with no human approval
+      // (ai-reply/route.ts). Arming it is a deliberate, per-account decision and
+      // belongs to the explicit toggle in Admin → Accounts — never a side effect
+      // of saving a prompt here.
       //
       // SECURITY: scope every account update to the caller's company by
       // chaining `.in('id', companyAccountIds)`. `companyAccountIds === null`
@@ -250,7 +255,6 @@ export default function AISettingsClient({ companyAccountIds, companyId }: AISet
           .from('accounts')
           .update({
             ai_confidence_threshold: thresholdDecimal,
-            ai_trust_mode: enableTrustMode,
             ai_system_prompt: prompts.email,
           })
           .eq('channel_type', 'email')
@@ -263,7 +267,6 @@ export default function AISettingsClient({ companyAccountIds, companyId }: AISet
           .from('accounts')
           .update({
             ai_confidence_threshold: thresholdDecimal,
-            ai_trust_mode: enableTrustMode,
             ai_system_prompt: prompts.teams,
           })
           .eq('channel_type', 'teams')
@@ -276,7 +279,6 @@ export default function AISettingsClient({ companyAccountIds, companyId }: AISet
           .from('accounts')
           .update({
             ai_confidence_threshold: thresholdDecimal,
-            ai_trust_mode: enableTrustMode,
             ai_system_prompt: prompts.whatsapp,
           })
           .eq('channel_type', 'whatsapp')
@@ -295,7 +297,6 @@ export default function AISettingsClient({ companyAccountIds, companyId }: AISet
           prev.map((a) => ({
             ...a,
             ai_confidence_threshold: thresholdDecimal,
-            ai_trust_mode: enableTrustMode,
             // SMS (and any future channel without a prompt editor here) falls
             // back to the account's existing prompt; its default lives in
             // ai-reply's CHANNEL_SYSTEM_PROMPTS.
@@ -310,7 +311,7 @@ export default function AISettingsClient({ companyAccountIds, companyId }: AISet
       setSaving(false)
       setTimeout(() => setSaveResult(null), 4000)
     }
-  }, [confidenceThreshold, trustThreshold, prompts, fallbackBehavior, autoResolveMarketing, companyAccountIds, companyId])
+  }, [confidenceThreshold, prompts, autoResolveMarketing, companyAccountIds, companyId])
 
   // Discard reverts in-memory state by re-pulling the persisted ai_config row.
   // We re-set every field the load effect originally set so the form snaps
@@ -343,10 +344,6 @@ export default function AISettingsClient({ companyAccountIds, companyId }: AISet
       if (aiConfig.confidence_threshold) {
         setConfidenceThreshold(Math.round(Number(aiConfig.confidence_threshold) * 100))
       }
-      if (aiConfig.trust_threshold !== undefined && aiConfig.trust_threshold !== null) {
-        setTrustThreshold(aiConfig.trust_threshold)
-      }
-      if (aiConfig.fallback_behavior) setFallbackBehavior(aiConfig.fallback_behavior)
       if (aiConfig.auto_resolve_marketing !== undefined && aiConfig.auto_resolve_marketing !== null) {
         setAutoResolveMarketing(aiConfig.auto_resolve_marketing)
       }
@@ -624,71 +621,43 @@ export default function AISettingsClient({ companyAccountIds, companyId }: AISet
         </div>
       </Card>
 
-      {/* Trust Mode Settings */}
+      {/* Auto-send status — READ-ONLY BY DESIGN.
+          `accounts.ai_trust_mode` is the sole gate on sending an AI reply to a
+          customer with no human approval (ai-reply/route.ts). Arming it is a
+          deliberate, per-account decision and lives on the account itself, in
+          Admin → Accounts — so that saving a prompt on this page can never arm
+          autonomous sending as a side effect. This card only reports state. */}
       <Card
-        title="Trust Mode Settings"
-        description="Configure when AI can auto-send replies without human approval"
+        title="Auto-send status"
+        description="Where AI replies reach customers without human approval"
       >
-        <div className="space-y-4">
-          <div className="flex items-center gap-4">
-            <Shield className="h-5 w-5 text-gray-400" />
-            <div className="flex-1">
-              <label className="mb-1 block text-sm font-medium text-gray-700">
-                Auto-send threshold (approved replies before trust)
-              </label>
-              <div className="flex items-center gap-3">
-                <Input
-                  type="number"
-                  min={1}
-                  max={50}
-                  value={trustThreshold.toString()}
-                  onChange={(e) => setTrustThreshold(Number(e.target.value))}
-                  className="w-24"
-                />
-                <span className="text-sm text-gray-500">
-                  consecutive approved replies required before auto-send is enabled
-                </span>
-              </div>
-            </div>
-          </div>
-          <p className="text-xs text-gray-500">
-            After {trustThreshold} consecutive replies are approved by a human reviewer without edits,
-            the AI will begin auto-sending for that account/category combination.
-          </p>
-        </div>
-      </Card>
-
-      {/* Fallback Behavior */}
-      <Card
-        title="Fallback Behavior"
-        description="What happens when AI confidence is below the threshold or an error occurs"
-      >
-        <div className="space-y-4">
-          <Select
-            label="When AI cannot generate a confident reply"
-            value={fallbackBehavior}
-            onChange={(e) => setFallbackBehavior(e.target.value)}
-            options={[
-              { value: 'escalate', label: 'Escalate to human reviewer' },
-              { value: 'generic', label: 'Send generic acknowledgment response' },
-              { value: 'none', label: 'No response (silent)' },
-            ]}
+        <div className="flex items-start gap-3">
+          <Shield
+            className={`mt-0.5 h-5 w-5 shrink-0 ${
+              autoSendAccounts.length > 0 ? 'text-amber-600' : 'text-gray-400'
+            }`}
           />
-          {fallbackBehavior === 'escalate' && (
-            <p className="text-sm text-gray-500">
-              Messages will appear in the inbox with a &quot;Needs Review&quot; badge for manual handling.
+          <div className="space-y-2">
+            <p className="text-sm text-gray-700">
+              {autoSendAccounts.length === 0 ? (
+                <>
+                  Auto-send is <strong>off</strong> for all {accounts.length} account
+                  {accounts.length === 1 ? '' : 's'}. Every AI reply waits for a human to approve it.
+                </>
+              ) : (
+                <>
+                  Auto-send is <strong>on</strong> for {autoSendAccounts.length} of {accounts.length}{' '}
+                  account{accounts.length === 1 ? '' : 's'}:{' '}
+                  {autoSendAccounts.map((a) => a.name).join(', ')}.
+                </>
+              )}
             </p>
-          )}
-          {fallbackBehavior === 'generic' && (
-            <p className="text-sm text-gray-500">
-              A standard acknowledgment will be sent: &quot;Thank you for reaching out. A team member will review your message shortly.&quot;
+            <p className="text-xs text-gray-500">
+              A reply only sends automatically when its account has Phase 2 enabled <em>and</em> Trust
+              Mode on <em>and</em> the reply scores at or above the confidence threshold above.
+              Trust Mode is set per account in Admin → Accounts.
             </p>
-          )}
-          {fallbackBehavior === 'none' && (
-            <p className="text-sm text-gray-500">
-              No response will be sent. The message will be logged but the customer receives no reply.
-            </p>
-          )}
+          </div>
         </div>
       </Card>
 

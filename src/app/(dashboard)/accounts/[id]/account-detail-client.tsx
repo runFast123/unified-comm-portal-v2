@@ -10,7 +10,6 @@ import {
   ArrowLeft,
   Zap,
   Eye,
-  Bot,
   Shield,
   ShieldAlert,
   X,
@@ -445,13 +444,9 @@ export function AccountDetailClient({ account }: { account: Account }) {
               <Zap size={14} />
               Phase 2
             </div>
-            <div className={cn(
-              'flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium',
-              account.ai_auto_reply ? 'bg-green-50 text-green-700' : 'bg-gray-50 text-gray-400'
-            )}>
-              <Bot size={14} />
-              Auto Reply
-            </div>
+            {/* No "Auto Reply" pill: it reported `ai_auto_reply`, which no server
+                code reads. The Phase 2 pill above is the real signal for whether
+                AI drafts replies on this account. */}
             <div className={cn(
               'flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium',
               account.ai_trust_mode ? 'bg-green-50 text-green-700' : 'bg-gray-50 text-gray-400'

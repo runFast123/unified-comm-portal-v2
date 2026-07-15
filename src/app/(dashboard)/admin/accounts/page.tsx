@@ -63,7 +63,6 @@ const AI_TONE_PRESETS = {
 
 interface ModalFormState {
   company_id: string | null
-  ai_auto_reply: boolean
   ai_trust_mode: boolean
   ai_confidence_threshold: number
   working_hours_start: string
@@ -216,7 +215,6 @@ export default function AccountsPage() {
     if (detailAccount) {
       setModalForm({
         company_id: detailAccount.company_id ?? null,
-        ai_auto_reply: detailAccount.ai_auto_reply,
         ai_trust_mode: detailAccount.ai_trust_mode,
         ai_confidence_threshold: detailAccount.ai_confidence_threshold,
         working_hours_start: detailAccount.working_hours_start ?? '09:00:00',
@@ -356,7 +354,6 @@ export default function AccountsPage() {
 
     const fields = {
       company_id: resolvedCompanyId,
-      ai_auto_reply: modalForm.ai_auto_reply,
       ai_trust_mode: modalForm.ai_trust_mode,
       ai_confidence_threshold: modalForm.ai_confidence_threshold,
       working_hours_start: modalForm.working_hours_start,
@@ -1037,19 +1034,11 @@ export default function AccountsPage() {
             <div className="rounded-lg border border-border p-4 space-y-4">
               <h3 className="text-sm font-semibold text-foreground">AI Settings</h3>
 
-              {/* Auto Reply Toggle */}
-              <div className="flex items-center justify-between">
-                <div className="flex-1 mr-4">
-                  <span className="text-sm font-medium text-zinc-700">Auto Reply</span>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    When enabled, AI will automatically generate reply drafts for incoming messages
-                  </p>
-                </div>
-                <Toggle
-                  checked={modalForm.ai_auto_reply}
-                  onChange={(val) => toggleField('ai_auto_reply', val)}
-                />
-              </div>
+              {/* NOTE: there is deliberately no "Auto Reply" toggle here. Drafting
+                  AI replies for incoming messages is gated by Phase 2 (above),
+                  which every webhook and the email ingester actually read. The
+                  old `ai_auto_reply` toggle described Phase 2's behaviour but no
+                  server code ever read the column, so it silently did nothing. */}
 
               {/* Trust Mode Toggle */}
               <div className="flex items-center justify-between">
