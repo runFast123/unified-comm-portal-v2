@@ -28,6 +28,11 @@ export type AIEndpoint =
   | 'suggest-replies'
   | 'ai-compose'
   | 'test-ai'
+  // Agent loops. Each STEP of a run records its own row (a run is N model
+  // calls), so cost-per-run is a SUM over rows sharing a request_id — unlike
+  // the single-shot endpoints above where one row is one call.
+  | 'agent-copilot'
+  | 'agent-triage'
 
 export interface UsageRecord {
   account_id: string

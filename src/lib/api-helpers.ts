@@ -666,18 +666,72 @@ export interface CallAIContext {
   request_id?: string
 }
 
+// ─── Chat primitives (multi-turn + tool calling) ────────────────────
+//
+// The wire format stays OpenAI-compatible `/chat/completions`, which is what
+// every configured provider already speaks (NIM, OpenAI, OpenRouter, Groq,
+// Together, Mistral, DeepSeek, Fireworks). That is deliberate: it keeps the
+// whole BYOC provider-resolution cascade in getAIConfig working untouched.
+//
+// NOTE ON MODELS: passing `tools` only does something useful if the configured
+// model actually supports tool calling. Providers that don't will either ignore
+// the field or 400. The agent loop treats "replied with prose instead of a tool
+// call" as a terminal answer, so a non-tool model degrades to single-shot rather
+// than breaking — but an agent on such a model is just a chatbot. See
+// isToolCapableModel() in src/lib/ai/agent.ts.
+
+/** An OpenAI-compatible function-tool definition handed to the model. */
+export interface ToolSpec {
+  type: 'function'
+  function: {
+    name: string
+    description: string
+    /** JSON Schema for the arguments object. */
+    parameters: Record<string, unknown>
+  }
+}
+
+/** A tool invocation the model asked for. `arguments` is a JSON *string*. */
+export interface ToolCall {
+  id: string
+  type: 'function'
+  function: { name: string; arguments: string }
+}
+
+export type ChatMessage =
+  | { role: 'system' | 'user'; content: string }
+  | { role: 'assistant'; content: string | null; tool_calls?: ToolCall[] }
+  /** The result of one tool call, keyed back to it by `tool_call_id`. */
+  | { role: 'tool'; content: string; tool_call_id: string }
+
+/** One assistant turn: prose, tool calls, or (rarely) both. */
+export interface AssistantTurn {
+  content: string
+  tool_calls: ToolCall[]
+  finish_reason: string | null
+  /** Echoed so a caller can attribute cost per turn without re-resolving config. */
+  model: string
+  input_tokens: number
+  output_tokens: number
+}
+
 /**
- * Calls any OpenAI-compatible AI API with timeout and retry logic.
+ * The AI call core: multi-turn messages in, one assistant turn out.
  *
- * When `ctx.account_id` is provided, the call is gated by the account's
- * monthly AI budget and usage is recorded after success. Routes should
- * catch `AIBudgetExceededError` and return a graceful 200 "skipped" response.
+ * Everything valuable lives here and is shared by every caller — the per-account
+ * budget gate, the circuit breaker, timeout + retry with error classification,
+ * duration metrics, and `ai_usage` cost recording. `callAI` is a thin wrapper
+ * over this, so the single-shot path and the agent loop can never drift apart.
+ *
+ * When `ctx.account_id` is provided the call is gated by the account's monthly
+ * budget and usage is recorded after success. Routes should catch
+ * `AIBudgetExceededError` and return a graceful 200 "skipped" response.
  */
-export async function callAI(
-  systemPrompt: string,
-  userMessage: string,
-  ctx: CallAIContext = {}
-): Promise<string> {
+export async function callChat(
+  messages: ChatMessage[],
+  ctx: CallAIContext = {},
+  opts: { tools?: ToolSpec[]; tool_choice?: 'auto' | 'none' | 'required' } = {}
+): Promise<AssistantTurn> {
   // ── Budget gate (BEFORE the AI call) ───────────────────────────────
   // Skipped when no account_id is supplied. Throws AIBudgetExceededError
   // when the cap is reached — caller is expected to catch + skip gracefully.
@@ -703,7 +757,7 @@ export async function callAI(
       // CircuitBreakerOpenError when NVIDIA has been failing repeatedly.
       // The breaker classifies failures internally (network/5xx/timeouts =
       // failures; 4xx bad-request and AIBudgetExceededError are not).
-      const { content, data } = await withCircuitBreaker(async () => {
+      const { content, tool_calls, finish_reason, data } = await withCircuitBreaker(async () => {
         const controller = new AbortController()
         const timeoutId = setTimeout(() => controller.abort(), AI_TIMEOUT_MS)
 
@@ -717,12 +771,16 @@ export async function callAI(
             },
             body: JSON.stringify({
               model: config.model,
-              messages: [
-                { role: 'system', content: systemPrompt },
-                { role: 'user', content: userMessage },
-              ],
+              messages,
               temperature: config.temperature,
               max_tokens: config.max_tokens,
+              // Only send the tool fields when tools are actually supplied.
+              // Some OpenAI-compatible providers 400 on an empty `tools: []`,
+              // and omitting them keeps the single-shot request byte-identical
+              // to what this function has always sent.
+              ...(opts.tools?.length
+                ? { tools: opts.tools, tool_choice: opts.tool_choice ?? 'auto' }
+                : {}),
             }),
             signal: controller.signal,
           })
@@ -736,18 +794,37 @@ export async function callAI(
         }
 
         const data = await response.json()
-        const content = data.choices?.[0]?.message?.content || ''
-        return { content, data }
+        const choice = data.choices?.[0]
+        const content = choice?.message?.content || ''
+        // A tool-calling turn usually has content === null, which is normal and
+        // must NOT be treated as an empty/failed response.
+        const tool_calls: ToolCall[] = Array.isArray(choice?.message?.tool_calls)
+          ? choice.message.tool_calls
+          : []
+        return { content, tool_calls, finish_reason: choice?.finish_reason ?? null, data }
       })
+
+      // Token counts are needed both for usage recording and for the returned
+      // turn (the agent loop sums them across steps to price a whole run), so
+      // they're computed unconditionally rather than inside the budget branch.
+      // The estimate folds in every message — under tool calling the transcript
+      // grows each step, so charging only system+user would undercount badly.
+      const inputTokens =
+        Number(data.usage?.prompt_tokens) ||
+        messages.reduce(
+          (n, m) => n + approxTokensFromText(typeof m.content === 'string' ? m.content : ''),
+          0
+        )
+      const outputTokens =
+        Number(data.usage?.completion_tokens) ||
+        approxTokensFromText(content) +
+          // Tool-call turns carry their payload in tool_calls, not content;
+          // without this an agent step would look free.
+          tool_calls.reduce((n, t) => n + approxTokensFromText(t.function?.arguments ?? ''), 0)
 
       // ── Usage recording (AFTER successful AI call) ─────────────────
       // Best-effort — recordAIUsage swallows DB errors internally.
       if (ctx.account_id) {
-        const inputTokens =
-          Number(data.usage?.prompt_tokens) ||
-          approxTokensFromText(systemPrompt) + approxTokensFromText(userMessage)
-        const outputTokens =
-          Number(data.usage?.completion_tokens) || approxTokensFromText(content)
         try {
           await recordAIUsage({
             account_id: ctx.account_id,
@@ -775,7 +852,14 @@ export async function callAI(
         { ...metricLabels, success: true, attempts: attempt + 1 },
         ctx.request_id ?? null
       )
-      return content
+      return {
+        content,
+        tool_calls,
+        finish_reason,
+        model: config.model,
+        input_tokens: inputTokens,
+        output_tokens: outputTokens,
+      }
     } catch (err: any) {
       lastError = err
       // Breaker tripped — don't retry, don't wait, just bubble up. The
@@ -827,6 +911,31 @@ export async function callAI(
   )
   recordMetric('ai.call_errors', 1, { ...metricLabels, reason: 'exhausted_retries' }, ctx.request_id ?? null)
   throw lastError || new Error('AI call failed after all retries')
+}
+
+/**
+ * Single-shot AI call: a system prompt and a user message in, assistant text
+ * out. The original signature, preserved exactly — this is what classify,
+ * ai-reply, ai-summarize, suggest-replies and ai-compose all use.
+ *
+ * It is a thin wrapper over `callChat` with no tools, so it sends a request
+ * byte-identical to the one this function has always sent, and inherits the
+ * budget gate / breaker / retry / metrics / usage recording from one place
+ * rather than a copy.
+ */
+export async function callAI(
+  systemPrompt: string,
+  userMessage: string,
+  ctx: CallAIContext = {}
+): Promise<string> {
+  const turn = await callChat(
+    [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userMessage },
+    ],
+    ctx
+  )
+  return turn.content
 }
 
 // ─── Account Access Verification ────────────────────────────────────
