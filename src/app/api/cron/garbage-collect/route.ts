@@ -1,14 +1,25 @@
 /**
- * Cron: garbage-collect stale time-tracking sessions.
+ * Cron: garbage-collect abandoned state. Runs every 5 minutes.
  *
- * Runs every 5 minutes. Closes any `conversation_time_entries` row whose
- * last heartbeat (`ended_at`, or `started_at` if never heartbeated) is
- * older than `STALE_THRESHOLD_SECONDS` — these are presumed abandoned
- * (user closed the tab without graceful shutdown, network failed, etc.).
+ * Two independent sweeps, both reclaiming work that a dead client or a dead
+ * function left behind:
  *
- * The duration billed for each closed-by-GC row is "started_at -> last
- * known alive moment" — we don't credit users for the 5-minute grace
- * window after the heartbeat actually stopped.
+ *   1. Stale time-tracking sessions — closes any `conversation_time_entries`
+ *      row whose last heartbeat (`ended_at`, or `started_at` if never
+ *      heartbeated) is older than `STALE_THRESHOLD_SECONDS`; these are presumed
+ *      abandoned (user closed the tab without graceful shutdown, network
+ *      failed, etc.). The duration billed for each closed-by-GC row is
+ *      "started_at -> last known alive moment" — we don't credit users for the
+ *      5-minute grace window after the heartbeat actually stopped.
+ *
+ *   2. Stranded dispatch claims — returns outbound queue rows stuck mid-claim
+ *      to 'pending' (or retires them to 'failed'). Without this a reply whose
+ *      dispatcher died mid-send is never sent and never surfaced: the cron
+ *      won't re-pick it and the retry endpoint refuses it. See
+ *      src/lib/dispatch-reaper.ts.
+ *
+ * The sweeps are independent — one failing must not stop the other, so each is
+ * reported separately and neither throws.
  *
  * Auth: same pattern as other crons (Vercel Cron sends a Bearer header,
  * internal callers use X-Webhook-Secret). Both pass through
@@ -22,6 +33,7 @@ import { logError, logInfo } from '@/lib/logger'
 import { getRequestId } from '@/lib/request-id'
 import { recordMetric } from '@/lib/metrics'
 import { garbageCollectStaleSessions } from '@/lib/time-tracking'
+import { reapStaleClaims } from '@/lib/dispatch-reaper'
 
 function authorizeCron(request: Request): boolean {
   if (validateWebhookSecret(request)) return true
@@ -52,14 +64,32 @@ export async function GET(request: Request) {
   try {
     const admin = await createServiceRoleClient()
     const { closed, failed } = await garbageCollectStaleSessions(admin)
+    const reaped = await reapStaleClaims(admin, requestId)
 
     const durationMs = Date.now() - startedAt
     logInfo('system', 'time_gc_end', 'garbage-collect cron finished', {
       request_id: requestId,
       closed,
       failed,
+      reaped_requeued: reaped.requeued,
+      reaped_retired: reaped.retired,
+      reaped_raced: reaped.raced,
+      reaped_errors: reaped.errors,
+      reaped_degraded: reaped.degraded,
       duration_ms: durationMs,
     })
+
+    if (reaped.degraded) {
+      // Not an error — the reaper stands down until migration 20260715120000
+      // lands. Worth saying out loud: while degraded, a dispatcher that dies
+      // mid-send still strands its row forever.
+      logInfo(
+        'system',
+        'reap_stale_claims_degraded',
+        'Claim reaper skipped: claim-tracking columns not present yet',
+        { request_id: requestId }
+      )
+    }
 
     recordMetric(
       'cron.garbage_collect.duration_ms',
@@ -68,6 +98,10 @@ export async function GET(request: Request) {
       requestId
     )
     recordMetric('cron.garbage_collect.closed', closed, undefined, requestId)
+    // Separate series from the time-entry counters: a stranded reply is a
+    // customer who never got answered, and it should be alertable on its own.
+    recordMetric('cron.garbage_collect.claims_requeued', reaped.requeued, undefined, requestId)
+    recordMetric('cron.garbage_collect.claims_retired', reaped.retired, undefined, requestId)
     if (failed > 0) {
       recordMetric(
         'cron.garbage_collect.errors',
@@ -76,8 +110,28 @@ export async function GET(request: Request) {
         requestId
       )
     }
+    if (reaped.errors > 0) {
+      recordMetric(
+        'cron.garbage_collect.errors',
+        reaped.errors,
+        { stage: 'reap' },
+        requestId
+      )
+    }
 
-    return NextResponse.json({ closed, failed, request_id: requestId })
+    return NextResponse.json({
+      closed,
+      failed,
+      reaped: {
+        requeued: reaped.requeued,
+        retired: reaped.retired,
+        raced: reaped.raced,
+        errors: reaped.errors,
+        degraded: reaped.degraded,
+        per_queue: reaped.per_queue,
+      },
+      request_id: requestId,
+    })
   } catch (err) {
     const durationMs = Date.now() - startedAt
     const message = err instanceof Error ? err.message : 'gc failed'

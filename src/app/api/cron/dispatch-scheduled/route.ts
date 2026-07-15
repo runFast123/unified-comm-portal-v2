@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server'
-import nodemailer from 'nodemailer'
 import { createServiceRoleClient } from '@/lib/supabase-server'
 import { sendViaChannel } from '@/lib/channels/adapters'
 import { resolveRecipient } from '@/lib/channels/registry'
@@ -7,12 +6,30 @@ import { validateWebhookSecret, getReplyToMessageId } from '@/lib/api-helpers'
 import { logError, logInfo } from '@/lib/logger'
 import { getRequestId } from '@/lib/request-id'
 import { recordMetric } from '@/lib/metrics'
-import { createNotification } from '@/lib/notifications'
+import { notifyDispatchFailure } from '@/lib/dispatch-notify'
+import { supportsClaimTracking, claimResetPatch } from '@/lib/dispatch-reaper'
 
 // Per-run cap so a backlog never monopolises one invocation.
 const BATCH_LIMIT = 50
 
 type Channel = 'email' | 'teams' | 'whatsapp'
+
+// ── Claim bookkeeping ────────────────────────────────────────────────
+// Claiming a row stamps `claimed_at` and burns one `attempt_count`, which is
+// what lets the garbage-collect cron tell a stranded claim (function died
+// mid-send) from one that's legitimately in flight, and retire a row that
+// strands every time. See src/lib/dispatch-reaper.ts.
+//
+// Both columns are probed once per run per table rather than assumed: they
+// arrive in migration 20260715120000, and this route must keep dispatching
+// unchanged if it deploys ahead of it. Probe false => today's exact behaviour
+// (claim without bookkeeping, and the reaper stands down to match).
+const CLAIM_COLUMNS = 'claimed_at, attempt_count'
+
+const SCHEDULED_COLUMNS =
+  'id, conversation_id, account_id, channel, reply_text, to_address, subject, teams_chat_id, attachments, scheduled_for, created_by'
+const PENDING_COLUMNS =
+  'id, conversation_id, account_id, channel, reply_text, to_address, subject, teams_chat_id, attachments, send_at, created_by'
 
 interface ScheduledRow {
   id: string
@@ -26,91 +43,8 @@ interface ScheduledRow {
   attachments: unknown
   scheduled_for: string
   created_by: string | null
-}
-
-function escapeHtml(text: string): string {
-  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
-}
-
-/**
- * Email the agent whose queued reply just failed to dispatch, so the
- * failure isn't invisible (no timeline row exists for a failed send).
- *
- * Fail-soft by design: every error is logged and swallowed so a broken
- * SMTP config can never break the dispatch loop. Fires on the state
- * TRANSITION only — the claim CAS guarantees each row goes
- * pending → failed at most once per queue attempt (a user-initiated
- * retry resets to 'pending', making a second failure a new transition),
- * so this can't spam on every cron run.
- */
-async function notifySenderOfFailure(
-  admin: Awaited<ReturnType<typeof createServiceRoleClient>>,
-  opts: {
-    createdBy: string | null
-    conversationId: string
-    channel: string
-    toAddress: string | null
-    error: string
-    kind: 'scheduled' | 'pending_send'
-    requestId: string
-  }
-): Promise<void> {
-  try {
-    if (!opts.createdBy) return
-    const smtpUser = process.env.SMTP_USER
-    const smtpPassword = process.env.SMTP_PASSWORD
-    if (!smtpUser || !smtpPassword) return
-
-    const { data: sender } = await admin
-      .from('users')
-      .select('email')
-      .eq('id', opts.createdBy)
-      .maybeSingle()
-    const senderEmail = (sender as { email: string | null } | null)?.email
-    if (!senderEmail) return
-
-    const portalUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://unified-comm-portal.vercel.app'
-    const conversationUrl = `${portalUrl}/conversations/${opts.conversationId}`
-    const recipientLabel = opts.toAddress || `the ${opts.channel} recipient`
-
-    const transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 587,
-      secure: false,
-      auth: { user: smtpUser, pass: smtpPassword },
-    })
-    await transporter.sendMail({
-      from: `"Unified Comms Portal" <${smtpUser}>`,
-      to: senderEmail,
-      subject: `Your reply to ${recipientLabel} failed to send`,
-      html: `
-<div style="font-family:sans-serif;max-width:600px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
-  <div style="background:#1e293b;padding:16px 24px;"><h1 style="margin:0;color:#fff;font-size:16px;">Unified Comms Portal</h1></div>
-  <div style="padding:20px 24px;">
-    <h2 style="margin:0 0 12px;font-size:15px;color:#dc2626;">Your reply to ${escapeHtml(recipientLabel)} failed to send</h2>
-    <p style="margin:0 0 16px;font-size:13px;color:#334155;line-height:1.5;">The customer did not receive it. Open the conversation to retry.</p>
-    <div style="background:#fef2f2;border-left:3px solid #dc2626;padding:10px 14px;margin:0 0 20px;border-radius:0 4px 4px 0;">
-      <p style="margin:0 0 4px;font-size:11px;color:#64748b;text-transform:uppercase;">Error</p>
-      <p style="margin:0;font-size:13px;color:#334155;line-height:1.5;">${escapeHtml(opts.error.slice(0, 300))}</p>
-    </div>
-    <a href="${conversationUrl}" style="display:inline-block;background:#dc2626;color:#fff;text-decoration:none;padding:8px 20px;border-radius:6px;font-size:13px;font-weight:500;">Open Conversation</a>
-  </div>
-  <div style="padding:12px 24px;border-top:1px solid #e2e8f0;"><p style="margin:0;font-size:11px;color:#94a3b8;">Unified Communication Portal notification</p></div>
-</div>`.trim(),
-    })
-  } catch (err) {
-    await logError(
-      'system',
-      'dispatch_failure_notify_failed',
-      err instanceof Error ? err.message : String(err),
-      {
-        request_id: opts.requestId,
-        conversation_id: opts.conversationId,
-        kind: opts.kind,
-        channel: opts.channel,
-      }
-    )
-  }
+  /** Present only once migration 20260715120000 lands — see CLAIM_COLUMNS. */
+  attempt_count?: number | null
 }
 
 /**
@@ -157,9 +91,13 @@ export async function GET(request: Request) {
     request_id: requestId,
   })
 
+  // Probe once per run, not per row: selecting a column that doesn't exist
+  // errors the whole query, so the column list itself depends on this.
+  const tracksScheduledClaims = await supportsClaimTracking(admin, 'scheduled_messages')
+
   const { data: rows, error } = await admin
     .from('scheduled_messages')
-    .select('id, conversation_id, account_id, channel, reply_text, to_address, subject, teams_chat_id, attachments, scheduled_for, created_by')
+    .select(tracksScheduledClaims ? `${SCHEDULED_COLUMNS}, ${CLAIM_COLUMNS}` : SCHEDULED_COLUMNS)
     .eq('status', 'pending')
     .lte('scheduled_for', nowIso)
     .order('scheduled_for', { ascending: true })
@@ -173,18 +111,37 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: error.message, request_id: requestId }, { status: 500 })
   }
 
-  const scheduled = (rows ?? []) as ScheduledRow[]
+  const scheduled = (rows ?? []) as unknown as ScheduledRow[]
   const errors: Array<{ id: string; error: string }> = []
   let dispatched = 0
   let failed = 0
   let skipped = 0
 
+  // Every terminal write releases the claim and zeroes the attempt budget.
+  // Zeroing on 'failed' is what lets a human Retry get a fresh set of attempts:
+  // the retry endpoint just flips status back to 'pending' and knows nothing
+  // about the counter, so without this a retried row would be retired again the
+  // first time it stranded.
+  const scheduledClaimReset = tracksScheduledClaims ? claimResetPatch() : {}
+
   for (const row of scheduled) {
     // ── Claim: compare-and-set pending → dispatching. Zero rows affected
     //    means another worker already claimed it; skip.
+    //
+    //    The attempt_count read-modify-write is safe despite the stale read:
+    //    this CAS is the only thing that ever increments it, and the CAS
+    //    serializes claims, so exactly one worker's +1 lands per attempt.
     const { data: claimed, error: claimErr } = await admin
       .from('scheduled_messages')
-      .update({ status: 'dispatching' })
+      .update(
+        tracksScheduledClaims
+          ? {
+              status: 'dispatching',
+              claimed_at: new Date().toISOString(),
+              attempt_count: (row.attempt_count ?? 0) + 1,
+            }
+          : { status: 'dispatching' }
+      )
       .eq('id', row.id)
       .eq('status', 'pending')
       .select('id')
@@ -281,7 +238,12 @@ export async function GET(request: Request) {
         // backfill if needed.
         await admin
           .from('scheduled_messages')
-          .update({ status: 'sent', sent_at: sentAt, error: `message_insert_failed: ${messageInsertError}` })
+          .update({
+            status: 'sent',
+            sent_at: sentAt,
+            error: `message_insert_failed: ${messageInsertError}`,
+            ...scheduledClaimReset,
+          })
           .eq('id', row.id)
 
         await logError(
@@ -320,7 +282,7 @@ export async function GET(request: Request) {
       // in place.
       await admin
         .from('scheduled_messages')
-        .update({ status: 'sent', sent_at: sentAt, error: null })
+        .update({ status: 'sent', sent_at: sentAt, error: null, ...scheduledClaimReset })
         .eq('id', row.id)
 
       // Also clear the inbound replied flag so the conversation exits "needs reply".
@@ -339,10 +301,11 @@ export async function GET(request: Request) {
       // Revert our 'dispatching' claim to 'failed' with the error attached.
       await admin
         .from('scheduled_messages')
-        .update({ status: 'failed', error: message })
+        .update({ status: 'failed', error: message, ...scheduledClaimReset })
         .eq('id', row.id)
-      // Tell the agent who queued it — fire-and-forget, never blocks the loop.
-      void notifySenderOfFailure(admin, {
+      // Tell the agent who queued it (email + bell) — fire-and-forget, never
+      // blocks the loop.
+      notifyDispatchFailure(admin, {
         createdBy: row.created_by,
         conversationId: row.conversation_id,
         channel: row.channel,
@@ -351,22 +314,6 @@ export async function GET(request: Request) {
         kind: 'scheduled',
         requestId,
       })
-      // Also surface it in the queuing agent's bell. Reuse the admin
-      // (service-role) client; createNotification is fail-soft and no-ops on a
-      // null user_id, so an unattributed queued row simply gets no bell entry.
-      if (row.created_by) {
-        void createNotification(
-          {
-            user_id: row.created_by,
-            type: 'system_alert',
-            title: 'Your reply failed to send',
-            body: `To ${row.to_address || `the ${row.channel} recipient`}: ${message.slice(0, 200)}`,
-            link: `/conversations/${row.conversation_id}`,
-            conversation_id: row.conversation_id,
-          },
-          admin
-        )
-      }
     }
   }
 
@@ -382,9 +329,12 @@ export async function GET(request: Request) {
   let pendingSkipped = 0
   const pendingErrors: Array<{ id: string; error: string }> = []
 
+  const tracksPendingClaims = await supportsClaimTracking(admin, 'pending_sends')
+  const pendingClaimReset = tracksPendingClaims ? claimResetPatch() : {}
+
   const { data: pendingRows, error: pendingQueryErr } = await admin
     .from('pending_sends')
-    .select('id, conversation_id, account_id, channel, reply_text, to_address, subject, teams_chat_id, attachments, send_at, created_by')
+    .select(tracksPendingClaims ? `${PENDING_COLUMNS}, ${CLAIM_COLUMNS}` : PENDING_COLUMNS)
     .eq('status', 'pending')
     .lte('send_at', nowIso)
     .order('send_at', { ascending: true })
@@ -395,7 +345,7 @@ export async function GET(request: Request) {
       request_id: requestId,
     })
   } else {
-    for (const row of (pendingRows ?? []) as Array<{
+    for (const row of (pendingRows ?? []) as unknown as Array<{
       id: string
       conversation_id: string
       account_id: string
@@ -407,13 +357,23 @@ export async function GET(request: Request) {
       attachments: unknown
       send_at: string
       created_by: string | null
+      attempt_count?: number | null
     }>) {
       // Compare-and-set claim: pending → sending. Guards against double
       // dispatch if two cron invocations overlap or against the user
-      // hitting Undo at the exact moment we picked the row up.
+      // hitting Undo at the exact moment we picked the row up. Stamps the
+      // claim so a strand here is recoverable — see the scheduled pass above.
       const { data: claimed, error: claimErr } = await admin
         .from('pending_sends')
-        .update({ status: 'sending' })
+        .update(
+          tracksPendingClaims
+            ? {
+                status: 'sending',
+                claimed_at: new Date().toISOString(),
+                attempt_count: (row.attempt_count ?? 0) + 1,
+              }
+            : { status: 'sending' }
+        )
         .eq('id', row.id)
         .eq('status', 'pending')
         .select('id')
@@ -509,7 +469,12 @@ export async function GET(request: Request) {
         if (messageInsertError) {
           await admin
             .from('pending_sends')
-            .update({ status: 'sent', sent_at: sentAt, error: `message_insert_failed: ${messageInsertError}` })
+            .update({
+              status: 'sent',
+              sent_at: sentAt,
+              error: `message_insert_failed: ${messageInsertError}`,
+              ...pendingClaimReset,
+            })
             .eq('id', row.id)
           await logError(
             'system',
@@ -531,7 +496,7 @@ export async function GET(request: Request) {
 
         await admin
           .from('pending_sends')
-          .update({ status: 'sent', sent_at: sentAt, error: null })
+          .update({ status: 'sent', sent_at: sentAt, error: null, ...pendingClaimReset })
           .eq('id', row.id)
 
         // Clear inbound replied flags so the conversation exits "needs reply".
@@ -549,10 +514,11 @@ export async function GET(request: Request) {
         pendingFailed++
         await admin
           .from('pending_sends')
-          .update({ status: 'failed', error: message })
+          .update({ status: 'failed', error: message, ...pendingClaimReset })
           .eq('id', row.id)
-        // Tell the agent who queued it — fire-and-forget, never blocks the loop.
-        void notifySenderOfFailure(admin, {
+        // Tell the agent who queued it (email + bell) — fire-and-forget, never
+        // blocks the loop.
+        notifyDispatchFailure(admin, {
           createdBy: row.created_by,
           conversationId: row.conversation_id,
           channel: row.channel,
@@ -561,20 +527,6 @@ export async function GET(request: Request) {
           kind: 'pending_send',
           requestId,
         })
-        // Mirror the scheduled-messages path: also land it in the agent's bell.
-        if (row.created_by) {
-          void createNotification(
-            {
-              user_id: row.created_by,
-              type: 'system_alert',
-              title: 'Your reply failed to send',
-              body: `To ${row.to_address || `the ${row.channel} recipient`}: ${message.slice(0, 200)}`,
-              link: `/conversations/${row.conversation_id}`,
-              conversation_id: row.conversation_id,
-            },
-            admin
-          )
-        }
       }
     }
   }

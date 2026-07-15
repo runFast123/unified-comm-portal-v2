@@ -114,6 +114,26 @@ interface DeploymentProtectionReport {
   checked_at: string
 }
 
+interface QueueHealth {
+  table: 'scheduled_messages' | 'pending_sends'
+  label: string
+  pending: number
+  due_now: number
+  claimed: number
+  /** null = claim-tracking migration not applied, so strandedness is unknowable. */
+  stranded: number | null
+  failed: number
+  oldest_due_at: string | null
+  claim_tracking: boolean
+}
+
+interface QueuesReport {
+  queues: QueueHealth[]
+  stale_threshold_minutes: number
+  max_dispatch_attempts: number
+  checked_at: string
+}
+
 // ─── Helpers ───────────────────────────────────────────────────────────
 
 function StatusDot({ status }: { status: HealthStatus }) {
@@ -170,6 +190,24 @@ function cronRunStatus(lastRunAt: string | null, cadenceMinutes: number | null):
   return 'error'
 }
 
+/**
+ * Verdict for one outbound queue. Stranded rows are the loudest signal — each
+ * one is a reply that will never be sent without intervention. Otherwise judge
+ * on lag: the dispatcher runs every minute, so a row still un-sent 5 minutes
+ * after it came due means the queue isn't draining.
+ */
+function queueStatus(q: QueueHealth): HealthStatus {
+  if (q.stranded != null && q.stranded > 0) return 'error'
+  if (!q.claim_tracking) return 'warning'
+  if (q.oldest_due_at) {
+    const lagMs = Date.now() - new Date(q.oldest_due_at).getTime()
+    if (lagMs > 15 * 60_000) return 'error'
+    if (lagMs > 5 * 60_000) return 'warning'
+  }
+  if (q.failed > 0) return 'warning'
+  return 'healthy'
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────
 
 export default function HealthPage() {
@@ -182,6 +220,7 @@ export default function HealthPage() {
   const [crons, setCrons] = useState<CronsReport | null>(null)
   const [accounts, setAccounts] = useState<AccountHealth[] | null>(null)
   const [protection, setProtection] = useState<DeploymentProtectionReport | null>(null)
+  const [queues, setQueues] = useState<QueuesReport | null>(null)
 
   const [latency, setLatency] = useState<DbLatencyReport | null>(null)
   const [latencyLoading, setLatencyLoading] = useState(false)
@@ -200,12 +239,13 @@ export default function HealthPage() {
       }
     }
 
-    const [envRes, oauthRes, cronsRes, accountsRes, protRes] = await Promise.all([
+    const [envRes, oauthRes, cronsRes, accountsRes, protRes, queuesRes] = await Promise.all([
       safeFetch<EnvReport>('/api/admin/health/env'),
       safeFetch<OAuthReport>('/api/admin/health/oauth'),
       safeFetch<CronsReport>('/api/admin/health/crons'),
       safeFetch<{ accounts: AccountHealth[] }>('/api/admin/health/accounts'),
       safeFetch<DeploymentProtectionReport>('/api/admin/health/deployment-protection'),
+      safeFetch<QueuesReport>('/api/admin/health/queues'),
     ])
 
     setEnv(envRes)
@@ -213,6 +253,7 @@ export default function HealthPage() {
     setCrons(cronsRes)
     setAccounts(accountsRes?.accounts ?? null)
     setProtection(protRes)
+    setQueues(queuesRes)
     setLastRefresh(new Date())
     setRefreshing(false)
   }, [])
@@ -302,6 +343,14 @@ export default function HealthPage() {
       if (protection.blocked) fail++
       else pass++
     }
+    if (queues) {
+      queues.queues.forEach((q) => {
+        const s = queueStatus(q)
+        if (s === 'healthy') pass++
+        else if (s === 'warning') warn++
+        else fail++
+      })
+    }
     return { pass, warn, fail }
   })()
 
@@ -357,13 +406,13 @@ export default function HealthPage() {
         // returned. Showing "0 passing / 0 warnings / 0 failing" before we
         // have any data reads as "everything is broken", which is the wrong
         // signal — render "—" instead until the first response lands.
-        const fullyLoading = !env && !oauth && !crons && !accounts && !protection
+        const fullyLoading = !env && !oauth && !crons && !accounts && !protection && !queues
         const display = (n: number) => (fullyLoading ? '—' : n)
         return (
           <div className="flex flex-wrap items-center gap-6 rounded-xl border border-border bg-card px-6 py-4 shadow-sm">
             <div className="flex items-center gap-2">
               <Server className="h-5 w-5 text-zinc-500" />
-              <span className="text-sm font-medium text-zinc-700">7 sections</span>
+              <span className="text-sm font-medium text-zinc-700">8 sections</span>
             </div>
             <div className="h-6 w-px bg-border" />
             <div className="flex items-center gap-2">
@@ -561,6 +610,29 @@ export default function HealthPage() {
                 </tbody>
               </table>
             </div>
+          </div>
+        )}
+      </Card>
+
+      {/* D2. Outbound queue health — deliberately next to the cron card: that
+            one proves the dispatcher RUNS, this one proves the queues it
+            drains are actually draining. A dispatcher that runs every minute
+            and strands every row it touches looks healthy up there. */}
+      <Card
+        title="D2. Outbound queue health"
+        description="Backlog depth and stranded claims for the two queues the dispatch cron drains. A stranded row is a reply whose sender died mid-send — it will never go out on its own."
+      >
+        {!queues ? (
+          <div className="space-y-2">
+            {Array.from({ length: 2 }).map((_, i) => (
+              <Skeleton key={i} className="h-20 w-full rounded-lg" />
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {queues.queues.map((q) => (
+              <QueueRow key={q.table} queue={q} report={queues} />
+            ))}
           </div>
         )}
       </Card>
@@ -791,6 +863,89 @@ function CronRunChip({ cron }: { cron: CronEntry }) {
           {cron.last_run_at
             ? 'check WEBHOOK_SECRET / Vercel cron logs'
             : 'never reported a metric — fine right after a deploy, otherwise check WEBHOOK_SECRET / Vercel cron logs'}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function QueueRow({ queue, report }: { queue: QueueHealth; report: QueuesReport }) {
+  const status = queueStatus(queue)
+  const stats: Array<{ label: string; value: string; tone?: 'danger' | 'warning' }> = [
+    { label: 'queued', value: String(queue.pending) },
+    { label: 'due now', value: String(queue.due_now) },
+    { label: 'in flight', value: String(queue.claimed) },
+    {
+      label: 'stranded',
+      value: queue.stranded == null ? '?' : String(queue.stranded),
+      tone: queue.stranded ? 'danger' : undefined,
+    },
+    {
+      label: 'failed',
+      value: String(queue.failed),
+      tone: queue.failed > 0 ? 'warning' : undefined,
+    },
+  ]
+
+  return (
+    <div className="rounded-lg border border-border bg-muted px-3 py-2.5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <StatusDot status={status} />
+          <div>
+            <div className="text-sm font-medium text-foreground">{queue.label}</div>
+            <code className="font-mono text-[11px] text-muted-foreground">{queue.table}</code>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-4">
+          {stats.map((s) => (
+            <div key={s.label} className="text-right">
+              <div
+                className={`text-sm font-semibold tabular-nums ${
+                  s.tone === 'danger'
+                    ? 'text-[var(--color-danger)]'
+                    : s.tone === 'warning'
+                    ? 'text-[var(--color-warning)]'
+                    : 'text-foreground'
+                }`}
+              >
+                {s.value}
+              </div>
+              <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                {s.label}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {queue.oldest_due_at && (
+        <div className="mt-2 text-xs text-zinc-600">
+          Oldest due row has been waiting since {relativeTime(queue.oldest_due_at)} — the
+          dispatcher runs every minute, so anything past a few minutes means the queue isn't
+          draining.
+        </div>
+      )}
+
+      {queue.stranded != null && queue.stranded > 0 && (
+        <div className="mt-2 text-xs text-[var(--color-danger)]">
+          {queue.stranded} row{queue.stranded === 1 ? '' : 's'} held a claim for over{' '}
+          {report.stale_threshold_minutes} minutes — their sender died mid-send. The
+          garbage-collect cron re-queues these automatically, and retires them to the failure
+          banner after {report.max_dispatch_attempts} attempts. Still showing after a few GC runs
+          means the reaper itself isn't running.
+        </div>
+      )}
+
+      {!queue.claim_tracking && (
+        <div className="mt-2 flex items-start gap-1.5 text-xs text-[var(--color-warning)]">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>
+            Claim tracking is off: migration{' '}
+            <code className="font-mono">20260715120000_dispatch_claim_reaper</code> hasn't been
+            applied to this database. Stranded rows can't be counted or recovered until it is — a
+            reply whose sender dies mid-send stays stuck forever.
+          </span>
         </div>
       )}
     </div>

@@ -62,6 +62,7 @@ const ALLOWLIST: Record<string, string> = {
   'admin/health/db-latency/route.ts': 'system DB latency probe, not tenant data',
   'admin/health/deployment-protection/route.ts': 'deployment/env health, not tenant data',
   'admin/health/env/route.ts': 'env-presence health, not tenant data',
+  'admin/health/queues/route.ts': 'outbound queue depth — admin-gated, returns integer counts only (no rows, ids, or tenant identifiers); cross-tenant totals are the point (an operator asking "are replies going out at all")',
   'attachments/delete/route.ts': 'owner-scoped by storage path prefix (`${user.id}/`)',
   'auth/gmail/callback/route.ts': 'OAuth callback — state/code is the auth; no tenant query keyed on request input',
   'auth/teams/callback/route.ts': 'OAuth callback — state/code is the auth; no tenant query keyed on request input',
