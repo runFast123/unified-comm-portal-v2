@@ -102,6 +102,63 @@ function requireString(args: Record<string, unknown>, key: string, max = 2000): 
 
 // ── Tools: read-only ────────────────────────────────────────────────
 
+/**
+ * Keyword fallback over kb_articles, for when vector search is unavailable.
+ *
+ * This exists because pgvector retrieval is gated on OPENAI_API_KEY, and
+ * `retrieveKbContext` degrades SILENTLY to `{enabled:false}` when it is unset —
+ * which is the case in production today. Without this fallback the tool would
+ * confidently report "the knowledge base does not cover it" for every question,
+ * while the KB sat full of the answer. ai-reply already has a keyword fallback
+ * for exactly this reason; a tool that is blinder than the path it replaces is
+ * worse than no tool.
+ *
+ * Deliberately generic: ai-reply's version hardcodes term boosts for one
+ * industry's vocabulary (ucaas / dialer / porting), which silently misranks for
+ * every tenant outside it. Title matches simply weigh more than body matches,
+ * which is true of any knowledge base.
+ */
+async function keywordSearchKb(ctx: ToolContext, query: string, limit: number) {
+  const { data, error } = await ctx.client
+    .from('kb_articles')
+    .select('id, title, content')
+    .eq('company_id', ctx.companyId) // tenant boundary — from ctx, never args
+    .eq('is_active', true)
+    .limit(200)
+  if (error) throw new Error(error.message)
+
+  const terms = Array.from(
+    new Set(
+      query
+        .toLowerCase()
+        .split(/[^a-z0-9]+/)
+        .filter((t) => t.length > 2)
+    )
+  )
+  if (terms.length === 0) return []
+
+  return (data ?? [])
+    .map((a) => {
+      const title = (a.title ?? '').toLowerCase()
+      const body = (a.content ?? '').toLowerCase()
+      let score = 0
+      for (const t of terms) {
+        if (title.includes(t)) score += 3
+        if (body.includes(t)) score += 1
+      }
+      return { a, score }
+    })
+    .filter((x) => x.score > 0)
+    .sort((x, y) => y.score - x.score)
+    .slice(0, limit)
+    .map(({ a, score }) => ({
+      article_id: a.id,
+      title: a.title,
+      excerpt: (a.content ?? '').slice(0, 1200),
+      score,
+    }))
+}
+
 const searchKnowledgeBase: AgentTool = {
   name: 'search_knowledge_base',
   description:
@@ -128,17 +185,31 @@ const searchKnowledgeBase: AgentTool = {
     const query = requireString(args, 'query', 1000)
     if (!ctx.companyId) {
       // No tenant scope = no safe search. Never fall back to an unscoped query.
-      return { enabled: false, chunks: [], note: 'No company scope for this caller.' }
+      return { method: 'none', matches: [], note: 'No company scope for this caller.' }
     }
+
     // companyId comes from ctx, NOT args — this is the tenant boundary.
     const res = await retrieveKbContext(query, ctx.companyId, 5)
+    if (res.enabled && res.chunks.length > 0) {
+      return {
+        method: 'vector',
+        matches: res.chunks.map((c) => ({
+          article_id: c.kb_article_id,
+          excerpt: c.content.slice(0, 1200),
+          similarity: Number(c.similarity.toFixed(3)),
+        })),
+      }
+    }
+
+    // Vector search is off (no OPENAI_API_KEY) or found nothing — try keywords
+    // before concluding the KB has no answer.
+    const matches = await keywordSearchKb(ctx, query, 3)
     return {
-      vector_search_enabled: res.enabled,
-      matches: res.chunks.map((c) => ({
-        article_id: c.kb_article_id,
-        excerpt: c.content.slice(0, 1200),
-        similarity: Number(c.similarity.toFixed(3)),
-      })),
+      // Surfaced so the trace shows WHICH retrieval path ran. "vector was off"
+      // and "the KB genuinely has no answer" look identical to the model
+      // otherwise, and they need very different fixes.
+      method: res.enabled ? 'keyword_after_empty_vector' : 'keyword_vector_disabled',
+      matches,
     }
   },
 }

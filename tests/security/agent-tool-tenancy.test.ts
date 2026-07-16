@@ -157,7 +157,7 @@ describe('agent tools: cross-tenant reads are refused', () => {
       companyId: null,
     }, { allowed: ALL })
     expect(res.ok).toBe(true)
-    expect((res.data as any).enabled).toBe(false)
+    expect((res.data as any).method).toBe('none')
     // The important part: no unscoped search was ever issued.
     expect(kbCalls).toHaveLength(0)
   })
