@@ -267,9 +267,14 @@ const getConversationThread: AgentTool = {
     }
     const limit = Math.min(Math.max(Number(args.limit) || 30, 1), 100)
 
+    // NOTE ON COLUMN NAMES: `conversations` has NO `subject` column — a
+    // conversation's subject lives per-message as `messages.email_subject`. The
+    // customer is `participant_name` / `participant_email`. Verified against the
+    // live schema; see tests/lib/agent-tool-columns.test.ts, which fails if a
+    // column referenced here isn't in schema.sql.
     const { data: conv, error: convErr } = await ctx.client
       .from('conversations')
-      .select('id, account_id, subject, status, priority, channel, contact_id')
+      .select('id, account_id, status, priority, channel, contact_id, participant_name, participant_email')
       .eq('id', conversationId)
       .maybeSingle()
     if (convErr) throw new Error(convErr.message)
@@ -283,27 +288,32 @@ const getConversationThread: AgentTool = {
       throw new Error('Conversation not found')
     }
 
+    // messages: body is `message_text`, and the time column is `timestamp`
+    // (NOT created_at).
     const { data: messages, error: msgErr } = await ctx.client
       .from('messages')
-      .select('direction, sender_name, body_text, created_at')
+      .select('direction, sender_name, message_text, email_subject, timestamp')
       .eq('conversation_id', conversationId)
-      .order('created_at', { ascending: true })
+      .order('timestamp', { ascending: true })
       .limit(limit)
     if (msgErr) throw new Error(msgErr.message)
 
+    const rows = messages ?? []
     return {
       conversation: {
         id: conv.id,
-        subject: conv.subject,
+        // Surfaced from the first message that carries one (email threads).
+        subject: rows.find((m) => m.email_subject)?.email_subject ?? null,
+        customer: conv.participant_name ?? conv.participant_email ?? null,
         status: conv.status,
         priority: conv.priority,
         channel: conv.channel,
       },
-      messages: (messages ?? []).map((m) => ({
+      messages: rows.map((m) => ({
         from: m.direction === 'inbound' ? 'customer' : 'agent',
         sender: m.sender_name,
-        at: m.created_at,
-        text: (m.body_text ?? '').slice(0, 4000),
+        at: m.timestamp,
+        text: (m.message_text ?? '').slice(0, 4000),
       })),
     }
   },
@@ -342,9 +352,11 @@ const getContactHistory: AgentTool = {
 
     // Scope to accounts in the caller's company. A contact row is company-wide,
     // so this join is what stops history bleeding across tenants.
+    // No `subject` column on conversations (see get_conversation_thread) —
+    // `created_at` here IS valid, it's the messages table that uses `timestamp`.
     let q = ctx.client
       .from('conversations')
-      .select('id, subject, status, channel, created_at, accounts!inner(company_id)')
+      .select('id, status, channel, created_at, accounts!inner(company_id)')
       .eq('contact_id', conv.contact_id)
       .neq('id', conv.id)
       .order('created_at', { ascending: false })
@@ -359,7 +371,6 @@ const getContactHistory: AgentTool = {
       prior_conversation_count: prior?.length ?? 0,
       prior_conversations: (prior ?? []).map((c) => ({
         id: c.id,
-        subject: c.subject,
         status: c.status,
         channel: c.channel,
         at: c.created_at,
