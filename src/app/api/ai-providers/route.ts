@@ -26,7 +26,7 @@ import { cookies } from 'next/headers'
 
 import { createServiceRoleClient } from '@/lib/supabase-server'
 import { requireUser, requireCompanyAdmin } from '@/lib/tenant-guard'
-import { getPreset } from '@/lib/ai-providers'
+import { getPreset, normalizeApiKey } from '@/lib/ai-providers'
 import { validateProviderBaseUrl } from '@/lib/ssrf'
 import { encrypt, decrypt, __parseCiphertextKeyId } from '@/lib/encryption'
 
@@ -170,7 +170,7 @@ export async function POST(request: Request) {
   const baseUrlErr = await validateProviderBaseUrl(baseUrl)
   if (baseUrlErr) return NextResponse.json({ error: baseUrlErr }, { status: 400 })
 
-  const apiKey = typeof body.api_key === 'string' ? body.api_key.trim() : ''
+  const apiKey = typeof body.api_key === 'string' ? normalizeApiKey(body.api_key) : ''
   if (!apiKey) return NextResponse.json({ error: 'api_key is required' }, { status: 400 })
 
   const model = typeof body.model === 'string' ? body.model.trim() : ''

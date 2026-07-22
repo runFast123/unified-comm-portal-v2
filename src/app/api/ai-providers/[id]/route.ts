@@ -21,7 +21,7 @@ import { NextResponse } from 'next/server'
 
 import { createServiceRoleClient } from '@/lib/supabase-server'
 import { requireCompanyAdmin } from '@/lib/tenant-guard'
-import { getPreset } from '@/lib/ai-providers'
+import { getPreset, normalizeApiKey } from '@/lib/ai-providers'
 import { validateProviderBaseUrl } from '@/lib/ssrf'
 import { encrypt, decrypt, __parseCiphertextKeyId } from '@/lib/encryption'
 
@@ -149,9 +149,9 @@ export async function PATCH(
 
   // api_key is ONLY updated when a non-empty value is supplied. Omitting it, or
   // sending ''/null, preserves the stored key — a PATCH never wipes it.
-  if ('api_key' in body && typeof body.api_key === 'string' && body.api_key.trim()) {
+  if ('api_key' in body && typeof body.api_key === 'string' && normalizeApiKey(body.api_key)) {
     try {
-      patch.api_key = encrypt(body.api_key.trim())
+      patch.api_key = encrypt(normalizeApiKey(body.api_key))
     } catch {
       return NextResponse.json(
         { error: 'Server encryption key is not configured — cannot store credentials. Set CHANNEL_CONFIG_ENCRYPTION_KEY.' },

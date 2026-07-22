@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { validateProviderBaseUrl } from '@/lib/ssrf'
+import { normalizeApiKey } from '@/lib/ai-providers'
 
 export async function POST(request: Request) {
   try {
@@ -12,7 +13,10 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    const { base_url, api_key, model } = body
+    const { base_url, model } = body
+    // Normalize before use: strips a pasted "Bearer " prefix + whitespace, the
+    // two silent causes of a 401 on an otherwise-valid key.
+    const api_key = normalizeApiKey(body.api_key)
 
     if (!base_url || !api_key || !model) {
       return NextResponse.json(

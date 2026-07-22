@@ -18,6 +18,7 @@ import { requireCompanyAdmin } from '@/lib/tenant-guard'
 import { createServiceRoleClient } from '@/lib/supabase-server'
 import { validateProviderBaseUrl } from '@/lib/ssrf'
 import { decrypt, __parseCiphertextKeyId } from '@/lib/encryption'
+import { normalizeApiKey } from '@/lib/ai-providers'
 
 interface Body {
   base_url?: string
@@ -31,7 +32,7 @@ export async function POST(request: Request) {
 
   const body = (await request.json().catch(() => ({}))) as Body
   let baseUrl = (body.base_url || '').trim()
-  let apiKey = (body.api_key || '').trim()
+  let apiKey = normalizeApiKey(body.api_key)
 
   // Resolve from a stored provider when an id is given — the saved key never
   // leaves the server, so editing a provider can still load its models without

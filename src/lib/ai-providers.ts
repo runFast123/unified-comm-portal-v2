@@ -21,6 +21,21 @@ export type AiProviderKey =
   | 'fireworks'
   | 'custom'
 
+/**
+ * Clean a user-entered API key before it's sent, tested, or stored.
+ *
+ * Two common paste mistakes both produce a rejected key:
+ *   - trailing/leading whitespace or a newline from copying a line;
+ *   - a leading "Bearer " because the provider's docs show the full
+ *     `Authorization: Bearer <key>` header — we add "Bearer" ourselves, so a
+ *     pasted one yields `Bearer Bearer <key>` and a 401.
+ * Both are silent and confusing (the field is masked), so normalize once at
+ * every ingestion point rather than making the user spot it.
+ */
+export function normalizeApiKey(raw: string | null | undefined): string {
+  return (raw ?? '').trim().replace(/^Bearer\s+/i, '').trim()
+}
+
 export interface AiProviderPreset {
   key: AiProviderKey
   label: string
