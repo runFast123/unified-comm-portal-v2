@@ -34,6 +34,7 @@ import { getRequestId } from '@/lib/request-id'
 import { recordMetric } from '@/lib/metrics'
 import { garbageCollectStaleSessions } from '@/lib/time-tracking'
 import { reapStaleClaims } from '@/lib/dispatch-reaper'
+import { purgeOldMetrics } from '@/lib/metrics-retention'
 
 function authorizeCron(request: Request): boolean {
   if (validateWebhookSecret(request)) return true
@@ -65,6 +66,10 @@ export async function GET(request: Request) {
     const admin = await createServiceRoleClient()
     const { closed, failed } = await garbageCollectStaleSessions(admin)
     const reaped = await reapStaleClaims(admin, requestId)
+    // 3. Trim metrics_events. It had no retention at all and had grown to
+    //    1.1M rows / 349 MB — ~99% of the database — which starves the small
+    //    hot tables of cache. Batched + capped, so this stays a short sweep.
+    const metrics = await purgeOldMetrics(admin)
 
     const durationMs = Date.now() - startedAt
     logInfo('system', 'time_gc_end', 'garbage-collect cron finished', {
@@ -76,6 +81,8 @@ export async function GET(request: Request) {
       reaped_raced: reaped.raced,
       reaped_errors: reaped.errors,
       reaped_degraded: reaped.degraded,
+      metrics_deleted: metrics.deleted,
+      metrics_more_remaining: metrics.more_remaining,
       duration_ms: durationMs,
     })
 
@@ -102,6 +109,7 @@ export async function GET(request: Request) {
     // customer who never got answered, and it should be alertable on its own.
     recordMetric('cron.garbage_collect.claims_requeued', reaped.requeued, undefined, requestId)
     recordMetric('cron.garbage_collect.claims_retired', reaped.retired, undefined, requestId)
+    recordMetric('cron.garbage_collect.metrics_purged', metrics.deleted, undefined, requestId)
     if (failed > 0) {
       recordMetric(
         'cron.garbage_collect.errors',
@@ -129,6 +137,13 @@ export async function GET(request: Request) {
         errors: reaped.errors,
         degraded: reaped.degraded,
         per_queue: reaped.per_queue,
+      },
+      metrics_retention: {
+        deleted: metrics.deleted,
+        batches: metrics.batches,
+        cutoff: metrics.cutoff,
+        errors: metrics.errors,
+        more_remaining: metrics.more_remaining,
       },
       request_id: requestId,
     })
