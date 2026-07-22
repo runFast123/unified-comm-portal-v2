@@ -13,6 +13,7 @@ import {
 import { withCircuitBreaker, CircuitBreakerOpenError as _CircuitBreakerOpenError } from '@/lib/ai-circuit-breaker'
 import type { Account } from '@/types/database'
 import { decodeHtmlEntities } from '@/lib/utils'
+import { normalizeApiKey } from '@/lib/ai-providers'
 import { encrypt, decrypt, __parseCiphertextKeyId } from '@/lib/encryption'
 
 // Re-export so callers can `import { AIBudgetExceededError } from '@/lib/api-helpers'`
@@ -784,7 +785,11 @@ export async function callChat(
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${config.api_key}`,
+              // normalize on READ too, not just on save: a key stored before the
+              // write-side normalization (or edited outside the app) may carry a
+              // pasted "Bearer " prefix, which would send `Bearer Bearer <key>`
+              // and 401 every call. Self-heals such rows without a re-save.
+              'Authorization': `Bearer ${normalizeApiKey(config.api_key)}`,
             },
             body: JSON.stringify({
               model: config.model,
