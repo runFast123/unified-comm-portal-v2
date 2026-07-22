@@ -26,7 +26,6 @@ import { Modal } from '@/components/ui/modal'
 import { cn, getSentimentColor, getUrgencyColor } from '@/lib/utils'
 import type { MessageClassification, AIReply } from '@/types/database'
 import { ThreadSummary } from '@/components/dashboard/thread-summary'
-import { Copilot } from '@/components/dashboard/copilot'
 import { useUser } from '@/context/user-context'
 
 export interface SentimentPoint {
@@ -319,10 +318,6 @@ export function AISidebar({
     <div className="space-y-4">
       {/* AI-generated thread summary (on-demand) */}
       {conversationId && can('action:ai.summarize') && <ThreadSummary conversationId={conversationId} />}
-
-      {/* Read-only agentic copilot — ask questions, get tool-grounded answers.
-          Gated on the same permission as the /api/ai/copilot route. */}
-      {conversationId && can('action:ai.compose') && <Copilot conversationId={conversationId} />}
 
       {/* Teams Context Card */}
       {channel === 'teams' && teamsContext && (

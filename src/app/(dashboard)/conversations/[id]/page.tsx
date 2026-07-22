@@ -7,6 +7,7 @@ import { ScrollToBottom } from '@/components/dashboard/scroll-to-bottom'
 import { MarkRead } from '@/components/dashboard/mark-read'
 import { ConversationRealtime } from '@/components/dashboard/conversation-realtime'
 import { AISidebar } from '@/components/dashboard/ai-sidebar'
+import { Copilot } from '@/components/dashboard/copilot'
 import { ConversationActions } from '@/components/dashboard/conversation-actions'
 import { ConversationQueueNav } from '@/components/dashboard/conversation-queue-nav'
 import { computeReplyWindow, formatReplyWindow } from '@/lib/messaging-window'
@@ -697,6 +698,7 @@ export default async function ConversationPage({
                 initialTags={(conversation.tags as string[] | null) ?? []}
               />
             }
+            copilot={<Copilot conversationId={id} />}
             time={<ConversationTimeDisplay conversationId={id} />}
             notes={<InternalNotes conversationId={id} authorName={currentUserName || undefined} />}
             activity={<ActivityTimeline conversationId={id} />}

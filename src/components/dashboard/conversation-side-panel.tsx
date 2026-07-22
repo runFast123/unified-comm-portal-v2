@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, type ReactNode } from 'react'
-import { Sparkles, Tag, Clock, StickyNote, Activity } from 'lucide-react'
+import { Sparkles, Bot, Tag, Clock, StickyNote, Activity } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useUser } from '@/context/user-context'
 
 /**
  * Right-side panel for the conversation page. Replaces the old "five
@@ -15,10 +16,16 @@ import { cn } from '@/lib/utils'
  * existing widgets (AISidebar, ConversationTagPicker, etc.) and passes
  * them in unchanged.
  */
-type TabId = 'summary' | 'tags' | 'time' | 'notes' | 'activity'
+type TabId = 'summary' | 'copilot' | 'tags' | 'time' | 'notes' | 'activity'
 
 interface Props {
   summary: ReactNode
+  /**
+   * The AI copilot. Optional so callers that don't grant AI access simply omit
+   * it — when absent, no Copilot tab is rendered at all (rather than an empty
+   * one). Placed second in the strip so it's immediately visible.
+   */
+  copilot?: ReactNode
   tags: ReactNode
   time: ReactNode
   notes: ReactNode
@@ -28,8 +35,9 @@ interface Props {
   tagsCount?: number
 }
 
-const TAB_ORDER: ReadonlyArray<{ id: TabId; label: string; Icon: typeof Sparkles }> = [
+const ALL_TABS: ReadonlyArray<{ id: TabId; label: string; Icon: typeof Sparkles }> = [
   { id: 'summary', label: 'Summary', Icon: Sparkles },
+  { id: 'copilot', label: 'Copilot', Icon: Bot },
   { id: 'tags', label: 'Tags', Icon: Tag },
   { id: 'time', label: 'Time', Icon: Clock },
   { id: 'notes', label: 'Notes', Icon: StickyNote },
@@ -38,6 +46,7 @@ const TAB_ORDER: ReadonlyArray<{ id: TabId; label: string; Icon: typeof Sparkles
 
 export function ConversationSidePanel({
   summary,
+  copilot,
   tags,
   time,
   notes,
@@ -45,9 +54,15 @@ export function ConversationSidePanel({
   notesCount,
   tagsCount,
 }: Props) {
+  const { can } = useUser()
   const [active, setActive] = useState<TabId>('summary')
 
-  const slots: Record<TabId, ReactNode> = { summary, tags, time, notes, activity }
+  const slots: Record<TabId, ReactNode> = { summary, copilot, tags, time, notes, activity }
+  // Show the Copilot tab only when a copilot node was passed AND the user has AI
+  // access — the same permission the /api/ai/copilot route enforces, so the UI
+  // never offers a tab the API would refuse.
+  const showCopilot = copilot != null && can('action:ai.compose')
+  const TAB_ORDER = ALL_TABS.filter((t) => t.id !== 'copilot' || showCopilot)
 
   // Per-tab badge counts. We only render the badge when there's something
   // to show, so the tab strip stays quiet at rest.
