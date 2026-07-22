@@ -121,6 +121,23 @@ function requireString(args: Record<string, unknown>, key: string, max = 2000): 
  * every tenant outside it. Title matches simply weigh more than body matches,
  * which is true of any knowledge base.
  */
+/**
+ * Common English words that carry no retrieval signal. Without this, a query
+ * like "what is your refund policy" scores a match on any article containing
+ * "your" — so a refund question (which no article answers) would wrongly return
+ * whichever article happened to say "your", instead of the honest "not covered".
+ * Verified against the seeded KB: dropping these fixes exactly that failure.
+ */
+const KB_STOPWORDS = new Set([
+  'the', 'a', 'an', 'and', 'or', 'but', 'is', 'are', 'was', 'were', 'be', 'been',
+  'being', 'to', 'of', 'in', 'on', 'at', 'for', 'with', 'by', 'from', 'as', 'into',
+  'do', 'does', 'did', 'you', 'your', 'yours', 'my', 'me', 'we', 'our', 'us', 'they',
+  'them', 'their', 'it', 'its', 'this', 'that', 'these', 'those', 'what', 'which',
+  'who', 'whom', 'how', 'when', 'where', 'why', 'can', 'could', 'will', 'would',
+  'should', 'have', 'has', 'had', 'get', 'got', 'if', 'then', 'than', 'so', 'about',
+  'any', 'some', 'there', 'here', 'not', 'all', 'out', 'up',
+])
+
 async function keywordSearchKb(ctx: ToolContext, query: string, limit: number) {
   const { data, error } = await ctx.client
     .from('kb_articles')
@@ -135,7 +152,7 @@ async function keywordSearchKb(ctx: ToolContext, query: string, limit: number) {
       query
         .toLowerCase()
         .split(/[^a-z0-9]+/)
-        .filter((t) => t.length > 2)
+        .filter((t) => t.length > 2 && !KB_STOPWORDS.has(t))
     )
   )
   if (terms.length === 0) return []

@@ -140,4 +140,29 @@ describe('search_knowledge_base retrieval', () => {
     const data = await search('is in a')
     expect(data.matches).toEqual([])
   })
+
+  it('does not let long stopwords (your/what/with) create spurious matches', async () => {
+    // The bug this guards: "what is your refund policy" scored a match on any
+    // article containing "your", so a question the KB does NOT answer returned an
+    // irrelevant article instead of the honest "not covered". Caught with the
+    // real seeded KB; this pins the fix.
+    vectorEnabled = false
+    articles = [
+      { id: 'port', title: 'Porting your existing numbers', content: 'Keep your numbers with us.' },
+    ]
+    const data = await search('what is your refund policy')
+    // refund / policy appear nowhere; your / what / is are stopwords → no match.
+    expect(data.matches).toEqual([])
+  })
+
+  it('still matches on the real content word after stopwords are removed', async () => {
+    vectorEnabled = false
+    articles = [
+      { id: 'refund', title: 'Refund policy', content: 'Refunds are issued within 30 days.' },
+      { id: 'port', title: 'Porting your numbers', content: 'Keep your numbers.' },
+    ]
+    // Only "refund" survives filtering, and it must still find the right article.
+    const data = await search('what is your refund policy')
+    expect(data.matches[0].article_id).toBe('refund')
+  })
 })
