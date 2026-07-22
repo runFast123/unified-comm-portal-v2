@@ -781,7 +781,12 @@ export async function callChat(
 
         let response: Response
         try {
-          response = await fetch(`${config.base_url}/chat/completions`, {
+          // Strip any trailing slash before appending the path. Both test
+          // endpoints already do this, so a base_url saved WITH one (Google's
+          // Gemini docs literally show `…/v1beta/openai/`) would pass "Test
+          // connection" and then 404 on every real call — green test, broken
+          // production. Normalizing here closes that gap for any provider.
+          response = await fetch(`${config.base_url.replace(/\/+$/, '')}/chat/completions`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',

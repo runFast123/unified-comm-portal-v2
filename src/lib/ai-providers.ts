@@ -13,6 +13,7 @@
 export type AiProviderKey =
   | 'nvidia'
   | 'openai'
+  | 'gemini'
   | 'groq'
   | 'openrouter'
   | 'together'
@@ -69,6 +70,27 @@ export const AI_PROVIDER_PRESETS: AiProviderPreset[] = [
     models: ['gpt-4o-mini', 'gpt-4o', 'gpt-4.1-mini', 'gpt-4.1', 'o4-mini'],
     apiKeyHint: 'sk-…',
     docsUrl: 'https://platform.openai.com',
+  },
+  {
+    key: 'gemini',
+    label: 'Google Gemini',
+    // Gemini's OpenAI-compatibility layer. Google's docs show this URL WITH a
+    // trailing slash; we store it WITHOUT one because every call site builds
+    // `${base_url}/chat/completions` — a stored trailing slash would produce
+    // `…/openai//chat/completions`.
+    base_url: 'https://generativelanguage.googleapis.com/v1beta/openai',
+    models: [
+      'gemini-3.6-flash',
+      'gemini-3.5-flash',
+      'gemini-3.5-flash-lite',
+      // Widest free-tier coverage (standard + batch + flex), so it's the
+      // safest pick for someone specifically after a no-cost provider.
+      'gemini-3.1-flash-lite',
+      'gemini-2.5-flash',
+      'gemini-2.5-pro',
+    ],
+    apiKeyHint: 'AIza… (from Google AI Studio)',
+    docsUrl: 'https://ai.google.dev/gemini-api/docs/openai',
   },
   {
     key: 'groq',
