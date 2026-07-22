@@ -93,8 +93,13 @@ export async function POST(request: Request) {
   }
 
   // Embeddings must be configured for this endpoint to do anything meaningful.
+  // Provider-agnostic now (OpenAI / NVIDIA / any OpenAI-compatible endpoint) —
+  // see src/lib/embeddings.ts resolveEmbeddingConfig().
   if (!isEmbeddingEnabled()) {
-    return NextResponse.json({ error: 'OPENAI_API_KEY not configured' }, { status: 400 })
+    return NextResponse.json(
+      { error: 'Embeddings are not configured (set an embedding provider, e.g. NVIDIA/OPENAI/EMBEDDINGS_* env).' },
+      { status: 400 }
+    )
   }
 
   // Resolve the target company. Non-super-admins are pinned to their own

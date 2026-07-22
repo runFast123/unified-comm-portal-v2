@@ -363,10 +363,36 @@ export default function KnowledgeBasePage() {
   }, [filteredArticles, kbPage, KB_PAGE_SIZE])
 
   // Handlers
-  function handleSyncNow() {
+  async function handleSyncNow() {
+    // Actually rebuild the embedding index (what this button has always claimed
+    // to do). Previously it only re-fetched the article list, so vector search
+    // could never be (re)built from the UI. POSTs to /api/kb/reindex, which
+    // embeds every active article for the company and is what turns keyword
+    // retrieval into vector retrieval.
     setSyncing(true)
-    // Re-fetch articles from Supabase as a "sync" action
-    fetchArticles().finally(() => setSyncing(false))
+    try {
+      // Super admins have no company of their own, so the reindex must target
+      // one — use the company currently in scope (the switcher / KB filter).
+      // Company admins are pinned to their own company server-side.
+      const qs = activeCompanyId ? `?company_id=${encodeURIComponent(activeCompanyId)}` : ''
+      const res = await fetch(`/api/kb/reindex${qs}`, { method: 'POST' })
+      const json = (await res.json().catch(() => null)) as
+        | { articles?: number; chunks?: number; error?: string }
+        | null
+      if (!res.ok) {
+        toast.error(json?.error || `Reindex failed (${res.status})`)
+      } else {
+        toast.success(
+          `Search index rebuilt — ${json?.articles ?? 0} article(s), ${json?.chunks ?? 0} chunk(s) embedded.`
+        )
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Reindex failed')
+    } finally {
+      // Refresh the list regardless (also updates the "last synced" pill).
+      await fetchArticles()
+      setSyncing(false)
+    }
   }
 
   async function handleToggleActive(id: string) {
