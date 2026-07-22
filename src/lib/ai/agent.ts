@@ -92,8 +92,15 @@ export interface RunAgentOptions {
   endpoint: AIEndpoint
   maxSteps?: number
   deadlineMs?: number
-  /** Withhold mutating tools. Enforced again inside runTool. */
+  /** Withhold mutating tools entirely (the copilot). Enforced again in runTool. */
   readOnly?: boolean
+  /**
+   * Record mutating tool calls instead of applying them (the triage agent's
+   * evaluation mode). Read-only tools still run — reading is what makes the
+   * recorded decision realistic. The caller is responsible for persisting the
+   * run with shadow=true so the trace reflects that nothing was applied.
+   */
+  shadow?: boolean
 }
 
 /**
@@ -137,6 +144,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentRunResult> {
     maxSteps = DEFAULT_MAX_STEPS,
     deadlineMs = DEFAULT_DEADLINE_MS,
     readOnly = false,
+    shadow = false,
   } = opts
 
   const startedAt = Date.now()
@@ -206,10 +214,12 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentRunResult> {
       turn.tool_calls.map(async (call: ToolCall) => {
         const toolStartedAt = Date.now()
         // `allowed: tools` is the security boundary: only what this run offered
-        // can run, no matter what name the model emits.
+        // can run, no matter what name the model emits. `shadow` records mutating
+        // calls instead of applying them.
         const result = await runTool(call.function.name, call.function.arguments, ctx, {
           allowed: tools,
           readOnly,
+          shadow,
         })
         return { call, result, duration_ms: Date.now() - toolStartedAt }
       })

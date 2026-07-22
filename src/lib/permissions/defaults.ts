@@ -25,6 +25,10 @@ const AGENT_ACTIONS = [
   'action:conversation.assign',
   'action:conversation.merge',
   'action:conversation.export',
+  // Granted by default so turning RBAC on stays non-breaking: agents already
+  // change priority/tags today (it was folded into message.send). Admins can
+  // revoke it to make a role read-only.
+  'action:conversation.triage',
   'action:message.send',
   // AI assist is available to everyone today → grant by default (non-breaking).
   'action:ai.compose',

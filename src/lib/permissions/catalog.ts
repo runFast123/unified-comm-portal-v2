@@ -50,6 +50,11 @@ export const ACTION_PERMISSIONS = {
   'action:conversation.export': 'Export conversations',
   'action:conversation.assign': 'Assign / reassign conversations',
   'action:conversation.merge': 'Merge conversations',
+  // Triage = internal-only organizing (priority, tags). Split out from
+  // message.send so an agent (human or AI) can be allowed to organize the inbox
+  // WITHOUT being allowed to send anything to a customer. Load-bearing for the
+  // AI triage agent: "can triage" must not imply "can reply".
+  'action:conversation.triage': 'Triage conversations (priority, tags)',
   'action:message.send': 'Send messages / replies',
   'action:credentials.manage': 'Manage channel credentials (BYOC)',
   'action:users.manage': 'Manage users',

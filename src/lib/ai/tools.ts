@@ -72,9 +72,12 @@ export interface AgentTool {
    */
   permission: string | null
   /**
-   * True when the tool changes state. Read-only tools are safe to run in shadow
-   * mode; mutating tools are refused there. Also drives whether the run writes
-   * an audit row.
+   * True when the tool changes state.
+   *   - readOnly runs (the copilot): mutating tools are withheld entirely.
+   *   - shadow runs: mutating tools ARE offered, but runTool records their
+   *     intended call instead of invoking the handler — so the decision is
+   *     captured without being applied.
+   *   - live runs: the handler executes.
    */
   mutates: boolean
   handler: (args: Record<string, unknown>, ctx: ToolContext) => Promise<unknown>
@@ -348,9 +351,186 @@ const getContactHistory: AgentTool = {
   },
 }
 
+// ── Tools: mutating (triage) ────────────────────────────────────────
+//
+// These change internal state only — priority and tags. Deliberately NOT status
+// or escalate: a status change to `resolved` emails the customer a CSAT link and
+// an `escalated` transition fires an outbound webhook, both of which reach the
+// outside world. Triage that only organizes the inbox has no such side effects,
+// which is what makes it safe to let an agent do. Anything customer-facing stays
+// behind action:message.send and a human.
+
+const PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const
+
+/**
+ * Load the focused conversation for a write, re-verifying the caller's access.
+ *
+ * Same reasoning as the read tools: the client is service-role (RLS off), so the
+ * access check is the only tenant boundary standing here. Throws on any failure;
+ * runTool turns that into a tool error the model can react to.
+ */
+async function loadFocusedConversation(
+  ctx: ToolContext,
+  columns: string
+): Promise<Record<string, unknown>> {
+  if (!ctx.conversationId) throw new Error('No conversation in focus')
+  const { data: conv, error } = await ctx.client
+    .from('conversations')
+    .select(columns)
+    .eq('id', ctx.conversationId)
+    .maybeSingle()
+  if (error) throw new Error(error.message)
+  if (!conv) throw new Error('Conversation not found')
+  // Supabase's typed client can't infer a dynamic `.select(columns)` string, so
+  // it widens to an error-union type; cast through unknown as it suggests.
+  const row = conv as unknown as Record<string, unknown>
+  const accountId = row.account_id as string
+  if (!(await verifyAccountAccess(ctx.userId, accountId))) {
+    throw new Error('Conversation not found')
+  }
+  return row
+}
+
+/**
+ * Write an audit_log row attributing an agent action to the acting user.
+ *
+ * `via: 'agent'` in the details is load-bearing: the override-rate analysis (how
+ * often a human undoes what the agent did) needs to tell an agent's change from
+ * a human's. Best-effort — an audit failure must never fail the tool, matching
+ * the guarded routes' own posture.
+ */
+async function auditAgentAction(
+  ctx: ToolContext,
+  accountId: string,
+  entry: { action: string; summary: string; details?: Record<string, unknown> }
+): Promise<void> {
+  try {
+    await ctx.client.from('audit_log').insert({
+      user_id: ctx.userId,
+      action: entry.action,
+      entity_type: 'conversation',
+      entity_id: ctx.conversationId,
+      details: {
+        ...entry.details,
+        account_id: accountId,
+        via: 'agent',
+        summary: entry.summary,
+      },
+    })
+  } catch {
+    /* audit is best-effort; never fail the tool because the log write failed */
+  }
+}
+
+const setPriority: AgentTool = {
+  name: 'set_priority',
+  description:
+    'Set the priority of the conversation in focus. Use "urgent" only for genuine ' +
+    'time-sensitivity (outage, a stated deadline, an angry repeat contact), "high" for ' +
+    'things that should jump the queue, "medium" for normal, "low" for FYI/no-action. ' +
+    'This only reorders the inbox; it never contacts the customer.',
+  parameters: {
+    type: 'object',
+    properties: {
+      priority: {
+        type: 'string',
+        enum: ['low', 'medium', 'high', 'urgent'],
+        description: 'The new priority.',
+      },
+    },
+    required: ['priority'],
+    additionalProperties: false,
+  },
+  permission: 'action:conversation.triage',
+  mutates: true,
+  async handler(args, ctx) {
+    const priority = String(args.priority ?? '').toLowerCase()
+    if (!(PRIORITIES as readonly string[]).includes(priority)) {
+      throw new Error(`priority must be one of: ${PRIORITIES.join(', ')}`)
+    }
+    const conv = await loadFocusedConversation(ctx, 'id, account_id, priority')
+    const from = (conv.priority as string) ?? null
+    if (from === priority) return { unchanged: true, priority }
+
+    const { error } = await ctx.client
+      .from('conversations')
+      .update({ priority })
+      .eq('id', conv.id as string)
+    if (error) throw new Error(error.message)
+
+    await auditAgentAction(ctx, conv.account_id as string, {
+      action: 'conversation.priority_changed',
+      summary: `Priority changed to ${priority}`,
+      details: { from, to: priority },
+    })
+    return { applied: true, from, to: priority }
+  },
+}
+
+const addTags: AgentTool = {
+  name: 'add_tags',
+  description:
+    'Add one or more short labels (tags) to the conversation in focus, e.g. "billing", ' +
+    '"bug", "vip". Tags help organize and filter the inbox. Existing tags are kept; this ' +
+    'only adds. It never contacts the customer.',
+  parameters: {
+    type: 'object',
+    properties: {
+      tags: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'One or more short tag labels to add.',
+      },
+    },
+    required: ['tags'],
+    additionalProperties: false,
+  },
+  permission: 'action:conversation.triage',
+  mutates: true,
+  async handler(args, ctx) {
+    const raw = Array.isArray(args.tags) ? args.tags : []
+    const incoming = Array.from(
+      new Set(
+        raw
+          .filter((t): t is string => typeof t === 'string')
+          .map((t) => t.trim().slice(0, 40))
+          .filter((t) => t.length > 0)
+      )
+    ).slice(0, 10) // cap so a runaway model can't stuff hundreds of tags
+    if (incoming.length === 0) {
+      throw new Error('tags must be a non-empty array of short strings')
+    }
+
+    const conv = await loadFocusedConversation(ctx, 'id, account_id, tags')
+    const existing = Array.isArray(conv.tags) ? (conv.tags as string[]) : []
+    const added = incoming.filter((t) => !existing.includes(t))
+    if (added.length === 0) return { unchanged: true, tags: existing }
+
+    const merged = Array.from(new Set([...existing, ...incoming]))
+    const { error } = await ctx.client
+      .from('conversations')
+      .update({ tags: merged })
+      .eq('id', conv.id as string)
+    if (error) throw new Error(error.message)
+
+    await auditAgentAction(ctx, conv.account_id as string, {
+      action: 'conversation.tags_added',
+      summary: `Added tags: ${added.join(', ')}`,
+      details: { added },
+    })
+    return { applied: true, added, tags: merged }
+  },
+}
+
 // ── Registry ────────────────────────────────────────────────────────
 
-const ALL_TOOLS: AgentTool[] = [searchKnowledgeBase, getConversationThread, getContactHistory]
+const ALL_TOOLS: AgentTool[] = [
+  searchKnowledgeBase,
+  getConversationThread,
+  getContactHistory,
+  setPriority,
+  addTags,
+]
 
 const BY_NAME = new Map(ALL_TOOLS.map((t) => [t.name, t]))
 
@@ -366,9 +546,11 @@ export function getTool(name: string): AgentTool | undefined {
 /**
  * Tools available for a run.
  *
- * `readOnly` (shadow mode, or the copilot) drops every mutating tool, so the
- * model is never even *offered* something it must not do — a much stronger
- * guarantee than refusing the call afterwards.
+ * `readOnly` (the copilot) drops every mutating tool, so the model is never even
+ * *offered* something it must not do — a stronger guarantee than refusing the
+ * call afterwards. The triage agent, by contrast, passes no `readOnly` and DOES
+ * get the mutating tools; whether they apply is controlled separately by the
+ * run's `shadow` flag (see runAgent / runTool).
  */
 export function toolsFor(opts: { readOnly?: boolean } = {}): AgentTool[] {
   return ALL_TOOLS.filter((t) => (opts.readOnly ? !t.mutates : true))
@@ -404,7 +586,7 @@ export async function runTool(
   name: string,
   rawArgs: string,
   ctx: ToolContext,
-  opts: { allowed?: AgentTool[]; readOnly?: boolean } = {}
+  opts: { allowed?: AgentTool[]; readOnly?: boolean; shadow?: boolean } = {}
 ): Promise<ToolResult> {
   const pool = opts.allowed ?? ALL_TOOLS
   const tool = pool.find((t) => t.name === name)
@@ -448,6 +630,18 @@ export async function runTool(
       // Tell the model plainly so it routes around it instead of retrying.
       error: `You do not have permission to use "${name}". Do not try again; continue without it.`,
     }
+  }
+
+  // SHADOW MODE: the mutating handler is NEVER invoked, so it physically cannot
+  // write. This is structural — it holds regardless of what a handler does, so a
+  // new mutating tool can't accidentally apply in shadow by forgetting a flag.
+  // We record the intended call (from the validated args) and return a
+  // success-shaped result so the agent proceeds exactly as it would live; the
+  // only difference is that nothing happened. The run itself is marked shadow.
+  // Read-only tools DO run in shadow — reading is what makes the recorded
+  // decision realistic (the agent still needs to see the KB, the history, etc.).
+  if (opts.shadow && tool.mutates) {
+    return { ok: true, data: { recorded: true, shadow: true, would_call: name, args } }
   }
 
   try {
