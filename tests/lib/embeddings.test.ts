@@ -18,9 +18,21 @@ vi.mock('@/lib/logger', () => ({
   logError: vi.fn(),
 }))
 
-import { isEmbeddingEnabled, embed, embedBatch } from '@/lib/embeddings'
+import { isEmbeddingEnabled, embed, embedBatch, resolveEmbeddingConfig } from '@/lib/embeddings'
 
-const ORIGINAL_KEY = process.env.OPENAI_API_KEY
+// Every env var the resolver reads — snapshot + fully control them per test so
+// resolution is deterministic regardless of what the shell/CI has set.
+const EMBED_ENV = [
+  'EMBEDDINGS_API_KEY',
+  'EMBEDDINGS_BASE_URL',
+  'EMBEDDINGS_MODEL',
+  'EMBEDDINGS_DIM',
+  'EMBEDDINGS_INPUT_TYPE',
+  'OPENAI_API_KEY',
+  'AI_API_KEY',
+  'AI_BASE_URL',
+] as const
+const SNAPSHOT: Record<string, string | undefined> = {}
 
 function mockFetchOnce(impl: () => Promise<Response> | Response) {
   const fn = vi.fn(impl)
@@ -29,7 +41,7 @@ function mockFetchOnce(impl: () => Promise<Response> | Response) {
   return fn
 }
 
-/** Build a fake OpenAI embeddings response. */
+/** Build a fake OpenAI-compatible embeddings response. */
 function okResponse(data: Array<{ index: number; embedding: number[] }>): Response {
   return {
     ok: true,
@@ -40,13 +52,20 @@ function okResponse(data: Array<{ index: number; embedding: number[] }>): Respon
 }
 
 beforeEach(() => {
+  for (const k of EMBED_ENV) {
+    SNAPSHOT[k] = process.env[k]
+    delete process.env[k]
+  }
+  // Default to the OpenAI path so the existing suite reads as before.
   process.env.OPENAI_API_KEY = 'sk-test-key'
   vi.restoreAllMocks()
 })
 
 afterEach(() => {
-  if (ORIGINAL_KEY === undefined) delete process.env.OPENAI_API_KEY
-  else process.env.OPENAI_API_KEY = ORIGINAL_KEY
+  for (const k of EMBED_ENV) {
+    if (SNAPSHOT[k] === undefined) delete process.env[k]
+    else process.env[k] = SNAPSHOT[k]
+  }
 })
 
 describe('isEmbeddingEnabled', () => {
@@ -176,5 +195,67 @@ describe('embedBatch', () => {
     const fetchMock = mockFetchOnce(() => okResponse([{ index: 0, embedding: [1] }]))
     expect(await embedBatch(['a', 'b'])).toEqual([null, null])
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('provider resolution', () => {
+  it('OpenAI path does NOT send input_type (symmetric model)', async () => {
+    const fetchMock = mockFetchOnce(() => okResponse([{ index: 0, embedding: [1, 2] }]))
+    await embed('hi', 'query')
+    const body = JSON.parse((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body as string)
+    expect(body.input_type).toBeUndefined()
+  })
+
+  it('reuses AI_API_KEY on an NVIDIA base for embeddings (no separate key)', async () => {
+    delete process.env.OPENAI_API_KEY
+    process.env.AI_API_KEY = 'nvapi-test'
+    process.env.AI_BASE_URL = 'https://integrate.api.nvidia.com/v1'
+
+    expect(isEmbeddingEnabled()).toBe(true)
+    const cfg = resolveEmbeddingConfig()!
+    expect(cfg.url).toBe('https://integrate.api.nvidia.com/v1/embeddings')
+    expect(cfg.model).toBe('nvidia/nv-embedqa-e5-v5')
+    expect(cfg.dimensions).toBe(1024)
+    expect(cfg.asymmetric).toBe(true)
+
+    const fetchMock = mockFetchOnce(() => okResponse([{ index: 0, embedding: [1, 2, 3] }]))
+    await embed('what are your rates?', 'query')
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+    expect(url).toBe('https://integrate.api.nvidia.com/v1/embeddings')
+    const body = JSON.parse(init.body as string)
+    // Asymmetric model → input_type is sent, and reflects the kind.
+    expect(body.input_type).toBe('query')
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer nvapi-test')
+  })
+
+  it('embedBatch defaults to input_type=passage on an asymmetric model', async () => {
+    delete process.env.OPENAI_API_KEY
+    process.env.AI_API_KEY = 'nvapi-test'
+    process.env.AI_BASE_URL = 'https://integrate.api.nvidia.com/v1'
+    const fetchMock = mockFetchOnce(() => okResponse([{ index: 0, embedding: [1] }]))
+    await embedBatch(['a chunk of a doc'])
+    const body = JSON.parse((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body as string)
+    expect(body.input_type).toBe('passage')
+  })
+
+  it('does NOT reuse AI_API_KEY when the chat base is not NVIDIA', () => {
+    delete process.env.OPENAI_API_KEY
+    process.env.AI_API_KEY = 'gsk-groq'
+    process.env.AI_BASE_URL = 'https://api.groq.com/openai/v1'
+    // Not every OpenAI-compatible chat endpoint serves /embeddings — don't assume.
+    expect(isEmbeddingEnabled()).toBe(false)
+  })
+
+  it('EMBEDDINGS_API_KEY takes priority and points anywhere', () => {
+    process.env.OPENAI_API_KEY = 'sk-should-be-ignored'
+    process.env.EMBEDDINGS_API_KEY = 'jina-key'
+    process.env.EMBEDDINGS_BASE_URL = 'https://api.jina.ai/v1'
+    process.env.EMBEDDINGS_MODEL = 'jina-embeddings-v3'
+    process.env.EMBEDDINGS_DIM = '768'
+    const cfg = resolveEmbeddingConfig()!
+    expect(cfg.url).toBe('https://api.jina.ai/v1/embeddings')
+    expect(cfg.apiKey).toBe('jina-key')
+    expect(cfg.model).toBe('jina-embeddings-v3')
+    expect(cfg.dimensions).toBe(768)
   })
 })
