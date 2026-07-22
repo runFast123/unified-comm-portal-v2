@@ -23,7 +23,12 @@ import { persistAgentRun } from '@/lib/ai/trace'
  * mid-run and the trace is lost, which is the one outcome worth avoiding.
  */
 export const maxDuration = 60
-const AGENT_DEADLINE_MS = 45_000
+// The loop must STOP starting model calls with enough headroom to finish an
+// in-flight call (≤20s, no retries — see AGENT_CALL_TIMEOUT_MS) plus persist the
+// trace, all inside maxDuration. 30s leaves ~30s of headroom: a call started at
+// t≈30s ends by ≈50s, trace by ≈52s, comfortably under 60. (Was 45s, which with
+// the old 30s×3-retry calls could run ~94s and get killed → 504.)
+const AGENT_DEADLINE_MS = 30_000
 
 export const dynamic = 'force-dynamic'
 

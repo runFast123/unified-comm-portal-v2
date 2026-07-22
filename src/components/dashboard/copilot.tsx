@@ -110,6 +110,16 @@ export function Copilot({ conversationId }: CopilotProps) {
           setState({ kind: 'error', message: json?.error || `Request failed (${res.status})` })
           return
         }
+        // The run completed but the provider failed mid-flight (a flaky upstream)
+        // — treat an empty 'error' answer as a soft failure, not a blank reply.
+        if ((json?.stop_reason === 'error' || json?.stop_reason === 'deadline') && !json?.answer) {
+          setState({
+            kind: 'error',
+            message:
+              'The AI provider was slow or unavailable just now. This usually clears in a moment — try again.',
+          })
+          return
+        }
         setState({
           kind: 'answer',
           answer: {

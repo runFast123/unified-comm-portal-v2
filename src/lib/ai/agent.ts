@@ -25,7 +25,13 @@
  *              enforces the per-account monthly cap and records ai_usage.
  */
 
-import { callChat, type ChatMessage, type ToolCall } from '@/lib/api-helpers'
+import {
+  callChat,
+  AIBudgetExceededError,
+  CircuitBreakerOpenError,
+  type ChatMessage,
+  type ToolCall,
+} from '@/lib/api-helpers'
 import type { AIEndpoint } from '@/lib/ai-usage'
 import { runTool, toToolSpecs, type AgentTool, type ToolContext } from '@/lib/ai/tools'
 import { logInfo } from '@/lib/logger'
@@ -33,6 +39,16 @@ import { recordMetric } from '@/lib/metrics'
 
 /** Model calls per run. 6 is generous: real runs settle in 2–4. */
 export const DEFAULT_MAX_STEPS = 6
+
+/**
+ * Per-model-call timeout, with NO retries (see callChat below).
+ *
+ * An agent run makes several calls, so it must fail fast on a flaky provider: a
+ * single call left on the default 30s × 3 retries (~94s observed on NVIDIA when
+ * it hangs) blows past any maxDuration and becomes a 504. 20s is well above the
+ * ~3s a healthy call takes, so it only bites when the provider is actually slow.
+ */
+export const AGENT_CALL_TIMEOUT_MS = 20_000
 
 /**
  * Stop this long before the function's own ceiling.
@@ -173,9 +189,37 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentRunResult> {
     }
 
     const modelStartedAt = Date.now()
-    const turn = await callChat(messages, { ...ctxToCallContext(ctx), endpoint }, {
-      tools: toolSpecs,
-    })
+    // Fail fast + no retries: on a flaky provider we want a clean partial, not a
+    // 90s hang that the route's maxDuration turns into a 504. A throw here (the
+    // provider timed out / errored) is caught and ends the run as 'error' with
+    // whatever we already have, rather than crashing the whole request.
+    let turn: Awaited<ReturnType<typeof callChat>>
+    try {
+      turn = await callChat(messages, { ...ctxToCallContext(ctx), endpoint }, {
+        tools: toolSpecs,
+        timeoutMs: AGENT_CALL_TIMEOUT_MS,
+        maxRetries: 0,
+      })
+    } catch (err) {
+      // Budget + breaker are expected operational states the route turns into a
+      // graceful 200 "skipped" — let them propagate rather than masking them as
+      // a generic error.
+      if (err instanceof AIBudgetExceededError || err instanceof CircuitBreakerOpenError) throw err
+      stop_reason = 'error'
+      steps.push({
+        index: steps.length + 1,
+        kind: 'model',
+        content: undefined,
+        duration_ms: Date.now() - modelStartedAt,
+      })
+      logInfo('ai', 'agent_call_failed', 'Agent model call failed', {
+        request_id: ctx.requestId,
+        endpoint,
+        step,
+        error: err instanceof Error ? err.message : 'unknown',
+      })
+      break
+    }
     model_calls++
     model = turn.model
     input_tokens += turn.input_tokens
@@ -252,28 +296,36 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentRunResult> {
   // still ends with a usable answer instead of nothing. Skipped when we stopped
   // on the deadline — there is by definition no time left for another call.
   if (stop_reason === 'max_steps' && Date.now() < deadlineAt) {
-    const finalTurn = await callChat(
-      [
-        ...messages,
-        {
-          role: 'user',
-          content:
-            'Stop using tools now and answer with what you already have. If it is not ' +
-            'enough to answer confidently, say exactly what is missing.',
-        },
-      ],
-      { ...ctxToCallContext(ctx), endpoint }
-    )
-    model_calls++
-    input_tokens += finalTurn.input_tokens
-    output_tokens += finalTurn.output_tokens
-    answer = finalTurn.content
-    steps.push({
-      index: steps.length + 1,
-      kind: 'model',
-      content: finalTurn.content || undefined,
-      duration_ms: 0,
-    })
+    try {
+      const finalTurn = await callChat(
+        [
+          ...messages,
+          {
+            role: 'user',
+            content:
+              'Stop using tools now and answer with what you already have. If it is not ' +
+              'enough to answer confidently, say exactly what is missing.',
+          },
+        ],
+        { ...ctxToCallContext(ctx), endpoint },
+        { timeoutMs: AGENT_CALL_TIMEOUT_MS, maxRetries: 0 }
+      )
+      model_calls++
+      input_tokens += finalTurn.input_tokens
+      output_tokens += finalTurn.output_tokens
+      answer = finalTurn.content
+      steps.push({
+        index: steps.length + 1,
+        kind: 'model',
+        content: finalTurn.content || undefined,
+        duration_ms: 0,
+      })
+    } catch (err) {
+      if (err instanceof AIBudgetExceededError || err instanceof CircuitBreakerOpenError) throw err
+      // Provider failed on the wrap-up call; end as 'error' with an empty answer
+      // rather than throwing the whole run away.
+      stop_reason = 'error'
+    }
   }
 
   const duration_ms = Date.now() - startedAt

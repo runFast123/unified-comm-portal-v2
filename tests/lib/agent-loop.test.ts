@@ -26,11 +26,28 @@ let script: ScriptedTurn[] = []
 /** Every messages[] array handed to the model, in order. */
 let sentTranscripts: any[][] = []
 let callChatCalls = 0
+/** When set, the NEXT callChat throws this instead of returning a turn. */
+let throwOnCall: Error | null = null
+
+// Error classes the agent re-throws (budget/breaker) vs swallows (everything
+// else). Defined via hoisted so both the mock and the tests can reference them.
+const { MockBudgetError, MockBreakerError } = vi.hoisted(() => {
+  class MockBudgetError extends Error {}
+  class MockBreakerError extends Error {}
+  return { MockBudgetError, MockBreakerError }
+})
 
 vi.mock('@/lib/api-helpers', () => ({
+  AIBudgetExceededError: MockBudgetError,
+  CircuitBreakerOpenError: MockBreakerError,
   callChat: vi.fn(async (messages: any[]) => {
     callChatCalls++
     sentTranscripts.push(JSON.parse(JSON.stringify(messages)))
+    if (throwOnCall) {
+      const e = throwOnCall
+      throwOnCall = null
+      throw e
+    }
     const turn = script.shift() ?? { content: 'fallback answer' }
     return {
       content: turn.content ?? '',
@@ -131,6 +148,7 @@ beforeEach(() => {
   sentTranscripts = []
   callChatCalls = 0
   canReturns = true
+  throwOnCall = null
 })
 
 // ---- Tests ---------------------------------------------------------
@@ -271,6 +289,25 @@ describe('agent loop', () => {
     script = [{ content: 'I answered without using any tool' }]
     const res = await run()
     expect(res.stop_reason).toBe('no_tool_support')
+  })
+
+  it('ends gracefully (stop_reason=error) when the provider throws — never propagates', async () => {
+    // A flaky provider (timeout) must not crash the whole request: the run
+    // returns a partial with a trace instead of throwing.
+    throwOnCall = new Error('AI API error: upstream timeout')
+    const res = await run()
+    expect(res.stop_reason).toBe('error')
+    expect(res.answer).toBe('')
+    // The failed model step is still recorded in the trace.
+    expect(res.steps.some((s) => s.kind === 'model')).toBe(true)
+  })
+
+  it('RE-THROWS budget and breaker errors so the route can skip gracefully', async () => {
+    throwOnCall = new MockBudgetError('over budget')
+    await expect(run()).rejects.toBeInstanceOf(MockBudgetError)
+
+    throwOnCall = new MockBreakerError('circuit open')
+    await expect(run()).rejects.toBeInstanceOf(MockBreakerError)
   })
 
   it('records a step trace covering every model and tool step', async () => {

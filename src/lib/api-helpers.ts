@@ -730,8 +730,25 @@ export interface AssistantTurn {
 export async function callChat(
   messages: ChatMessage[],
   ctx: CallAIContext = {},
-  opts: { tools?: ToolSpec[]; tool_choice?: 'auto' | 'none' | 'required' } = {}
+  opts: {
+    tools?: ToolSpec[]
+    tool_choice?: 'auto' | 'none' | 'required'
+    /**
+     * Per-attempt upstream timeout. Defaults to AI_TIMEOUT_MS (30s). Interactive
+     * callers (the agent loop) pass a shorter budget so a flaky provider fails
+     * fast instead of hanging the whole request.
+     */
+    timeoutMs?: number
+    /**
+     * Retries on a timeout/5xx. Defaults to AI_MAX_RETRIES (2). Interactive
+     * callers pass 0 — retrying a hung provider three times can burn 90s+, which
+     * on a maxDuration-bounded route becomes a 504 instead of a clean failure.
+     */
+    maxRetries?: number
+  } = {}
 ): Promise<AssistantTurn> {
+  const timeoutMs = opts.timeoutMs ?? AI_TIMEOUT_MS
+  const maxRetries = opts.maxRetries ?? AI_MAX_RETRIES
   // ── Budget gate (BEFORE the AI call) ───────────────────────────────
   // Skipped when no account_id is supplied. Throws AIBudgetExceededError
   // when the cap is reached — caller is expected to catch + skip gracefully.
@@ -751,7 +768,7 @@ export async function callChat(
     model: config.model,
   }
 
-  for (let attempt = 0; attempt <= AI_MAX_RETRIES; attempt++) {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       // Wrap the upstream fetch in the circuit breaker — short-circuits with
       // CircuitBreakerOpenError when NVIDIA has been failing repeatedly.
@@ -759,7 +776,7 @@ export async function callChat(
       // failures; 4xx bad-request and AIBudgetExceededError are not).
       const { content, tool_calls, finish_reason, data } = await withCircuitBreaker(async () => {
         const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), AI_TIMEOUT_MS)
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
 
         let response: Response
         try {
@@ -894,9 +911,10 @@ export async function callChat(
         !!err.message && /\bAI API error \(5\d{2}\)|\bHTTP\s?5\d{2}\b|status[\s:]+5\d{2}\b/i.test(err.message)
       const isRetryable = isTimeout || isHttp5xxByStatus || isHttp5xxByMessage
 
-      if (attempt < AI_MAX_RETRIES && isRetryable) {
-        console.warn(`AI call attempt ${attempt + 1} failed (${isTimeout ? 'timeout' : err.message}), retrying in ${AI_RETRY_DELAYS[attempt]}ms...`)
-        await new Promise(r => setTimeout(r, AI_RETRY_DELAYS[attempt]))
+      if (attempt < maxRetries && isRetryable) {
+        const delay = AI_RETRY_DELAYS[attempt] ?? AI_RETRY_DELAYS[AI_RETRY_DELAYS.length - 1]
+        console.warn(`AI call attempt ${attempt + 1} failed (${isTimeout ? 'timeout' : err.message}), retrying in ${delay}ms...`)
+        await new Promise(r => setTimeout(r, delay))
         continue
       }
       break
