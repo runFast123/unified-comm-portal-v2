@@ -175,6 +175,15 @@ export async function POST(request: Request) {
       input: message,
     })
 
+    // Compact tool trace for the UI: the ordered names + whether each
+    // succeeded. This is the "how it answered" surface — it lets an agent see
+    // "searched the KB, found nothing, checked contact history" rather than
+    // trusting an opaque answer. The full step-by-step trace (with arguments and
+    // results) lives in agent_run_steps behind run_id for a deeper view later.
+    const tool_summary = result.steps
+      .filter((s) => s.kind === 'tool')
+      .map((s) => ({ name: s.tool_name, ok: s.tool_ok !== false }))
+
     return NextResponse.json({
       answer: result.answer,
       run_id: runId,
@@ -182,6 +191,7 @@ export async function POST(request: Request) {
       tool_calls: result.tool_calls,
       model_calls: result.model_calls,
       duration_ms: result.duration_ms,
+      tool_summary,
       request_id: requestId,
     })
   } catch (err) {
