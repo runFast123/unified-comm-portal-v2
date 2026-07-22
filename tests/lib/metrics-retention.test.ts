@@ -154,6 +154,46 @@ describe('purgeOldMetrics', () => {
     expect((await purgeOldMetrics(client(), { retentionDays: 5 })).deleted).toBe(10)
   })
 
+  it('does NOT stop early when the server caps the select below the batch size', async () => {
+    // THE PRODUCTION BUG this pins: PostgREST caps selects at db-max-rows (1000
+    // by default) and silently returns fewer rows than requested. Treating that
+    // short batch as "drained" limited the sweep to ONE batch per run — observed
+    // purging exactly 1000/run instead of batch x maxBatches. Only a ZERO-row
+    // select means drained.
+    const SERVER_CAP = 50
+    rows = makeRows(500, METRICS_RETENTION_DAYS + 2)
+    const capped: any = {
+      from() {
+        const st: { cutoff?: string } = {}
+        const b: any = {
+          select: () => b,
+          delete: () => b,
+          lt: (_c: string, v: string) => {
+            st.cutoff = v
+            return b
+          },
+          // Asked for `n`, but the server never returns more than SERVER_CAP.
+          limit: async (n: number) => {
+            selectCalls.push({ cutoff: st.cutoff!, limit: n })
+            const older = rows.filter((r) => r.ts < st.cutoff!).slice(0, Math.min(n, SERVER_CAP))
+            return { data: older.map((r) => ({ id: r.id })), error: null }
+          },
+          in: async (_c: string, ids: number[]) => {
+            rows = rows.filter((r) => !ids.includes(r.id))
+            return { error: null }
+          },
+        }
+        return b
+      },
+    }
+
+    const res = await purgeOldMetrics(capped, { batchLimit: 200, maxBatches: 4 })
+    // 4 batches actually ran despite every one coming back short.
+    expect(res.batches).toBe(4)
+    expect(res.deleted).toBe(4 * SERVER_CAP)
+    expect(rows).toHaveLength(500 - 4 * SERVER_CAP)
+  })
+
   it('ships with sane defaults', () => {
     expect(METRICS_RETENTION_DAYS).toBeGreaterThanOrEqual(7)
     expect(METRICS_PURGE_BATCH).toBeLessThanOrEqual(10_000)

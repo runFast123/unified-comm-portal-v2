@@ -31,11 +31,16 @@ import { logError, logInfo } from '@/lib/logger'
  */
 export const METRICS_RETENTION_DAYS = 30
 
-/** Rows per DELETE. Small enough that the id list and the lock stay cheap. */
-export const METRICS_PURGE_BATCH = 2_000
+/**
+ * Rows per DELETE. Deliberately 1000, not higher: PostgREST caps a select at
+ * `db-max-rows` (1000 by Supabase default) and silently returns fewer rows than
+ * asked for, so requesting more just hides the cap. Observed in production —
+ * a `.limit(2000)` came back with exactly 1000 every run.
+ */
+export const METRICS_PURGE_BATCH = 1_000
 
 /** Batches per cron run — bounds total work in one invocation. */
-export const METRICS_PURGE_MAX_BATCHES = 5
+export const METRICS_PURGE_MAX_BATCHES = 10
 
 export interface MetricsPurgeResult {
   deleted: number
@@ -95,8 +100,12 @@ export async function purgeOldMetrics(
     result.deleted += ids.length
     result.batches++
 
-    // Short batch => we drained everything older than the cutoff.
-    if (ids.length < batch) return result
+    // NOTE: we deliberately do NOT stop on a short batch. PostgREST silently
+    // caps a select at db-max-rows, so "fewer rows than asked for" does NOT
+    // mean we drained the backlog — it usually just means we hit the cap. The
+    // only reliable "drained" signal is a select that returns ZERO rows, which
+    // is handled above. (This exact mistake limited the sweep to 1000 rows per
+    // run in production instead of the intended batch × maxBatches.)
   }
 
   // Hit the per-run cap; the next run continues where this one stopped.
