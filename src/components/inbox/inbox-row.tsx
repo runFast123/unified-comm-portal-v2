@@ -1,6 +1,6 @@
 'use client'
 
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Archive, AlertTriangle, CheckCheck, Sparkles, Clock, User } from 'lucide-react'
 import { useToast } from '@/components/ui/toast'
@@ -239,6 +239,30 @@ export const InboxRow = forwardRef<InboxRowHandle, InboxRowProps>(function Inbox
   // DOM node of the outer `group` div — InboxList drives focus() through the
   // imperative handle below so DOM focus follows the j/k cursor.
   const rowRef = useRef<HTMLDivElement>(null)
+  // Prefetch-once guard: hover/focus can fire many times per row.
+  const prefetchedRef = useRef(false)
+
+  /**
+   * Warm the conversation route before the click.
+   *
+   * The row is a <div>, not a <Link>, so Next never prefetched it — every
+   * conversation open was a cold navigation. We can't simply wrap the row in a
+   * <Link>: it contains a checkbox and four action buttons, and nesting those
+   * inside an anchor is invalid HTML and would break the row's roving-tabindex
+   * keyboard model. Prefetching explicitly on hover/focus gets the benefit
+   * without touching that structure — and firing on FOCUS means the j/k
+   * keyboard cursor warms the next conversation too, not just the mouse.
+   */
+  const prefetchConversation = useCallback(() => {
+    if (prefetchedRef.current) return
+    if (onItemClick || !item.conversation_id) return // inline view: no navigation
+    prefetchedRef.current = true
+    try {
+      router.prefetch(`/conversations/${item.conversation_id}`)
+    } catch {
+      // Prefetch is best-effort; never let it affect the row.
+    }
+  }, [router, item.conversation_id, onItemClick])
 
   const handleRowClick = () => {
     if (onItemClick) {
@@ -410,6 +434,10 @@ export const InboxRow = forwardRef<InboxRowHandle, InboxRowProps>(function Inbox
     <div
       ref={rowRef}
       onClick={handleRowClick}
+      // Warm the route before the click — see prefetchConversation. onFocus
+      // covers the j/k keyboard cursor as well as the mouse.
+      onMouseEnter={prefetchConversation}
+      onFocus={prefetchConversation}
       // Focusable row: `aria-label` gives it a meaningful accessible name (who /
       // channel / subject / unread / priority) so screen readers announce it as
       // focus moves, and the roving `tabIndex` makes Tab reach the list once.

@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
+import { usePolled } from '@/hooks/usePolled'
+import { setPolledData, refreshPolled } from '@/lib/polled-store'
 import {
   Bell,
   MessageSquare,
@@ -118,21 +120,104 @@ function toItem(row: NotificationRow): NotificationItem {
 /** How often to re-poll the persisted table so the badge stays current. */
 const POLL_INTERVAL_MS = 45_000
 
+/**
+ * Shared poll key. dashboard-shell mounts this bell TWICE (mobile + desktop
+ * header — `md:hidden` only hides one with CSS, React still mounts it). Sharing
+ * one loop halves the request rate AND fixes a real bug: the "new notification"
+ * sound used to play once per mounted copy, i.e. twice.
+ */
+const NOTIFICATIONS_KEY = 'notifications'
+
+/**
+ * IDs of unread rows seen in the PRIOR fetch, so the alert only fires for a
+ * genuinely-new unread row rather than on every poll. Module-level (not a ref)
+ * because it must be shared by every mounted copy — one poll, one alert.
+ * `null` until the first fetch completes, so the initial load is silent.
+ */
+let seenUnreadIds: Set<string> | null = null
+
+/** Mirrors the browser Notification permission for use inside the fetcher. */
+let browserPermissionGranted = false
+
+/**
+ * Module-level so its identity is stable across renders (see usePolled), and so
+ * the alert side-effects below run exactly once per poll.
+ */
+async function fetchNotificationsList(): Promise<NotificationItem[]> {
+  const supabase = createClient()
+
+  // RLS restricts SELECT to the caller's own rows (user_id = auth.uid()), so no
+  // manual user filter is required. We still resolve the user id and add a
+  // defensive .eq('user_id', …) so a future RLS change can't widen this feed.
+  const { data: { user } } = await supabase.auth.getUser()
+
+  let query = supabase
+    .from('notifications')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(30)
+  if (user?.id) query = query.eq('user_id', user.id)
+
+  const { data, error } = await query
+  // Throw so the store keeps the previous list rather than blanking the bell.
+  if (error) throw new Error(error.message)
+
+  const rows = (data as NotificationRow[] | null) ?? []
+  const items = rows.map(toItem)
+
+  const currentUnreadIds = rows.filter((r) => r.read_at == null).map((r) => r.id)
+  const prevSeen = seenUnreadIds
+  if (prevSeen !== null) {
+    const newUnread = currentUnreadIds.filter((id) => !prevSeen.has(id))
+    if (newUnread.length > 0) {
+      playNotificationSound()
+      // Browser push only when the tab isn't focused (mirrors prior behavior).
+      if (typeof document !== 'undefined' && document.hidden && browserPermissionGranted) {
+        const first = items.find((i) => i.id === newUnread[0])
+        if (first) {
+          try {
+            const browserNotif = new window.Notification(first.title, {
+              body: first.description,
+              icon: '/favicon.ico',
+              tag: first.id,
+            })
+            browserNotif.onclick = () => {
+              window.focus()
+              const dest =
+                first.link || (first.conversationId ? `/conversations/${first.conversationId}` : '/inbox')
+              window.location.href = dest
+              browserNotif.close()
+            }
+          } catch {
+            // Browser notification creation failed
+          }
+        }
+      }
+    }
+  }
+  seenUnreadIds = new Set(currentUnreadIds)
+
+  return items
+}
+
 export function NotificationCenter() {
   const router = useRouter()
   const [open, setOpen] = useState(false)
-  const [notifications, setNotifications] = useState<NotificationItem[]>([])
-  const [loading, setLoading] = useState(false)
   const [permissionGranted, setPermissionGranted] = useState(false)
 
   const panelRef = useRef<HTMLDivElement>(null)
-  // Guards against setState after unmount (the bell is a hot client component
-  // with a poll interval + async fetches in flight on navigation/logout).
+  // Guards against setState after unmount (permission prompt resolves async).
   const mountedRef = useRef(true)
-  // IDs of unread rows seen in the PRIOR fetch — lets us play the sound only
-  // when a genuinely-new unread row appears, not on every poll. `null` until
-  // the first fetch completes so the initial load is silent.
-  const seenUnreadRef = useRef<Set<string> | null>(null)
+
+  // Shared poll loop — one request per interval across every mounted copy, and
+  // paused while the tab is hidden. Intentionally NOT Supabase realtime:
+  // `notifications` isn't in the realtime publication.
+  const { data: polled, loading } = usePolled<NotificationItem[]>(
+    NOTIFICATIONS_KEY,
+    fetchNotificationsList,
+    POLL_INTERVAL_MS
+  )
+  const notifications = polled ?? []
 
   const unreadCount = notifications.filter((n) => !n.read).length
 
@@ -141,99 +226,27 @@ export function NotificationCenter() {
     if (typeof window === 'undefined' || !('Notification' in window)) return
     if (Notification.permission === 'granted') {
       setPermissionGranted(true)
+      browserPermissionGranted = true
     } else if (Notification.permission !== 'denied') {
       Notification.requestPermission().then((perm) => {
+        // Mirror to module scope so the shared fetcher can read it.
+        browserPermissionGranted = perm === 'granted'
         if (mountedRef.current) setPermissionGranted(perm === 'granted')
       })
     }
-  }, [])
-
-  const fetchNotifications = useCallback(async () => {
-    if (mountedRef.current) setLoading(true)
-    try {
-      const supabase = createClient()
-
-      // RLS restricts SELECT to the caller's own rows (user_id = auth.uid()),
-      // so no manual user filter is required. We still resolve the user id and
-      // add a defensive .eq('user_id', …) so a future RLS change can't widen
-      // this feed cross-user.
-      const { data: { user } } = await supabase.auth.getUser()
-
-      let query = supabase
-        .from('notifications')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(30)
-      if (user?.id) query = query.eq('user_id', user.id)
-
-      const { data, error } = await query
-      if (error) {
-        console.error('Failed to fetch notifications:', error.message)
-        return
-      }
-      if (!mountedRef.current) return
-
-      const rows = (data as NotificationRow[] | null) ?? []
-      const items = rows.map(toItem)
-
-      // Sound: only when a genuinely-new UNREAD row appears vs the prior fetch.
-      const currentUnreadIds = rows.filter((r) => r.read_at == null).map((r) => r.id)
-      const prevSeen = seenUnreadRef.current
-      if (prevSeen !== null) {
-        const newUnread = currentUnreadIds.filter((id) => !prevSeen.has(id))
-        if (newUnread.length > 0) {
-          playNotificationSound()
-          // Browser push only when the tab isn't focused (mirrors prior behavior).
-          if (document.hidden && permissionGranted) {
-            const first = items.find((i) => i.id === newUnread[0])
-            if (first) {
-              try {
-                const browserNotif = new window.Notification(first.title, {
-                  body: first.description,
-                  icon: '/favicon.ico',
-                  tag: first.id,
-                })
-                browserNotif.onclick = () => {
-                  window.focus()
-                  const dest = first.link || (first.conversationId ? `/conversations/${first.conversationId}` : '/inbox')
-                  window.location.href = dest
-                  browserNotif.close()
-                }
-              } catch {
-                // Browser notification creation failed
-              }
-            }
-          }
-        }
-      }
-      seenUnreadRef.current = new Set(currentUnreadIds)
-
-      setNotifications(items)
-    } catch (err) {
-      console.error('Failed to fetch notifications:', err)
-    } finally {
-      if (mountedRef.current) setLoading(false)
-    }
-  }, [permissionGranted])
-
-  // Initial fetch + lightweight polling. Intentionally NOT Supabase realtime —
-  // `notifications` isn't in the realtime publication, so we poll (matches the
-  // old fetch-on-open behavior). The interval is cleared on unmount.
-  useEffect(() => {
-    mountedRef.current = true
-    fetchNotifications()
-    const t = setInterval(fetchNotifications, POLL_INTERVAL_MS)
     return () => {
       mountedRef.current = false
-      clearInterval(t)
     }
-  }, [fetchNotifications])
+  }, [])
 
   const markAllRead = useCallback(async () => {
     const now = new Date().toISOString()
-    // Optimistic: flip locally first so the badge clears instantly.
-    setNotifications((prev) => prev.map((n) => (n.read ? n : { ...n, read: true })))
-    // Do NOT reset seenUnreadRef here: the just-read ids must stay in the "seen"
+    // Optimistic: flip first so the badge clears instantly. Writing through the
+    // shared store updates BOTH mounted copies of the bell at once.
+    setPolledData<NotificationItem[]>(NOTIFICATIONS_KEY, (prev) =>
+      (prev ?? []).map((n) => (n.read ? n : { ...n, read: true }))
+    )
+    // Do NOT reset seenUnreadIds here: the just-read ids must stay in the "seen"
     // set so the next poll doesn't re-classify them as new unread (and replay the
     // sound / browser push) in the window before the server UPDATE is visible.
     try {
@@ -256,10 +269,10 @@ export function NotificationCenter() {
       // Optimistic local read flip + persist via the browser client (RLS scopes
       // the UPDATE to the caller's own rows).
       if (!notification.read) {
-        setNotifications((prev) =>
-          prev.map((n) => (n.id === notification.id ? { ...n, read: true } : n))
+        setPolledData<NotificationItem[]>(NOTIFICATIONS_KEY, (prev) =>
+          (prev ?? []).map((n) => (n.id === notification.id ? { ...n, read: true } : n))
         )
-        // Keep this id in seenUnreadRef (don't delete it): if the read UPDATE
+        // Keep this id in seenUnreadIds (don't delete it): if the read UPDATE
         // hasn't committed when the next poll runs, the row is still "seen" and
         // won't replay the notification sound.
         try {
@@ -400,7 +413,8 @@ export function NotificationCenter() {
         onClick={() => {
           const next = !open
           setOpen(next)
-          if (next) fetchNotifications()
+          // Opening the panel forces an immediate refresh on the shared loop.
+          if (next) void refreshPolled(NOTIFICATIONS_KEY)
         }}
         className="relative flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-zinc-700 transition-colors"
         aria-label="Notifications"

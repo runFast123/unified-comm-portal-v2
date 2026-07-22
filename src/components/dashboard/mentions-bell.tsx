@@ -4,6 +4,8 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { AtSign } from 'lucide-react'
 import { MENTION_REGEX } from '@/lib/mentions'
+import { usePolled } from '@/hooks/usePolled'
+import { setPolledData } from '@/lib/polled-store'
 
 interface Mention {
   id: string
@@ -41,6 +43,25 @@ function renderPreview(text: string): string {
 const POLL_INTERVAL_MS = 60_000
 
 /**
+ * Shared poll key. dashboard-shell mounts this bell TWICE (mobile + desktop
+ * header; `md:hidden` only hides one with CSS, React still mounts it), so both
+ * instances must share one loop instead of each running its own timer.
+ */
+const MENTIONS_KEY = 'mentions'
+
+/** Module-level so its identity is stable across renders (see usePolled). */
+async function fetchMentionsList(): Promise<Mention[]> {
+  try {
+    const res = await fetch('/api/mentions', { credentials: 'same-origin' })
+    if (!res.ok) return []
+    const data = (await res.json()) as MentionsResponse
+    return data.mentions || []
+  } catch {
+    return []
+  }
+}
+
+/**
  * Mentions bell — sits in the dashboard header next to the existing
  * notification bell. Shows the count of unread `@`-mentions (last 30 days);
  * clicking the bell opens a dropdown of recent mentions, and clicking a
@@ -49,38 +70,21 @@ const POLL_INTERVAL_MS = 60_000
 export function MentionsBell() {
   const router = useRouter()
   const [open, setOpen] = useState(false)
-  const [mentions, setMentions] = useState<Mention[]>([])
-  const [loading, setLoading] = useState(false)
   const panelRef = useRef<HTMLDivElement>(null)
   const buttonRef = useRef<HTMLButtonElement>(null)
 
+  // Shared poll loop: one request per interval no matter how many copies of this
+  // bell are mounted, paused while the tab is hidden. We intentionally don't
+  // subscribe to realtime — mentions are far rarer than messages, so a 60s pull
+  // is plenty.
+  const { data, loading } = usePolled<Mention[]>(
+    MENTIONS_KEY,
+    fetchMentionsList,
+    POLL_INTERVAL_MS
+  )
+  const mentions = data ?? []
+
   const unreadCount = mentions.filter((m) => m.read_at == null).length
-
-  const fetchMentions = useCallback(async () => {
-    setLoading(true)
-    try {
-      const res = await fetch('/api/mentions', { credentials: 'same-origin' })
-      if (!res.ok) {
-        setMentions([])
-        return
-      }
-      const data = (await res.json()) as MentionsResponse
-      setMentions(data.mentions || [])
-    } catch {
-      setMentions([])
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  // Initial fetch + lightweight polling. We intentionally don't subscribe to
-  // realtime here — mentions are far less frequent than messages, so a 60s
-  // pull is plenty.
-  useEffect(() => {
-    fetchMentions()
-    const t = setInterval(fetchMentions, POLL_INTERVAL_MS)
-    return () => clearInterval(t)
-  }, [fetchMentions])
 
   // Click-outside to close
   useEffect(() => {
@@ -98,10 +102,11 @@ export function MentionsBell() {
   const handleMentionClick = useCallback(
     async (m: Mention) => {
       setOpen(false)
-      // Optimistically mark read locally; persist via API best-effort.
+      // Optimistically mark read; persist via API best-effort. Writing through
+      // the shared store updates BOTH mounted copies of the bell at once.
       if (m.read_at == null) {
-        setMentions((prev) =>
-          prev.map((x) =>
+        setPolledData<Mention[]>(MENTIONS_KEY, (prev) =>
+          (prev ?? []).map((x) =>
             x.id === m.id ? { ...x, read_at: new Date().toISOString() } : x
           )
         )
